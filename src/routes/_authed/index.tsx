@@ -937,7 +937,7 @@ function Home() {
                       </div>
                     ) : null}
                   </div>
-                  <ul className="relative z-[3] mt-1.5 flex flex-col gap-px pointer-events-auto">
+                  <ul className="relative z-[3] mt-2 flex flex-col gap-px pointer-events-auto">
                     {([0, 1, 2] as const).map((slot) => {
                       const p = dayPlans[slot];
                       if (!p) {
