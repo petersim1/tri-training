@@ -325,17 +325,7 @@ function ActivitiesContent() {
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Activities</h1>
-          <p className="text-sm text-zinc-400">
-            Filtered list of planned workouts. Session trends (all time, by
-            type) live on{" "}
-            <Link to="/" className="text-emerald-400 hover:underline">
-              Home
-            </Link>
-            ; use Home to add or link sessions too.
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Activities</h1>
         <div className="flex flex-wrap items-center gap-2">
           <a
             href={STRAVA_ACTIVITIES_HOME}

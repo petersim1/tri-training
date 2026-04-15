@@ -1370,28 +1370,7 @@ function Home() {
       </section>
 
       <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-medium text-zinc-100">Session trends</h2>
-          <p className="text-sm text-zinc-500">
-            Completed workouts with linked Strava or Hevy data (all time), by
-            type — separate from the filtered list on{" "}
-            <Link
-              to="/activities"
-              search={{
-                kind: "all",
-                status: "all",
-                from: undefined,
-                to: undefined,
-                page: 1,
-              }}
-              className="text-emerald-400/90 hover:underline"
-            >
-              Activities
-            </Link>
-            . Click a point or its date label to jump the calendar to that day
-            and highlight it — same as weight below.
-          </p>
-        </div>
+        <h2 className="text-lg font-medium text-zinc-100">Session trends</h2>
         <ActivityMetricsChart
           kind={activityPlotKind}
           onKindChange={setActivityPlotKind}
@@ -1402,14 +1381,7 @@ function Home() {
       </section>
 
       <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-medium text-zinc-100">Weight</h2>
-          <p className="text-sm text-zinc-500">
-            Trend from your logged entries (lb). Click a point or its date label
-            to jump the calendar to that day and highlight it — then open the
-            day on the calendar to log or edit.
-          </p>
-        </div>
+        <h2 className="text-lg font-medium text-zinc-100">Weight</h2>
         <WeightTrendChart
           entries={weightEntries}
           onSelectDayKey={openDayFromDayKey}
