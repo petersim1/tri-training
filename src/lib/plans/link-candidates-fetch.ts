@@ -151,13 +151,13 @@ export async function fetchHevyWorkoutsInRange(
   }
 }
 
-export function linkedSessionExcludeKeys(
+export async function linkedSessionExcludeKeys(
   db: ReturnType<typeof getDb>,
-): Set<string> {
-  const linkedRows = db
+): Promise<Set<string>> {
+  const linkedRows = await db
     .select({
       vendor: completedWorkouts.vendor,
-      externalId: completedWorkouts.externalId,
+      vendorId: completedWorkouts.vendorId,
     })
     .from(plannedWorkouts)
     .innerJoin(
@@ -167,8 +167,8 @@ export function linkedSessionExcludeKeys(
     .all();
   const excludeKeys = new Set<string>();
   for (const r of linkedRows) {
-    if (r.externalId) {
-      excludeKeys.add(`${r.vendor}:${r.externalId}`);
+    if (r.vendorId) {
+      excludeKeys.add(`${r.vendor}:${r.vendorId}`);
     }
   }
   return excludeKeys;

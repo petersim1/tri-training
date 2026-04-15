@@ -7,6 +7,7 @@ import {
 } from "~/lib/strava/cookie-store";
 import { stravaRedirectUri } from "~/lib/strava/oauth";
 import { STRAVA_OAUTH_STATE_COOKIE } from "~/lib/strava/oauth-flow";
+import { persistServiceStravaTokens } from "~/lib/strava/service-tokens";
 
 const TOKEN_URL = "https://www.strava.com/oauth/token";
 const STRAVA_ATHLETE_URL = "https://www.strava.com/api/v3/athlete";
@@ -61,10 +62,7 @@ function redirectLogin(
 
 /** Allowed athlete: session + Strava cookies already set. */
 function redirectOk(origin: string): Response {
-  const location = new URL(
-    `/`,
-    origin,
-  ).toString();
+  const location = new URL(`/`, origin).toString();
   return new Response(null, {
     status: 302,
     headers: {
@@ -223,6 +221,15 @@ export const Route = createFileRoute("/api/strava/callback")({
               expiresAt: data.expires_at,
               athleteId: athlete.id ?? null,
             });
+            try {
+              await persistServiceStravaTokens({
+                accessToken: data.access_token,
+                refreshToken: data.refresh_token,
+                expiresAt: data.expires_at,
+              });
+            } catch (persistErr) {
+              logError("persist service Strava tokens failed", persistErr);
+            }
           } catch (e) {
             logError("set cookies failed", e);
             return redirectLogin(

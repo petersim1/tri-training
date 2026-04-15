@@ -7,5 +7,5 @@ import { selectPlannedWorkoutsWithCompleted } from "~/lib/plans/select-with-comp
 export const listAllPlannedWorkoutsFn = createServerFn({ method: "GET" })
   .middleware([requireSessionFnMiddleware])
   .handler(async (): Promise<PlannedWorkoutWithCompleted[]> => {
-    return selectPlannedWorkoutsWithCompleted();
+    return await selectPlannedWorkoutsWithCompleted();
   });

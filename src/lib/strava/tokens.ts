@@ -11,7 +11,10 @@ type TokenResponse = {
   expires_at: number;
 };
 
-async function refreshTokens(refreshToken: string): Promise<TokenResponse> {
+/** Refresh access token; used by cookie-based sessions and server-stored tokens (webhooks). */
+export async function exchangeStravaRefreshToken(
+  refreshToken: string,
+): Promise<TokenResponse> {
   const clientId = process.env.STRAVA_CLIENT_ID;
   const clientSecret = process.env.STRAVA_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
@@ -45,7 +48,7 @@ export async function getValidStravaAccessToken(): Promise<string | null> {
   if (row.expiresAt > now + 120) {
     return row.accessToken;
   }
-  const next = await refreshTokens(row.refreshToken);
+  const next = await exchangeStravaRefreshToken(row.refreshToken);
   setStravaTokensCookie({
     accessToken: next.access_token,
     refreshToken: next.refresh_token,

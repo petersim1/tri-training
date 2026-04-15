@@ -14,15 +14,15 @@
     "check": "biome check --write ./src vite.config.ts package.json biome.json drizzle.config.ts",
     "routes:generate": "bunx @tanstack/router-cli@latest generate",
     "db:generate": "bunx drizzle-kit generate",
-    "db:migrate": "bun scripts/ensure-sqlite-dir.mjs && bunx drizzle-kit migrate",
-    "db:push": "bun scripts/ensure-sqlite-dir.mjs && bunx drizzle-kit push"
+    "db:migrate": "bunx drizzle-kit migrate",
+    "db:push": "bunx drizzle-kit push"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.2",
     "@tanstack/react-query": "^5.99.0",
     "@tanstack/react-router": "^1.168.21",
     "@tanstack/react-router-devtools": "^1.166.13",
     "@tanstack/react-start": "^1.167.39",
-    "better-sqlite3": "^11.9.1",
     "drizzle-orm": "^0.41.0",
     "nitro": "^3.0.260311-beta",
     "react": "^19.0.0",
@@ -31,7 +31,6 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.11",
     "@tailwindcss/vite": "^4.2.2",
-    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.5.4",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",

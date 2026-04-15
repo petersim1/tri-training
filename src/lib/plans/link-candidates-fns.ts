@@ -24,7 +24,7 @@ export const getPlanLinkCandidatesFn = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }): Promise<PlanLinkCandidatesResult> => {
     const db = getDb();
-    const plan = db
+    const plan = await db
       .select()
       .from(plannedWorkouts)
       .where(eq(plannedWorkouts.id, data.planId))
@@ -32,7 +32,7 @@ export const getPlanLinkCandidatesFn = createServerFn({ method: "GET" })
     if (!plan) {
       throw new Error("Plan not found");
     }
-    const excludeKeys = linkedSessionExcludeKeys(db);
+    const excludeKeys = await linkedSessionExcludeKeys(db);
     return candidatesForKindAndDay(
       plan.kind,
       data.dayStartMs,
@@ -57,7 +57,7 @@ export const getPlanLinkCandidatesForDayFn = createServerFn({ method: "GET" })
       throw new Error("Invalid kind");
     }
     const db = getDb();
-    const excludeKeys = linkedSessionExcludeKeys(db);
+    const excludeKeys = await linkedSessionExcludeKeys(db);
     return candidatesForKindAndDay(
       data.kind,
       data.dayStartMs,

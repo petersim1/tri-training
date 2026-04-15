@@ -14,6 +14,8 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedActivitiesRouteImport } from './routes/_authed/activities'
+import { Route as ApiWebhooksStravaRouteImport } from './routes/api/webhooks/strava'
+import { Route as ApiWebhooksHevyRouteImport } from './routes/api/webhooks/hevy'
 import { Route as ApiStravaStatusRouteImport } from './routes/api/strava/status'
 import { Route as ApiStravaCallbackRouteImport } from './routes/api/strava/callback'
 import { Route as ApiStravaActivitiesRouteImport } from './routes/api/strava/activities'
@@ -42,6 +44,16 @@ const AuthedActivitiesRoute = AuthedActivitiesRouteImport.update({
   id: '/activities',
   path: '/activities',
   getParentRoute: () => AuthedRoute,
+} as any)
+const ApiWebhooksStravaRoute = ApiWebhooksStravaRouteImport.update({
+  id: '/api/webhooks/strava',
+  path: '/api/webhooks/strava',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWebhooksHevyRoute = ApiWebhooksHevyRouteImport.update({
+  id: '/api/webhooks/hevy',
+  path: '/api/webhooks/hevy',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiStravaStatusRoute = ApiStravaStatusRouteImport.update({
   id: '/api/strava/status',
@@ -73,6 +85,8 @@ export interface FileRoutesByFullPath {
   '/api/strava/activities': typeof ApiStravaActivitiesRoute
   '/api/strava/callback': typeof ApiStravaCallbackRoute
   '/api/strava/status': typeof ApiStravaStatusRoute
+  '/api/webhooks/hevy': typeof ApiWebhooksHevyRoute
+  '/api/webhooks/strava': typeof ApiWebhooksStravaRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -83,6 +97,8 @@ export interface FileRoutesByTo {
   '/api/strava/activities': typeof ApiStravaActivitiesRoute
   '/api/strava/callback': typeof ApiStravaCallbackRoute
   '/api/strava/status': typeof ApiStravaStatusRoute
+  '/api/webhooks/hevy': typeof ApiWebhooksHevyRoute
+  '/api/webhooks/strava': typeof ApiWebhooksStravaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,6 +111,8 @@ export interface FileRoutesById {
   '/api/strava/activities': typeof ApiStravaActivitiesRoute
   '/api/strava/callback': typeof ApiStravaCallbackRoute
   '/api/strava/status': typeof ApiStravaStatusRoute
+  '/api/webhooks/hevy': typeof ApiWebhooksHevyRoute
+  '/api/webhooks/strava': typeof ApiWebhooksStravaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,6 +125,8 @@ export interface FileRouteTypes {
     | '/api/strava/activities'
     | '/api/strava/callback'
     | '/api/strava/status'
+    | '/api/webhooks/hevy'
+    | '/api/webhooks/strava'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -117,6 +137,8 @@ export interface FileRouteTypes {
     | '/api/strava/activities'
     | '/api/strava/callback'
     | '/api/strava/status'
+    | '/api/webhooks/hevy'
+    | '/api/webhooks/strava'
   id:
     | '__root__'
     | '/_authed'
@@ -128,6 +150,8 @@ export interface FileRouteTypes {
     | '/api/strava/activities'
     | '/api/strava/callback'
     | '/api/strava/status'
+    | '/api/webhooks/hevy'
+    | '/api/webhooks/strava'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -137,6 +161,8 @@ export interface RootRouteChildren {
   ApiStravaActivitiesRoute: typeof ApiStravaActivitiesRoute
   ApiStravaCallbackRoute: typeof ApiStravaCallbackRoute
   ApiStravaStatusRoute: typeof ApiStravaStatusRoute
+  ApiWebhooksHevyRoute: typeof ApiWebhooksHevyRoute
+  ApiWebhooksStravaRoute: typeof ApiWebhooksStravaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -175,6 +201,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/activities'
       preLoaderRoute: typeof AuthedActivitiesRouteImport
       parentRoute: typeof AuthedRoute
+    }
+    '/api/webhooks/strava': {
+      id: '/api/webhooks/strava'
+      path: '/api/webhooks/strava'
+      fullPath: '/api/webhooks/strava'
+      preLoaderRoute: typeof ApiWebhooksStravaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/hevy': {
+      id: '/api/webhooks/hevy'
+      path: '/api/webhooks/hevy'
+      fullPath: '/api/webhooks/hevy'
+      preLoaderRoute: typeof ApiWebhooksHevyRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/strava/status': {
       id: '/api/strava/status'
@@ -229,6 +269,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiStravaActivitiesRoute: ApiStravaActivitiesRoute,
   ApiStravaCallbackRoute: ApiStravaCallbackRoute,
   ApiStravaStatusRoute: ApiStravaStatusRoute,
+  ApiWebhooksHevyRoute: ApiWebhooksHevyRoute,
+  ApiWebhooksStravaRoute: ApiWebhooksStravaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

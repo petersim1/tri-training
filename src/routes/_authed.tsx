@@ -20,9 +20,6 @@ function AuthedLayout() {
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="shrink-0 border-b border-zinc-800 bg-zinc-900/80">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-4 px-4 py-3">
-          <span className="font-semibold tracking-tight">
-            Workout tracker
-          </span>
           <nav className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
             <Link
               to="/"
@@ -37,6 +34,7 @@ function AuthedLayout() {
                 status: "all",
                 from: undefined,
                 to: undefined,
+                page: 1,
               }}
               activeProps={{ className: "font-semibold text-white" }}
             >

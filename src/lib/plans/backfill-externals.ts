@@ -9,6 +9,10 @@ import {
   localDayKeyFromIso,
   type StravaFetchJson,
 } from "~/lib/plans/link-candidates-fetch";
+import {
+  hevyDataFromWorkoutSummary,
+  stravaDataFromActivitySummary,
+} from "~/lib/plans/completed-workout-data";
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
 import {
   linkedSessionFromHevyWorkout,
@@ -78,11 +82,11 @@ function pickClosestByStartTime<T>(
 
 const KINDS = new Set(["lift", "run", "bike", "swim"]);
 
-function planExistsForCompletedWorkoutId(
+async function planExistsForCompletedWorkoutId(
   db: ReturnType<typeof getDb>,
   completedId: string,
-): boolean {
-  const row = db
+): Promise<boolean> {
+  const row = await db
     .select({ id: plannedWorkouts.id })
     .from(plannedWorkouts)
     .where(eq(plannedWorkouts.completedWorkoutId, completedId))
@@ -91,27 +95,58 @@ function planExistsForCompletedWorkoutId(
 }
 
 /** Reuse an existing row or insert; returns `completed_workouts.id`. */
-function findOrCreateCompletedWorkoutId(
+async function findOrCreateCompletedWorkoutId(
   db: ReturnType<typeof getDb>,
   link: { vendor: "strava" | "hevy"; externalId: string },
   payload: LinkedSessionPayload,
   now: Date,
-): string {
-  const row = db
+  opts?: {
+    stravaActivity?: StravaActivitySummary;
+    hevyWorkout?: HevyWorkoutSummary;
+    planKind?: string;
+    scheduledAtIso?: string;
+  },
+): Promise<string> {
+  const vid = link.externalId.trim();
+  const row = await db
     .select({ id: completedWorkouts.id })
     .from(completedWorkouts)
     .where(
       and(
         eq(completedWorkouts.vendor, link.vendor),
-        eq(completedWorkouts.externalId, link.externalId.trim()),
+        eq(completedWorkouts.vendorId, vid),
       ),
     )
     .get();
   if (row) {
+    if (opts?.stravaActivity) {
+      await db
+        .update(completedWorkouts)
+        .set({
+          data: stravaDataFromActivitySummary(opts.stravaActivity),
+          updatedAt: now,
+        })
+        .where(eq(completedWorkouts.id, row.id))
+        .run();
+    } else if (opts?.hevyWorkout) {
+      await db
+        .update(completedWorkouts)
+        .set({
+          data: hevyDataFromWorkoutSummary(opts.hevyWorkout),
+          updatedAt: now,
+        })
+        .where(eq(completedWorkouts.id, row.id))
+        .run();
+    }
     return row.id;
   }
-  const ins = normalizeCompletedInsert(link, payload, now);
-  db.insert(completedWorkouts).values(ins).run();
+  const ins = normalizeCompletedInsert(link, payload, now, {
+    stravaActivity: opts?.stravaActivity,
+    hevyWorkout: opts?.hevyWorkout,
+    planKind: opts?.planKind,
+    scheduledAtIso: opts?.scheduledAtIso,
+  });
+  await db.insert(completedWorkouts).values(ins).run();
   return ins.id;
 }
 
@@ -119,12 +154,12 @@ function findOrCreateCompletedWorkoutId(
  * Insert `completed_workouts` + `planned_workouts` so the session appears on the calendar.
  * Skips if this external id already has a plan. Returns true if a new plan row was created.
  */
-function upsertCalendarFromHevyWorkout(
+export async function upsertCalendarFromHevyWorkout(
   db: ReturnType<typeof getDb>,
   w: HevyWorkoutSummary,
   calendarExternalKeys: Set<string>,
   now: Date,
-): boolean {
+): Promise<boolean> {
   const id = w.id?.trim();
   if (!id || !w.start_time) {
     return false;
@@ -140,8 +175,18 @@ function upsertCalendarFromHevyWorkout(
     return false;
   }
   const link = { vendor: "hevy" as const, externalId: id };
-  const completedId = findOrCreateCompletedWorkoutId(db, link, payload, now);
-  if (planExistsForCompletedWorkoutId(db, completedId)) {
+  const completedId = await findOrCreateCompletedWorkoutId(
+    db,
+    link,
+    payload,
+    now,
+    {
+      hevyWorkout: w,
+      planKind: "lift",
+      scheduledAtIso: new Date(w.start_time).toISOString(),
+    },
+  );
+  if (await planExistsForCompletedWorkoutId(db, completedId)) {
     calendarExternalKeys.add(key);
     return false;
   }
@@ -150,7 +195,8 @@ function upsertCalendarFromHevyWorkout(
     w.routine_id?.trim() && w.routine_id.trim() !== ""
       ? w.routine_id.trim()
       : null;
-  db.insert(plannedWorkouts)
+  await db
+    .insert(plannedWorkouts)
     .values({
       id: planId,
       kind: "lift",
@@ -171,12 +217,12 @@ function upsertCalendarFromHevyWorkout(
   return true;
 }
 
-function upsertCalendarFromStravaActivity(
+export async function upsertCalendarFromStravaActivity(
   db: ReturnType<typeof getDb>,
   a: StravaActivitySummary,
   calendarExternalKeys: Set<string>,
   now: Date,
-): boolean {
+): Promise<boolean> {
   if (!a.start_date) {
     return false;
   }
@@ -191,13 +237,24 @@ function upsertCalendarFromStravaActivity(
   }
   const link = { vendor: "strava" as const, externalId: sid };
   const payload = linkedSessionFromStravaActivity(a);
-  const completedId = findOrCreateCompletedWorkoutId(db, link, payload, now);
-  if (planExistsForCompletedWorkoutId(db, completedId)) {
+  const completedId = await findOrCreateCompletedWorkoutId(
+    db,
+    link,
+    payload,
+    now,
+    {
+      stravaActivity: a,
+      planKind: kind,
+      scheduledAtIso: new Date(a.start_date).toISOString(),
+    },
+  );
+  if (await planExistsForCompletedWorkoutId(db, completedId)) {
     calendarExternalKeys.add(key);
     return false;
   }
   const planId = crypto.randomUUID();
-  db.insert(plannedWorkouts)
+  await db
+    .insert(plannedWorkouts)
     .values({
       id: planId,
       kind,
@@ -227,7 +284,7 @@ export async function backfillLinkedWorkouts(
   stravaFetchJsonImpl: StravaFetchJson,
 ): Promise<BackfillReport> {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select()
     .from(plannedWorkouts)
     .where(
@@ -251,7 +308,7 @@ export async function backfillLinkedWorkouts(
   const hasHevy = Boolean(process.env.HEVY_API_KEY?.trim());
   const now = new Date();
   /** Vendor:externalId that already have a plan row (completed_workouts only exist through plans). */
-  const calendarExternalKeys = linkedSessionExcludeKeys(db);
+  const calendarExternalKeys = await linkedSessionExcludeKeys(db);
 
   const hevyByDay = new Map<string, HevyWorkoutSummary[]>();
   let hevyPreloadError: string | undefined;
@@ -276,7 +333,14 @@ export async function backfillLinkedWorkouts(
           hevyByDay.set(dk, arr);
         }
         arr.push(w);
-        if (upsertCalendarFromHevyWorkout(db, w, calendarExternalKeys, now)) {
+        if (
+          await upsertCalendarFromHevyWorkout(
+            db,
+            w,
+            calendarExternalKeys,
+            now,
+          )
+        ) {
           report.importedHevy++;
         }
       }
@@ -303,13 +367,20 @@ export async function backfillLinkedWorkouts(
         stravaByDay.set(dk, arr);
       }
       arr.push(a);
-      if (upsertCalendarFromStravaActivity(db, a, calendarExternalKeys, now)) {
+      if (
+        await upsertCalendarFromStravaActivity(
+          db,
+          a,
+          calendarExternalKeys,
+          now,
+        )
+      ) {
         report.importedStrava++;
       }
     }
   }
 
-  const excludeKeys = linkedSessionExcludeKeys(db);
+  const excludeKeys = await linkedSessionExcludeKeys(db);
 
   console.log(LOG, "backfill sync + preload done", {
     unlinkedPlans: rows.length,
@@ -396,13 +467,19 @@ export async function backfillLinkedWorkouts(
         }
         const link = { vendor: "hevy" as const, externalId: best.id.trim() };
         const payload = linkedSessionFromHevyWorkout(best);
-        const completedId = findOrCreateCompletedWorkoutId(
+        const completedId = await findOrCreateCompletedWorkoutId(
           db,
           link,
           payload,
           linkNow,
+          {
+            hevyWorkout: best,
+            planKind: plan.kind,
+            scheduledAtIso: new Date(plan.scheduledAt).toISOString(),
+          },
         );
-        db.update(plannedWorkouts)
+        await db
+          .update(plannedWorkouts)
           .set({
             completedWorkoutId: completedId,
             status: "completed",
@@ -456,13 +533,19 @@ export async function backfillLinkedWorkouts(
       const id = String(best.id);
       const link = { vendor: "strava" as const, externalId: id };
       const payload = linkedSessionFromStravaActivity(best);
-      const completedId = findOrCreateCompletedWorkoutId(
+      const completedId = await findOrCreateCompletedWorkoutId(
         db,
         link,
         payload,
         linkNow,
+        {
+          stravaActivity: best,
+          planKind: plan.kind,
+          scheduledAtIso: new Date(plan.scheduledAt).toISOString(),
+        },
       );
-      db.update(plannedWorkouts)
+      await db
+        .update(plannedWorkouts)
         .set({
           completedWorkoutId: completedId,
           status: "completed",

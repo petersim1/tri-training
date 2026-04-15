@@ -1,5 +1,9 @@
 import type { PlannedWorkoutWithCompleted } from "~/lib/db/schema";
 import { plannedDistanceToKm } from "~/lib/plans/cardio-targets";
+import {
+  completedWorkoutDistanceM,
+  completedWorkoutMovingSeconds,
+} from "~/lib/plans/completed-workout-data";
 
 export type ActivityPlotKind = "run" | "bike" | "swim" | "lift";
 
@@ -28,12 +32,9 @@ function metricsForPlan(
 
   if (kind === "lift") {
     let timeMin: number | null = null;
-    if (
-      cw &&
-      cw.movingTimeSeconds != null &&
-      Number.isFinite(cw.movingTimeSeconds)
-    ) {
-      timeMin = cw.movingTimeSeconds / 60;
+    const mov = cw ? completedWorkoutMovingSeconds(cw) : null;
+    if (cw && mov != null && Number.isFinite(mov)) {
+      timeMin = mov / 60;
     } else if (
       p.timeSeconds != null &&
       Number.isFinite(p.timeSeconds) &&
@@ -48,11 +49,13 @@ function metricsForPlan(
   let timeMin: number | null = null;
 
   if (cw) {
-    if (cw.distanceM != null && Number.isFinite(cw.distanceM)) {
-      distanceKm = cw.distanceM / 1000;
+    const dm = completedWorkoutDistanceM(cw);
+    if (dm != null && Number.isFinite(dm)) {
+      distanceKm = dm / 1000;
     }
-    if (cw.movingTimeSeconds != null && Number.isFinite(cw.movingTimeSeconds)) {
-      timeMin = cw.movingTimeSeconds / 60;
+    const mov = completedWorkoutMovingSeconds(cw);
+    if (mov != null && Number.isFinite(mov)) {
+      timeMin = mov / 60;
     }
   }
   if (distanceKm == null) {

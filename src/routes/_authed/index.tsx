@@ -17,7 +17,8 @@ import type {
   HevyRoutineFolderGroup,
   HevyRoutineSummary,
 } from "~/lib/hevy/types";
-import { getHomeDataFn } from "~/lib/home/server-fns";
+import type { CalendarScope } from "~/lib/home/calendar-scope";
+import { getHomeDataFn, setCalendarScopeFn } from "~/lib/home/server-fns";
 import {
   type ActivityPlotKind,
   buildActivityPlotPoints,
@@ -26,6 +27,11 @@ import {
   CARDIO_DISTANCE_UNITS,
   isCardioKind,
 } from "~/lib/plans/cardio-targets";
+import {
+  completedWorkoutCalories,
+  completedWorkoutDistanceM,
+  completedWorkoutMovingSeconds,
+} from "~/lib/plans/completed-workout-data";
 import {
   getPlanLinkCandidatesFn,
   getPlanLinkCandidatesForDayFn,
@@ -55,83 +61,11 @@ export const Route = createFileRoute("/_authed/")({
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-/** All month cells share this height (3 single-line previews + day/weight row). */
-const CAL_DAY_CELL_CLASS = "h-32";
+/** Month grid: day + weight row + activity icons (desktop wide viewport). */
+const CAL_DAY_CELL_MONTH_WIDE_CLASS = "h-18";
 
-function LinkedExternalSessionIcon() {
-  return (
-    <span
-      className="inline-flex shrink-0 text-zinc-500"
-      title="Linked external session"
-      aria-hidden
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="size-3 shrink-0"
-      >
-        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-      </svg>
-    </span>
-  );
-}
-
-function PlanStatusPreviewGlyph({ status }: { status: string }) {
-  const label =
-    status === "completed"
-      ? "Completed"
-      : status === "skipped"
-        ? "Skipped"
-        : "Planned";
-  const common = "inline-flex h-3 w-3 shrink-0";
-  if (status === "completed") {
-    return (
-      <span className={`${common} text-emerald-500`} title={label} aria-hidden>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fillRule="evenodd"
-            d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-            clipRule="evenodd"
-          />
-        </svg>
-      </span>
-    );
-  }
-  if (status === "skipped") {
-    return (
-      <span className={`${common} text-amber-500`} title={label} aria-hidden>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-        </svg>
-      </span>
-    );
-  }
-  return (
-    <span className={`${common} text-zinc-500`} title={label} aria-hidden>
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 20 20"
-        fill="currentColor"
-      >
-        <circle cx="10" cy="10" r="3" />
-      </svg>
-    </span>
-  );
-}
+/** Narrow month grid: same layout, tighter row height. */
+const CAL_DAY_CELL_MONTH_NARROW_CLASS = "h-16";
 
 function localDayKey(iso: string): string {
   const d = new Date(iso);
@@ -186,18 +120,17 @@ function formatActualDurationSec(s: number | null | undefined): string | null {
 }
 
 function CardioActualFromCompleted({ c }: { c: CompletedWorkoutRow }) {
-  const dist = c.distanceM;
+  const dist = completedWorkoutDistanceM(c);
   const distLabel =
     dist != null && Number.isFinite(dist)
       ? dist >= 1000
         ? `${(dist / 1000).toFixed(2)} km`
         : `${Math.round(dist)} m`
       : null;
-  const dur = formatActualDurationSec(c.movingTimeSeconds);
+  const dur = formatActualDurationSec(completedWorkoutMovingSeconds(c));
+  const kcalRaw = completedWorkoutCalories(c);
   const kcal =
-    c.calories != null && Number.isFinite(c.calories)
-      ? Math.round(c.calories)
-      : null;
+    kcalRaw != null && Number.isFinite(kcalRaw) ? Math.round(kcalRaw) : null;
   if (!distLabel && !dur && kcal == null) {
     return null;
   }
@@ -293,6 +226,25 @@ function LiftRoutinePicker({
     return [...raw].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
   }, [routineQuery.data?.exercises]);
 
+  const visibleGroups = useMemo(() => {
+    if (!selectedId) {
+      return groups;
+    }
+    return groups
+      .map((g) => ({
+        ...g,
+        routines: g.routines.filter((r) => r.id === selectedId),
+      }))
+      .filter((g) => g.routines.length > 0);
+  }, [groups, selectedId]);
+
+  const visibleUnfoldered = useMemo(() => {
+    if (!selectedId) {
+      return unfoldered;
+    }
+    return unfoldered.filter((r) => r.id === selectedId);
+  }, [unfoldered, selectedId]);
+
   const selectedTitle =
     selectedId && routineQuery.data?.title
       ? routineQuery.data.title
@@ -319,8 +271,14 @@ function LiftRoutinePicker({
       {total === 0 ? (
         <p className="text-xs text-zinc-500">No routines loaded from Hevy.</p>
       ) : (
-        <div className="max-h-48 space-y-4 overflow-y-auto pr-1">
-          {groups.map(({ folder, routines }, gi) =>
+        <div
+          className={
+            selectedId
+              ? "space-y-4 pr-1"
+              : "max-h-48 space-y-4 overflow-y-auto pr-1"
+          }
+        >
+          {visibleGroups.map(({ folder, routines }, gi) =>
             routines.length > 0 ? (
               <div
                 key={
@@ -359,13 +317,13 @@ function LiftRoutinePicker({
               </div>
             ) : null,
           )}
-          {unfoldered.length > 0 ? (
+          {visibleUnfoldered.length > 0 ? (
             <div className="space-y-1.5">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Other
               </p>
               <div className="flex flex-col gap-1">
-                {unfoldered.map((r) => {
+                {visibleUnfoldered.map((r) => {
                   const id = r.id;
                   if (!id) {
                     return null;
@@ -388,6 +346,13 @@ function LiftRoutinePicker({
                 })}
               </div>
             </div>
+          ) : null}
+          {selectedId &&
+          visibleGroups.length === 0 &&
+          visibleUnfoldered.length === 0 ? (
+            <p className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-300">
+              {selectedTitle ?? selectedId}
+            </p>
           ) : null}
         </div>
       )}
@@ -464,6 +429,405 @@ function calendarCells(year: number, month: number): CalendarCell[] {
   return cells;
 }
 
+/** Local-calendar Monday of the ISO week containing `dt` (week starts Monday). */
+function startOfIsoWeekMondayFromDate(dt: Date): {
+  y: number;
+  m0: number;
+  d: number;
+} {
+  const copy = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  const mondayOffset = (copy.getDay() + 6) % 7;
+  copy.setDate(copy.getDate() - mondayOffset);
+  return {
+    y: copy.getFullYear(),
+    m0: copy.getMonth(),
+    d: copy.getDate(),
+  };
+}
+
+function addCalendarDays(
+  y: number,
+  m0: number,
+  d: number,
+  delta: number,
+): { y: number; m0: number; d: number } {
+  const next = new Date(y, m0, d + delta);
+  return {
+    y: next.getFullYear(),
+    m0: next.getMonth(),
+    d: next.getDate(),
+  };
+}
+
+/** Seven consecutive days from Monday `weekMonday` (may cross month boundaries). */
+function calendarWeekDayCells(weekMonday: {
+  y: number;
+  m0: number;
+  d: number;
+}): { key: string; y: number; m0: number; d: number }[] {
+  const out: { key: string; y: number; m0: number; d: number }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const { y, m0, d } = addCalendarDays(
+      weekMonday.y,
+      weekMonday.m0,
+      weekMonday.d,
+      i,
+    );
+    out.push({ key: `wk-${y}-${m0}-${d}`, y, m0, d });
+  }
+  return out;
+}
+
+function weekRangeLabel(weekMonday: {
+  y: number;
+  m0: number;
+  d: number;
+}): string {
+  const start = new Date(weekMonday.y, weekMonday.m0, weekMonday.d);
+  const endParts = addCalendarDays(
+    weekMonday.y,
+    weekMonday.m0,
+    weekMonday.d,
+    6,
+  );
+  const end = new Date(endParts.y, endParts.m0, endParts.d);
+  const a = start.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const b = end.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${a} – ${b}`;
+}
+
+type CalendarGridCell =
+  | { kind: "pad"; key: string }
+  | { kind: "day"; key: string; y: number; m0: number; d: number };
+
+function buildCalendarGridCells(
+  compact: boolean,
+  viewY: number,
+  viewM: number,
+  weekStart: { y: number; m0: number; d: number },
+): CalendarGridCell[] {
+  if (compact) {
+    return calendarWeekDayCells(weekStart).map((c) => ({
+      kind: "day" as const,
+      key: c.key,
+      y: c.y,
+      m0: c.m0,
+      d: c.d,
+    }));
+  }
+  return calendarCells(viewY, viewM).map((cell): CalendarGridCell => {
+    if (cell.day === null) {
+      return { kind: "pad", key: cell.key };
+    }
+    return {
+      kind: "day",
+      key: cell.key,
+      y: viewY,
+      m0: viewM,
+      d: cell.day,
+    };
+  });
+}
+
+/** Narrow viewport: month grid uses dot strip instead of plan preview cards. */
+const VIEWPORT_NARROW_QUERY = "(max-width: 1023px)";
+
+function useViewportNarrowForCalendar(): boolean {
+  const [narrow, setNarrow] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia(VIEWPORT_NARROW_QUERY).matches
+      : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(VIEWPORT_NARROW_QUERY);
+    const fn = () => setNarrow(mq.matches);
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
+  return narrow;
+}
+
+type HomeCalendarDayLayout = "monthGrid" | "weekList";
+
+type PlanActivityKind = "swim" | "lift" | "run" | "bike";
+
+function normalizePlanActivityKind(kind: string): PlanActivityKind | "other" {
+  if (kind === "swim" || kind === "lift" || kind === "run" || kind === "bike") {
+    return kind;
+  }
+  return "other";
+}
+
+const activityIconSvgProps = {
+  xmlns: "http://www.w3.org/2000/svg",
+  viewBox: "0 0 24 24",
+  fill: "none" as const,
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  className: "size-3 shrink-0",
+  "aria-hidden": true,
+} as const;
+
+/** Lucide-style paths — swim (Aquarius waves), lift (dumbbell), run (sport shoe), bike. */
+function PlanActivityKindIcon({ kind }: { kind: string }) {
+  const k = normalizePlanActivityKind(kind);
+
+  if (k === "swim") {
+    return (
+      <svg {...activityIconSvgProps}>
+        <path d="m2 10 2.456-3.684a.7.7 0 0 1 1.106-.013l2.39 3.413a.7.7 0 0 0 1.096-.001l2.402-3.432a.7.7 0 0 1 1.098 0l2.402 3.432a.7.7 0 0 0 1.098 0l2.389-3.413a.7.7 0 0 1 1.106.013L22 10" />
+        <path d="m2 18.002 2.456-3.684a.7.7 0 0 1 1.106-.013l2.39 3.413a.7.7 0 0 0 1.097 0l2.402-3.432a.7.7 0 0 1 1.098 0l2.402 3.432a.7.7 0 0 0 1.098 0l2.389-3.413a.7.7 0 0 1 1.106.013L22 18.002" />
+      </svg>
+    );
+  }
+
+  if (k === "lift") {
+    return (
+      <svg {...activityIconSvgProps}>
+        <path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z" />
+        <path d="m2.5 21.5 1.4-1.4" />
+        <path d="m20.1 3.9 1.4-1.4" />
+        <path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z" />
+        <path d="m9.6 14.4 4.8-4.8" />
+      </svg>
+    );
+  }
+
+  if (k === "run") {
+    return (
+      <svg {...activityIconSvgProps}>
+        <path d="m15 10.42 4.8-5.07" />
+        <path d="M19 18h3" />
+        <path d="M9.5 22L21.414 9.415A2 2 0 0 0 21.2 6.4l-5.61-4.208A1 1 0 0 0 14 3v2a2 2 0 0 1-1.394 1.906L8.677 8.053A1 1 0 0 0 8 9c-.155 6.393-2.082 9-4 9a2 2 0 0 0 0 4h14" />
+      </svg>
+    );
+  }
+
+  if (k === "bike") {
+    return (
+      <svg {...activityIconSvgProps}>
+        <circle cx="18.5" cy="17.5" r="3.5" />
+        <circle cx="5.5" cy="17.5" r="3.5" />
+        <circle cx="15" cy="5" r="1" />
+        <path d="M12 17.5V14l-3-3 4-3 2 3h2" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...activityIconSvgProps}>
+      <circle cx="12" cy="12" r="3.5" />
+    </svg>
+  );
+}
+
+function CalendarDayActivityIcons({
+  dayPlans,
+}: {
+  dayPlans: PlannedWorkoutWithCompleted[];
+}) {
+  if (dayPlans.length === 0) {
+    return (
+      <span className="text-sm leading-none text-zinc-600" aria-hidden>
+        ·
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="inline-flex max-w-full flex-row flex-wrap items-center justify-center gap-0.5 leading-none"
+      aria-hidden
+    >
+      {dayPlans.map((p) => (
+        <span
+          key={p.id}
+          title={`${p.kind}${p.status === "completed" ? " · completed" : ""}`}
+          className={
+            p.status === "completed"
+              ? "inline-flex shrink-0 text-emerald-500"
+              : "inline-flex shrink-0 text-zinc-500"
+          }
+        >
+          <PlanActivityKindIcon kind={p.kind} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Top-right of day cells; full label on desktop, truncated number on narrow viewports. */
+function DayCellWeightTopRight({
+  entry,
+  compactLabel,
+}: {
+  entry: WeightEntryRow;
+  compactLabel: boolean;
+}) {
+  return (
+    <span
+      className={`shrink-0 text-right tabular-nums leading-none text-zinc-300 ${
+        compactLabel
+          ? "max-w-[2.75rem] truncate text-[10px] font-medium"
+          : "text-[11px]"
+      }`}
+      title={`${entry.weightLb.toFixed(1)} lb`}
+    >
+      {compactLabel
+        ? entry.weightLb.toFixed(1)
+        : `${entry.weightLb.toFixed(1)} lb`}
+    </span>
+  );
+}
+
+function HomeCalendarDayBlock({
+  y,
+  m0,
+  day,
+  dayKey,
+  dayPlans,
+  dayWeight,
+  isHighlightedDay,
+  isToday,
+  layout,
+  monthCellHeightClass,
+  weightLabelCompact,
+  onOpenDay,
+}: {
+  y: number;
+  m0: number;
+  day: number;
+  dayKey: string;
+  dayPlans: PlannedWorkoutWithCompleted[];
+  dayWeight: WeightEntryRow | undefined;
+  isHighlightedDay: boolean;
+  isToday: boolean;
+  layout: HomeCalendarDayLayout;
+  monthCellHeightClass: string;
+  /**
+   * Narrow viewports: shorter weight text (number only). Wider: `NNN.N lb`.
+   */
+  weightLabelCompact: boolean;
+  onOpenDay: () => void;
+}) {
+  const dayAriaLabel = new Date(y, m0, day).toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const openPlanCount = dayPlans.filter((p) => p.status !== "completed").length;
+  const completedPlanCount = dayPlans.filter(
+    (p) => p.status === "completed",
+  ).length;
+  const weekListAria = [
+    dayAriaLabel,
+    openPlanCount > 0
+      ? `${openPlanCount} open plan${openPlanCount === 1 ? "" : "s"}`
+      : null,
+    completedPlanCount > 0 ? `${completedPlanCount} completed` : null,
+    dayWeight ? "weight logged" : null,
+  ]
+    .filter(Boolean)
+    .join(". ");
+
+  if (layout === "weekList") {
+    return (
+      <div
+        id={`home-cal-day-${dayKey}`}
+        className={`relative flex min-h-[3.25rem] min-w-0 flex-col overflow-hidden bg-zinc-950 ${
+          isHighlightedDay
+            ? "z-[4] ring-2 ring-sky-500/80 ring-inset"
+            : isToday
+              ? "ring-1 ring-emerald-600/50 ring-inset"
+              : ""
+        }`}
+      >
+        <button
+          type="button"
+          className="absolute inset-0 z-[1] cursor-pointer border-0 bg-transparent p-0 hover:bg-zinc-900/45 focus-visible:z-[5] focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-inset touch-manipulation"
+          onClick={onOpenDay}
+          aria-label={`Open ${weekListAria}`}
+        />
+        <div className="relative z-[2] flex h-full min-h-0 w-full flex-col px-0.5 pb-1 pt-1.5 pointer-events-none">
+          <div className="relative mb-0.5 flex min-h-[1.125rem] w-full shrink-0 items-start justify-center">
+            {dayWeight ? (
+              <span
+                className="absolute top-0 right-1 z-[3] inline-flex"
+                title={`${dayWeight.weightLb.toFixed(1)} lb`}
+              >
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"
+                  aria-hidden
+                />
+              </span>
+            ) : null}
+            <span
+              className={`text-center text-sm font-medium tabular-nums leading-none ${
+                isToday ? "text-emerald-400" : "text-zinc-200"
+              }`}
+            >
+              {day}
+            </span>
+          </div>
+          <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+            <CalendarDayActivityIcons dayPlans={dayPlans} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      id={`home-cal-day-${dayKey}`}
+      className={`relative flex ${monthCellHeightClass} min-w-0 flex-col overflow-hidden bg-zinc-950 px-1 py-0.5 ${
+        isHighlightedDay
+          ? "z-[4] ring-2 ring-sky-500/80 ring-inset"
+          : isToday
+            ? "ring-1 ring-emerald-600/50 ring-inset"
+            : ""
+      }`}
+    >
+      <button
+        type="button"
+        className="absolute inset-0 z-[1] cursor-pointer rounded border-0 bg-transparent p-0 hover:bg-zinc-900/45 focus-visible:z-[5] focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-inset touch-manipulation"
+        onClick={onOpenDay}
+        aria-label={`Open ${weekListAria}`}
+      />
+      <div className="relative z-[2] flex h-full min-h-0 min-w-0 flex-1 flex-col pointer-events-none">
+        <div className="flex shrink-0 items-start justify-between gap-1">
+          <div
+            className={`text-xs font-medium leading-none ${
+              isToday ? "text-emerald-400" : "text-zinc-500"
+            }`}
+          >
+            {day}
+          </div>
+          {dayWeight ? (
+            <DayCellWeightTopRight
+              entry={dayWeight}
+              compactLabel={weightLabelCompact}
+            />
+          ) : null}
+        </div>
+        <div className="flex min-h-0 w-full flex-1 items-center justify-center px-0.5">
+          <CalendarDayActivityIcons dayPlans={dayPlans} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type SelectedDay = { y: number; m: number; d: number };
 
 type DayModalScreen = "summary" | "addPlan" | "addFromActivity" | "planLink";
@@ -497,6 +861,7 @@ function Home() {
     hevyRoutines,
     hevyRoutineGroups,
     hevyRoutinesUnfoldered,
+    calendarScope,
   } = data;
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -516,6 +881,18 @@ function Home() {
     const n = new Date();
     return { y: n.getFullYear(), m: n.getMonth() };
   });
+
+  /** Monday (local) of the visible week — `md` and up use month `view` only. */
+  const [weekStart, setWeekStart] = useState(() =>
+    startOfIsoWeekMondayFromDate(new Date()),
+  );
+
+  const isNarrowViewport = useViewportNarrowForCalendar();
+  const showWeekStrip = calendarScope === "week";
+  async function persistCalendarScope(scope: CalendarScope) {
+    await setCalendarScopeFn({ data: { scope } });
+    await router.invalidate();
+  }
 
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null);
   const [weightErr, setWeightErr] = useState<string | null>(null);
@@ -548,12 +925,24 @@ function Home() {
   );
   const rTitle = useMemo(() => routineTitleMap(hevyRoutines), [hevyRoutines]);
 
-  const cells = useMemo(() => calendarCells(view.y, view.m), [view.y, view.m]);
+  const gridCells = useMemo(
+    () => buildCalendarGridCells(showWeekStrip, view.y, view.m, weekStart),
+    [showWeekStrip, view.y, view.m, weekStart],
+  );
 
   const monthLabel = new Date(view.y, view.m, 1).toLocaleString(undefined, {
     month: "long",
     year: "numeric",
   });
+
+  const calendarNavLabel = showWeekStrip
+    ? weekRangeLabel(weekStart)
+    : monthLabel;
+
+  const monthDayCellHeightClass =
+    isNarrowViewport && calendarScope === "month"
+      ? CAL_DAY_CELL_MONTH_NARROW_CLASS
+      : CAL_DAY_CELL_MONTH_WIDE_CLASS;
 
   useEffect(() => {
     if (!selectedDay) {
@@ -601,28 +990,37 @@ function Home() {
     requestAnimationFrame(() => {
       cell?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
-  }, [highlightedDayKey, view.y, view.m]);
+  }, [highlightedDayKey]);
 
-  function prevMonth() {
+  function prevCalendarPage() {
     setHighlightedDayKey(null);
-    setView((v) => {
-      const d = new Date(v.y, v.m - 1, 1);
-      return { y: d.getFullYear(), m: d.getMonth() };
-    });
+    if (showWeekStrip) {
+      setWeekStart((ws) => addCalendarDays(ws.y, ws.m0, ws.d, -7));
+    } else {
+      setView((v) => {
+        const d = new Date(v.y, v.m - 1, 1);
+        return { y: d.getFullYear(), m: d.getMonth() };
+      });
+    }
   }
 
-  function nextMonth() {
+  function nextCalendarPage() {
     setHighlightedDayKey(null);
-    setView((v) => {
-      const d = new Date(v.y, v.m + 1, 1);
-      return { y: d.getFullYear(), m: d.getMonth() };
-    });
+    if (showWeekStrip) {
+      setWeekStart((ws) => addCalendarDays(ws.y, ws.m0, ws.d, 7));
+    } else {
+      setView((v) => {
+        const d = new Date(v.y, v.m + 1, 1);
+        return { y: d.getFullYear(), m: d.getMonth() };
+      });
+    }
   }
 
   function goToday() {
     setHighlightedDayKey(null);
     const n = new Date();
     setView({ y: n.getFullYear(), m: n.getMonth() });
+    setWeekStart(startOfIsoWeekMondayFromDate(n));
   }
 
   function openDay(y: number, m0: number, day: number) {
@@ -657,18 +1055,8 @@ function Home() {
     const normalized = dayKeyFromParts(y, month0, d);
     scrollCalendarFromChartRef.current = true;
     setView({ y, m: month0 });
+    setWeekStart(startOfIsoWeekMondayFromDate(new Date(y, month0, d)));
     setHighlightedDayKey(normalized);
-  }
-
-  function openDayWithPlan(y: number, m0: number, day: number, planId: string) {
-    setHighlightedDayKey(null);
-    setSelectedDay({ y, m: m0, d: day });
-    setDayModalScreen("planLink");
-    setLinkPlanId(planId);
-    setWeightErr(null);
-    setPlanErr(null);
-    setPlanKind("");
-    setLiftRoutineId(null);
   }
 
   function closeWeightDialog() {
@@ -826,156 +1214,159 @@ function Home() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
-        <p className="text-sm text-zinc-400">
-          Click a day for weight and plans. Tap a plan to link a session: lifts
-          use Hevy; run, bike, and swim use Strava.
-        </p>
-      </div>
-
-      <section ref={calendarSectionRef} className="space-y-3 scroll-mt-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-medium text-zinc-100">Calendar</h2>
-          <div className="flex flex-wrap items-center gap-2">
+      <section ref={calendarSectionRef} className="space-y-2 scroll-mt-4">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={prevMonth}
-              className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
+              onClick={prevCalendarPage}
+              aria-label={showWeekStrip ? "Previous week" : "Previous month"}
+              className="touch-manipulation rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
             >
               ←
             </button>
-            <span className="min-w-[10rem] text-center text-sm font-medium text-zinc-200">
-              {monthLabel}
+            <span className="min-w-0 max-w-[min(100%,16rem)] truncate text-center text-sm font-medium text-zinc-200">
+              {calendarNavLabel}
             </span>
             <button
               type="button"
-              onClick={nextMonth}
-              className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
+              onClick={nextCalendarPage}
+              aria-label={showWeekStrip ? "Next week" : "Next month"}
+              className="touch-manipulation rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
             >
               →
             </button>
             <button
               type="button"
               onClick={goToday}
-              className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
+              className="touch-manipulation rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
             >
               Today
             </button>
+            <div className="flex rounded-md border border-zinc-700 p-0.5 text-xs text-zinc-400">
+              <button
+                type="button"
+                aria-pressed={calendarScope === "month"}
+                onClick={() => void persistCalendarScope("month")}
+                className={`touch-manipulation rounded px-2.5 py-1 ${
+                  calendarScope === "month"
+                    ? "bg-zinc-800 font-medium text-zinc-100"
+                    : "hover:bg-zinc-900/80"
+                }`}
+              >
+                Month
+              </button>
+              <button
+                type="button"
+                aria-pressed={calendarScope === "week"}
+                onClick={() => void persistCalendarScope("week")}
+                className={`touch-manipulation rounded px-2.5 py-1 ${
+                  calendarScope === "week"
+                    ? "bg-zinc-800 font-medium text-zinc-100"
+                    : "hover:bg-zinc-900/80"
+                }`}
+              >
+                Week
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-px overflow-hidden rounded border border-zinc-800 bg-zinc-800">
-          {WEEKDAYS.map((w) => (
-            <div
-              key={w}
-              className="bg-zinc-900 px-3 py-2 text-center text-xs font-medium text-zinc-500"
-            >
-              {w}
-            </div>
-          ))}
-          {cells.map((cell) => {
-            if (cell.day === null) {
-              return (
+        {showWeekStrip ? (
+          <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-800">
+            <div className="grid min-w-0 grid-cols-7 gap-px">
+              {WEEKDAYS.map((w) => (
                 <div
-                  key={cell.key}
-                  className={`${CAL_DAY_CELL_CLASS} bg-zinc-950/80`}
-                />
-              );
-            }
-            const day = cell.day;
-            const key = `${view.y}-${String(view.m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-            const dayPlans = byDay.get(key) ?? [];
-            const dayWeight = byWeightDay.get(key);
-            const isToday =
-              new Date().toDateString() ===
-              new Date(view.y, view.m, day).toDateString();
-            const isHighlightedDay =
-              (dialogDayKey !== null && key === dialogDayKey) ||
-              (highlightedDayKey !== null && key === highlightedDayKey);
-            const dayAriaLabel = new Date(
-              view.y,
-              view.m,
-              day,
-            ).toLocaleDateString(undefined, {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            });
-
-            return (
-              <div
-                key={cell.key}
-                id={`home-cal-day-${key}`}
-                className={`relative flex ${CAL_DAY_CELL_CLASS} flex-col bg-zinc-950 px-1.5 py-0.5 ${
-                  isHighlightedDay
-                    ? "z-[4] ring-2 ring-sky-500/80 ring-inset"
-                    : isToday
-                      ? "ring-1 ring-emerald-600/50 ring-inset"
-                      : ""
-                }`}
-              >
-                <button
-                  type="button"
-                  className="absolute inset-0 z-[1] cursor-pointer rounded border-0 bg-transparent p-0 text-left hover:bg-zinc-900/45 focus-visible:z-[5] focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-inset"
-                  onClick={() => openDay(view.y, view.m, day)}
-                  aria-label={`Open ${dayAriaLabel}`}
-                />
-                <div className="relative z-[2] flex h-full min-h-0 min-w-0 flex-1 flex-col pointer-events-none">
-                  <div className="flex shrink-0 items-start justify-between gap-1">
-                    <div
-                      className={`text-xs font-medium leading-none ${
-                        isToday ? "text-emerald-400" : "text-zinc-500"
-                      }`}
-                    >
-                      {day}
-                    </div>
-                    {dayWeight ? (
-                      <div className="text-right text-[11px] leading-none tabular-nums text-zinc-300">
-                        {dayWeight.weightLb.toFixed(1)} lb
-                      </div>
-                    ) : null}
-                  </div>
-                  <ul className="relative z-[3] mt-2 flex flex-col gap-px pointer-events-auto">
-                    {([0, 1, 2] as const).map((slot) => {
-                      const p = dayPlans[slot];
-                      if (!p) {
-                        return (
-                          <li
-                            key={`${key}-preview-${slot}`}
-                            className="h-7 shrink-0"
-                            aria-hidden
-                          />
-                        );
-                      }
-                      return (
-                        <li key={p.id} className="h-7 min-h-0 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDayWithPlan(view.y, view.m, day, p.id);
-                            }}
-                            className="flex h-full w-full min-w-0 max-w-full items-center gap-1 overflow-hidden rounded border border-zinc-800 bg-zinc-900/80 px-1.5 py-0 text-left text-[11px] leading-none text-zinc-200 hover:border-zinc-600"
-                          >
-                            <span className="min-w-0 flex-1 truncate capitalize text-zinc-100">
-                              {p.kind}
-                            </span>
-                            <PlanStatusPreviewGlyph status={p.status} />
-                            {p.completedWorkout ? (
-                              <LinkedExternalSessionIcon />
-                            ) : null}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  key={w}
+                  className="bg-zinc-900 px-0.5 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-zinc-500"
+                >
+                  {w}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              ))}
+              {gridCells.map((cell) => {
+                if (cell.kind !== "day") {
+                  return null;
+                }
+                const key = dayKeyFromParts(cell.y, cell.m0, cell.d);
+                const dayPlans = byDay.get(key) ?? [];
+                const dayWeight = byWeightDay.get(key);
+                const isToday =
+                  new Date().toDateString() ===
+                  new Date(cell.y, cell.m0, cell.d).toDateString();
+                const isHighlightedDay =
+                  (dialogDayKey !== null && key === dialogDayKey) ||
+                  (highlightedDayKey !== null && key === highlightedDayKey);
+                return (
+                  <HomeCalendarDayBlock
+                    key={cell.key}
+                    y={cell.y}
+                    m0={cell.m0}
+                    day={cell.d}
+                    dayKey={key}
+                    dayPlans={dayPlans}
+                    dayWeight={dayWeight}
+                    isHighlightedDay={isHighlightedDay}
+                    isToday={isToday}
+                    layout="weekList"
+                    monthCellHeightClass={monthDayCellHeightClass}
+                    weightLabelCompact={isNarrowViewport}
+                    onOpenDay={() => openDay(cell.y, cell.m0, cell.d)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-800">
+            <div className="grid grid-cols-7 gap-px">
+              {WEEKDAYS.map((w) => (
+                <div
+                  key={w}
+                  className="bg-zinc-900 px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-zinc-500"
+                >
+                  {w}
+                </div>
+              ))}
+              {gridCells.map((cell) => {
+                if (cell.kind === "pad") {
+                  return (
+                    <div
+                      key={cell.key}
+                      className={`${monthDayCellHeightClass} bg-zinc-950/80`}
+                    />
+                  );
+                }
+                const { y, m0, d: day } = cell;
+                const key = dayKeyFromParts(y, m0, day);
+                const dayPlans = byDay.get(key) ?? [];
+                const dayWeight = byWeightDay.get(key);
+                const isToday =
+                  new Date().toDateString() ===
+                  new Date(y, m0, day).toDateString();
+                const isHighlightedDay =
+                  (dialogDayKey !== null && key === dialogDayKey) ||
+                  (highlightedDayKey !== null && key === highlightedDayKey);
+                return (
+                  <HomeCalendarDayBlock
+                    key={cell.key}
+                    y={y}
+                    m0={m0}
+                    day={day}
+                    dayKey={key}
+                    dayPlans={dayPlans}
+                    dayWeight={dayWeight}
+                    isHighlightedDay={isHighlightedDay}
+                    isToday={isToday}
+                    layout="monthGrid"
+                    monthCellHeightClass={monthDayCellHeightClass}
+                    weightLabelCompact={isNarrowViewport}
+                    onOpenDay={() => openDay(y, m0, day)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="space-y-3">
@@ -991,6 +1382,7 @@ function Home() {
                 status: "all",
                 from: undefined,
                 to: undefined,
+                page: 1,
               }}
               className="text-emerald-400/90 hover:underline"
             >
@@ -1026,17 +1418,18 @@ function Home() {
       </section>
 
       {selectedDay !== null ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
-          role="presentation"
-          onClick={closeWeightDialog}
-        >
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+          <button
+            type="button"
+            aria-label="Close dialog"
+            className="absolute inset-0 cursor-default border-0 bg-black/60 p-0"
+            onClick={closeWeightDialog}
+          />
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="day-dialog-title"
-            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-4 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+            className="relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-4 shadow-xl"
           >
             {dayModalScreen === "summary" ? (
               <>
@@ -1697,7 +2090,7 @@ function Home() {
                           {linkPlan.completedWorkout.vendor === "strava" ? (
                             <a
                               href={stravaActivityWebUrl(
-                                linkPlan.completedWorkout.externalId,
+                                linkPlan.completedWorkout.vendorId,
                               )}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -1708,7 +2101,7 @@ function Home() {
                           ) : (
                             <a
                               href={hevyWorkoutWebUrl(
-                                linkPlan.completedWorkout.externalId,
+                                linkPlan.completedWorkout.vendorId,
                               )}
                               target="_blank"
                               rel="noopener noreferrer"

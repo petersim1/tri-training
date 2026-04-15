@@ -1,3 +1,5 @@
+import type { HevyWorkoutSummary } from "~/lib/activities/types";
+
 const BASE = "https://api.hevyapp.com/v1";
 
 function headers(): HeadersInit {
@@ -30,4 +32,30 @@ export async function hevyFetch<T>(
     throw new Error(`Hevy API ${res.status}: ${text}`);
   }
   return res.json() as Promise<T>;
+}
+
+/** Single workout `GET /v1/workouts/{id}`; `null` if not found. */
+export async function hevyFetchWorkoutById(
+  workoutId: string,
+): Promise<HevyWorkoutSummary | null> {
+  const id = workoutId.trim();
+  if (!id) {
+    return null;
+  }
+  const url = `${BASE}/workouts/${encodeURIComponent(id)}`;
+  const res = await fetch(url, {
+    headers: {
+      ...headers(),
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Hevy API ${res.status}: ${text}`);
+  }
+  return res.json() as Promise<HevyWorkoutSummary>;
 }

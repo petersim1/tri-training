@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "tanstack-start",
+  "bunVersion": "1.x",
+  "installCommand": "bun install",
+  "buildCommand": "bun run build && bun run db:migrate",
+  "devCommand": "bun run dev"
+}

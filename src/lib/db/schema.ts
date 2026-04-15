@@ -1,18 +1,37 @@
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  integer,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
-/** Linked session (Strava activity or Hevy workout) — actual metrics from the list row at link time. */
-export const completedWorkouts = sqliteTable("completed_workouts", {
-  id: text("id").primaryKey(),
-  vendor: text("vendor").$type<"strava" | "hevy">().notNull(),
-  externalId: text("external_id").notNull(),
-  distanceM: real("distance_m"),
-  movingTimeSeconds: integer("moving_time_seconds"),
-  elapsedTimeSeconds: integer("elapsed_time_seconds"),
-  calories: real("calories"),
-  title: text("title"),
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
-});
+/** JSON value — structured so TanStack Start can serialize server responses. */
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue =
+  | JsonPrimitive
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+/**
+ * Linked session: full Strava activity or Hevy workout JSON from vendor APIs.
+ * @see `~/lib/plans/completed-workout-data.ts` for field accessors.
+ */
+export const completedWorkouts = sqliteTable(
+  "completed_workouts",
+  {
+    id: text("id").primaryKey(),
+    vendor: text("vendor").$type<"strava" | "hevy">().notNull(),
+    /** Strava activity id or Hevy workout id (string). */
+    vendorId: text("vendor_id").notNull(),
+    data: text("data", { mode: "json" }).notNull().$type<JsonValue>(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("completed_workouts_vendor_vendor_id").on(t.vendor, t.vendorId),
+  ],
+);
 
 export type CompletedWorkoutRow = typeof completedWorkouts.$inferSelect;
 export type NewCompletedWorkout = typeof completedWorkouts.$inferInsert;
@@ -27,6 +46,7 @@ export const plannedWorkouts = sqliteTable("planned_workouts", {
   routineId: text("routine_id"),
   completedWorkoutId: text("completed_workout_id").references(
     () => completedWorkouts.id,
+    { onDelete: "set null" },
   ),
   distance: real("distance"),
   distanceUnits: text("distance_units"),
@@ -53,3 +73,27 @@ export const weightEntries = sqliteTable("weight_entries", {
 });
 
 export type WeightEntryRow = typeof weightEntries.$inferSelect;
+
+/** Singleton row (`id` = 1) for Strava API in webhooks (no browser cookies). */
+export const serviceStravaTokens = sqliteTable("service_strava_tokens", {
+  id: integer("id").primaryKey(),
+  refreshToken: text("refresh_token").notNull(),
+  accessToken: text("access_token").notNull(),
+  /** Unix seconds */
+  expiresAt: integer("expires_at").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export type ServiceStravaTokensRow = typeof serviceStravaTokens.$inferSelect;
+
+export const webhookDeliveries = sqliteTable("webhook_deliveries", {
+  id: text("id").primaryKey(),
+  source: text("source").$type<"hevy" | "strava">().notNull(),
+  idempotencyKey: text("idempotency_key").unique(),
+  payloadJson: text("payload_json"),
+  outcome: text("outcome").$type<"ok" | "ignored" | "error">().notNull(),
+  detail: text("detail"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export type WebhookDeliveryRow = typeof webhookDeliveries.$inferSelect;

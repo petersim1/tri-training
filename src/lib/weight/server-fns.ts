@@ -49,11 +49,13 @@ export const setWeightForDayFn = createServerFn({ method: "POST" })
     const now = new Date();
     const id = crypto.randomUUID();
     const db = getDb();
-    db.transaction((tx) => {
-      tx.delete(weightEntries)
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(weightEntries)
         .where(eq(weightEntries.dayKey, data.dayKey))
         .run();
-      tx.insert(weightEntries)
+      await tx
+        .insert(weightEntries)
         .values({
           id,
           dayKey: data.dayKey,
@@ -76,6 +78,9 @@ export const clearWeightForDayFn = createServerFn({ method: "POST" })
       throw new Error("Invalid day");
     }
     const db = getDb();
-    db.delete(weightEntries).where(eq(weightEntries.dayKey, data.dayKey)).run();
+    await db
+      .delete(weightEntries)
+      .where(eq(weightEntries.dayKey, data.dayKey))
+      .run();
     return { ok: true };
   });

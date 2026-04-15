@@ -7,9 +7,11 @@ import {
   type PlannedWorkoutWithCompleted,
 } from "~/lib/db/schema";
 
-export function selectPlannedWorkoutsWithCompleted(): PlannedWorkoutWithCompleted[] {
+export async function selectPlannedWorkoutsWithCompleted(): Promise<
+  PlannedWorkoutWithCompleted[]
+> {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select({
       ...getTableColumns(plannedWorkouts),
       cw: completedWorkouts,

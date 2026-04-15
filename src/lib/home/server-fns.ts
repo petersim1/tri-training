@@ -1,9 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getCookie, setCookie } from "@tanstack/react-start/server";
 import { desc } from "drizzle-orm";
 import { getSessionOk } from "~/lib/auth/session-server";
 import { getDb } from "~/lib/db";
 import { weightEntries } from "~/lib/db/schema";
-import { selectPlannedWorkoutsWithCompleted } from "~/lib/plans/select-with-completed";
 import {
   fetchAllHevyRoutines,
   fetchAllRoutineFolders,
@@ -14,6 +14,12 @@ import type {
   HevyRoutineFolderSummary,
   HevyRoutineSummary,
 } from "~/lib/hevy/types";
+import {
+  CALENDAR_SCOPE_COOKIE,
+  type CalendarScope,
+  parseCalendarScope,
+} from "~/lib/home/calendar-scope";
+import { selectPlannedWorkoutsWithCompleted } from "~/lib/plans/select-with-completed";
 
 export type {
   HevyRoutineFolderGroup,
@@ -31,9 +37,9 @@ export const getHomeDataFn = createServerFn({ method: "GET" }).handler(
   async () => {
     await requireAuth();
     const db = getDb();
-    const plans = selectPlannedWorkoutsWithCompleted();
+    const plans = await selectPlannedWorkoutsWithCompleted();
 
-    const weightEntriesList = db
+    const weightEntriesList = await db
       .select()
       .from(weightEntries)
       .orderBy(desc(weightEntries.dayKey))
@@ -67,6 +73,25 @@ export const getHomeDataFn = createServerFn({ method: "GET" }).handler(
       hevyRoutines,
       hevyRoutineGroups,
       hevyRoutinesUnfoldered,
+      calendarScope: parseCalendarScope(getCookie(CALENDAR_SCOPE_COOKIE)),
     };
   },
 );
+
+/** Persist month vs week calendar (`/` home). Read via `getHomeDataFn`. */
+export const setCalendarScopeFn = createServerFn({ method: "POST" })
+  .inputValidator((d: { scope: CalendarScope }) => d)
+  .handler(async ({ data }) => {
+    await requireAuth();
+    if (data.scope !== "month" && data.scope !== "week") {
+      throw new Error("Invalid calendar scope");
+    }
+    setCookie(CALENDAR_SCOPE_COOKIE, data.scope, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+    });
+    return { ok: true as const };
+  });
