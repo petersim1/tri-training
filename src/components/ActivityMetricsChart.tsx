@@ -450,7 +450,7 @@ export function ActivityMetricsChart({
         aria-label="Activity metrics chart"
         className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
       >
-        <div className="space-y-2 border-b border-zinc-800/80 px-4 py-3">
+        <div className="space-y-2 px-4 py-3">
           {tabs}
           {toolbar}
         </div>
@@ -498,7 +498,7 @@ export function ActivityMetricsChart({
         aria-label="Activity metrics chart"
         className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
       >
-        <div className="space-y-2 border-b border-zinc-800/80 px-4 py-3">
+        <div className="space-y-2 px-4 py-3">
           {tabs}
           {toolbar}
         </div>
@@ -538,13 +538,6 @@ export function ActivityMetricsChart({
 
   const interactive = Boolean(onSelectDayKey);
 
-  const captionSuffix = isCardio
-    ? effectiveMetric === "distance"
-      ? "Distance (km)."
-      : effectiveMetric === "time"
-        ? "Time (min)."
-        : "Pace (min/km) where distance and time exist."
-    : "Duration (min).";
 
   const chartKindLabel = cumulative ? "line chart" : "bar chart";
   const ariaLabel = `${sessionChartRangeLabel(sessionChart.range)} · ${KIND_LABEL[kind]} sessions ${chartKindLabel}, ${sessionCount} sessions`;
@@ -561,17 +554,10 @@ export function ActivityMetricsChart({
       aria-label="Activity metrics chart"
       className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
     >
-      <div className="space-y-2 border-b border-zinc-800/80 px-4 py-3">
+      <div className="space-y-2 px-4 py-3">
         {tabs}
         {toolbar}
       </div>
-      <p className="border-b border-zinc-800/60 px-4 py-2 text-[11px] text-zinc-500">
-        {cumulative ? "Line chart" : "Bar chart"} ·{" "}
-        {sessionChartRangeLabel(sessionChart.range)} ·{" "}
-        {cumulative ? "Cumulative · " : ""}
-        {captionSuffix}
-      </p>
-
       <svg
         className="h-auto w-full max-w-full"
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}

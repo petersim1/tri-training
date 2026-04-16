@@ -8,6 +8,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import {
   useEffect,
   useLayoutEffect,
@@ -17,16 +18,15 @@ import {
   useSyncExternalStore,
 } from "react";
 import { ActivityMetricsChart } from "~/components/ActivityMetricsChart";
+import { LinkedSessionPanel } from "~/components/LinkedSessionPanel";
 import { PlanCardioTargetsField } from "~/components/PlanCardioTargetsField";
 import { PlanNotesField } from "~/components/PlanNotesField";
 import { PlanStatusSelect } from "~/components/PlanStatusSelect";
 import { WeightTrendChart } from "~/components/WeightTrendChart";
 import type {
-  CompletedWorkoutRow,
   PlannedWorkoutWithCompleted,
   WeightEntryRow,
 } from "~/lib/db/schema";
-import { hevyWorkoutWebUrl, stravaActivityWebUrl } from "~/lib/hevy/links";
 import type {
   HevyRoutineExerciseDetail,
   HevyRoutineFolderGroup,
@@ -55,11 +55,6 @@ import {
   CARDIO_DISTANCE_UNITS,
   isCardioKind,
 } from "~/lib/plans/cardio-targets";
-import {
-  completedWorkoutCalories,
-  completedWorkoutDistanceM,
-  completedWorkoutMovingSeconds,
-} from "~/lib/plans/completed-workout-data";
 import {
   getPlanLinkCandidatesFn,
   getPlanLinkCandidatesForDayFn,
@@ -172,56 +167,6 @@ function formatSessionTime(iso: string | undefined) {
   } catch {
     return iso;
   }
-}
-
-function formatActualDurationSec(s: number | null | undefined): string | null {
-  if (s == null || !Number.isFinite(s)) {
-    return null;
-  }
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = Math.floor(s % 60);
-  if (h > 0) {
-    return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-  }
-  return `${m}:${String(sec).padStart(2, "0")}`;
-}
-
-function CardioActualFromCompleted({ c }: { c: CompletedWorkoutRow }) {
-  const dist = completedWorkoutDistanceM(c);
-  const distLabel =
-    dist != null && Number.isFinite(dist)
-      ? dist >= 1000
-        ? `${(dist / 1000).toFixed(2)} km`
-        : `${Math.round(dist)} m`
-      : null;
-  const dur = formatActualDurationSec(completedWorkoutMovingSeconds(c));
-  const kcalRaw = completedWorkoutCalories(c);
-  const kcal =
-    kcalRaw != null && Number.isFinite(kcalRaw) ? Math.round(kcalRaw) : null;
-  if (!distLabel && !dur && kcal == null) {
-    return null;
-  }
-  return (
-    <div className="rounded border border-zinc-800/80 bg-zinc-900/20 px-2 py-1.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">
-        Actual (linked)
-      </p>
-      <div className="mt-0.5 text-[11px] text-zinc-400">
-        {distLabel ? <span>{distLabel}</span> : null}
-        {distLabel && dur ? <span className="text-zinc-600"> · </span> : null}
-        {dur ? <span>{dur}</span> : null}
-        {kcal != null ? (
-          <span>
-            {distLabel || dur ? (
-              <span className="text-zinc-600"> · </span>
-            ) : null}
-            {kcal} kcal
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 function plansByDayKey(
@@ -623,7 +568,7 @@ const activityIconSvgProps = {
   strokeWidth: 2,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
-  className: "size-4 shrink-0",
+  className: "sm:size-4 size-3 shrink-0",
   "aria-hidden": true,
 } as const;
 
@@ -813,7 +758,7 @@ function HomeCalendarDayBlock({
               {day}
             </span>
           </div>
-          <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-2">
+          <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-1 sm:gap-2">
             <CalendarDayActivityIcons dayPlans={dayPlans} />
           </div>
         </div>
@@ -912,8 +857,8 @@ function removePlannedWorkoutFromCaches(
 
 function Home() {
   const data = Route.useLoaderData();
-  const { calendarScope } = data;
   const loaderSessionChart = data.sessionChartSettings;
+  const loaderCalendarScope = data.calendarScope;
   const queryClient = useQueryClient();
 
   const [sessionChartSettings, setSessionChartSettings] = useState(
@@ -923,6 +868,34 @@ function Home() {
   useEffect(() => {
     setSessionChartSettings(loaderSessionChart);
   }, [loaderSessionChart]);
+
+  const [calendarScope, setCalendarScope] = useState(() => data.calendarScope);
+
+  useEffect(() => {
+    setCalendarScope(loaderCalendarScope);
+  }, [loaderCalendarScope]);
+
+  const runSetCalendarScope = useServerFn(setCalendarScopeFn);
+  const runSetSessionChartSettings = useServerFn(setSessionChartSettingsFn);
+
+  const patchSessionChartMutation = useMutation({
+    mutationFn: async (patch: Partial<SessionChartSettings>) => {
+      const next = { ...sessionChartSettings, ...patch };
+      await runSetSessionChartSettings({ data: next });
+      return next;
+    },
+    onSuccess: (next) => {
+      setSessionChartSettings(next);
+    },
+  });
+
+  const persistCalendarScopeMutation = useMutation({
+    mutationFn: (scope: CalendarScope) =>
+      runSetCalendarScope({ data: { scope } }),
+    onSuccess: (_, scope) => {
+      setCalendarScope(scope);
+    },
+  });
 
   const plansQuery = useQuery({
     queryKey: homePlansQueryKey,
@@ -943,12 +916,6 @@ function Home() {
   const hevyRoutines = hevyQuery.data?.hevyRoutines ?? [];
   const hevyRoutineGroups = hevyQuery.data?.hevyRoutineGroups ?? [];
   const hevyRoutinesUnfoldered = hevyQuery.data?.hevyRoutinesUnfoldered ?? [];
-
-  async function patchSessionChart(patch: Partial<SessionChartSettings>) {
-    const next = { ...sessionChartSettings, ...patch };
-    await setSessionChartSettingsFn({ data: next });
-    setSessionChartSettings(next);
-  }
 
   async function refreshAfterPlanChange() {
     await queryClient.invalidateQueries({
@@ -980,9 +947,6 @@ function Home() {
   );
 
   const showWeekStrip = calendarScope === "week";
-  async function persistCalendarScope(scope: CalendarScope) {
-    await setCalendarScopeFn({ data: { scope } });
-  }
 
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null);
   const [weightErr, setWeightErr] = useState<string | null>(null);
@@ -1444,8 +1408,9 @@ function Home() {
               <button
                 type="button"
                 aria-pressed={calendarScope === "month"}
-                onClick={() => void persistCalendarScope("month")}
-                className={`touch-manipulation rounded px-2.5 py-1 ${
+                disabled={persistCalendarScopeMutation.isPending}
+                onClick={() => persistCalendarScopeMutation.mutate("month")}
+                className={`touch-manipulation rounded px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50 ${
                   calendarScope === "month"
                     ? "bg-zinc-800 font-medium text-zinc-100"
                     : "hover:bg-zinc-900/80"
@@ -1456,8 +1421,9 @@ function Home() {
               <button
                 type="button"
                 aria-pressed={calendarScope === "week"}
-                onClick={() => void persistCalendarScope("week")}
-                className={`touch-manipulation rounded px-2.5 py-1 ${
+                disabled={persistCalendarScopeMutation.isPending}
+                onClick={() => persistCalendarScopeMutation.mutate("week")}
+                className={`touch-manipulation rounded px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50 ${
                   calendarScope === "week"
                     ? "bg-zinc-800 font-medium text-zinc-100"
                     : "hover:bg-zinc-900/80"
@@ -1567,7 +1533,9 @@ function Home() {
           onKindChange={setActivityPlotKind}
           points={activityPlotPoints}
           sessionChart={sessionChartSettings}
-          onSessionChartPatch={(patch) => void patchSessionChart(patch)}
+          onSessionChartPatch={(patch) =>
+            patchSessionChartMutation.mutate(patch)
+          }
           onSelectDayKey={openDayFromDayKey}
           selectedDayKey={dialogDayKey ?? highlightedDayKey}
           isLoading={plansQuery.isLoading}
@@ -1579,7 +1547,7 @@ function Home() {
         <WeightTrendChart
           entries={weightEntriesInRange}
           range={sessionChartSettings.range}
-          onRangeChange={(r) => void patchSessionChart({ range: r })}
+          onRangeChange={(r) => patchSessionChartMutation.mutate({ range: r })}
           onSelectDayKey={openDayFromDayKey}
           selectedDayKey={dialogDayKey ?? highlightedDayKey}
           isLoading={weightQuery.isLoading}
@@ -2165,11 +2133,11 @@ function Home() {
                   <div className="min-w-0 flex-1">
                     <h2
                       id="day-dialog-title"
-                      className="text-lg font-semibold text-zinc-100"
+                      className="text-lg font-semibold capitalize text-zinc-100"
                     >
-                      Link session
+                      {linkPlan ? `${linkPlan.kind} plan` : "Plan"}
                     </h2>
-                    <p className="truncate text-sm text-zinc-400">
+                    <p className="text-sm leading-snug text-zinc-400">
                       {dialogTitle}
                     </p>
                   </div>
@@ -2209,71 +2177,34 @@ function Home() {
                       </div>
                     ) : null}
 
-                    <div className="mb-2 rounded border border-zinc-800/90 bg-zinc-900/40 px-2 py-1.5">
+                    <div className="mb-2 space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                        <span className="text-sm capitalize text-zinc-200">
-                          {linkPlan.kind}
+                        <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                          Status
                         </span>
                         <PlanStatusSelect
                           planId={linkPlan.id}
                           status={linkPlan.status}
+                          disabled={Boolean(linkPlan.completedWorkout)}
                           onUpdated={refreshAfterPlanChange}
                         />
                       </div>
                       {linkPlan.completedWorkout ? (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <span className="text-[11px] text-zinc-500">
-                            Linked session.
-                          </span>
-                          {linkPlan.completedWorkout.vendor === "strava" ? (
-                            <a
-                              href={stravaActivityWebUrl(
-                                linkPlan.completedWorkout.vendorId,
-                              )}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[11px] text-emerald-400/90 hover:underline"
-                            >
-                              View in Strava
-                            </a>
-                          ) : (
-                            <a
-                              href={hevyWorkoutWebUrl(
-                                linkPlan.completedWorkout.vendorId,
-                              )}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[11px] text-emerald-400/90 hover:underline"
-                            >
-                              Open Hevy workout
-                            </a>
-                          )}
-                          <button
-                            type="button"
-                            disabled={updatePlanMutation.isPending}
-                            className="text-[11px] text-amber-400/90 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                            onClick={() =>
-                              updatePlanMutation.mutate({
-                                id: linkPlan.id,
-                                stravaActivityId: null,
-                                hevyWorkoutId: null,
-                              })
-                            }
-                          >
-                            {updatePlanMutation.isPending
-                              ? "Unlinking…"
-                              : "Unlink"}
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="mt-1 text-[11px] text-zinc-600">
-                          No session linked.
+                        <LinkedSessionPanel
+                          planId={linkPlan.id}
+                          completed={linkPlan.completedWorkout}
+                          onUnlinked={refreshAfterPlanChange}
+                        />
+                      ) : !isCardioKind(linkPlan.kind) ? (
+                        <p className="rounded border border-dashed border-zinc-800/90 bg-zinc-950/40 px-2 py-1.5 text-[10px] text-zinc-500">
+                          No session linked
                         </p>
-                      )}
+                      ) : null}
                     </div>
 
-                    {isCardioKind(linkPlan.kind) ? (
-                      <div className="mb-2 space-y-1.5">
+                    {isCardioKind(linkPlan.kind) &&
+                    !linkPlan.completedWorkout ? (
+                      <div className="mb-2">
                         <PlanCardioTargetsField
                           planId={linkPlan.id}
                           kind={linkPlan.kind}
@@ -2282,11 +2213,6 @@ function Home() {
                           timeSeconds={linkPlan.timeSeconds}
                           onUpdated={refreshAfterPlanChange}
                         />
-                        {linkPlan.completedWorkout ? (
-                          <CardioActualFromCompleted
-                            c={linkPlan.completedWorkout}
-                          />
-                        ) : null}
                       </div>
                     ) : null}
 

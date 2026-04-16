@@ -245,9 +245,6 @@ export function WeightTrendChart({
       className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
     >
       {toolbar}
-      <p className="border-b border-zinc-800/60 px-4 py-2 text-[11px] text-zinc-500">
-        Line chart · {sessionChartRangeLabel(range)} · Weight (lb)
-      </p>
       <div className="p-4">
         <svg
           className="h-auto w-full max-w-full"
