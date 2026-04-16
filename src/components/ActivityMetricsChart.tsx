@@ -538,7 +538,6 @@ export function ActivityMetricsChart({
 
   const interactive = Boolean(onSelectDayKey);
 
-
   const chartKindLabel = cumulative ? "line chart" : "bar chart";
   const ariaLabel = `${sessionChartRangeLabel(sessionChart.range)} · ${KIND_LABEL[kind]} sessions ${chartKindLabel}, ${sessionCount} sessions`;
 
