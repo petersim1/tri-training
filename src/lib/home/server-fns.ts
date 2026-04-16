@@ -117,7 +117,7 @@ export const loadHomePageDataFn = async (
   const sessionChartSettings = await getCalendarSettings();
 
   queryClient.prefetchQuery({
-    queryKey: homePlansQueryKey(sessionChartSettings),
+    queryKey: homePlansQueryKey,
     queryFn: () => listAllPlannedWorkoutsFn(),
   });
 

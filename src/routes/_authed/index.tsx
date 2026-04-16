@@ -884,11 +884,10 @@ function parseFormOptionalInt(v: FormDataEntryValue | null): number | null {
 
 function removePlannedWorkoutFromCaches(
   queryClient: QueryClient,
-  sessionChartSettings: SessionChartSettings,
   deletedId: string,
 ) {
   queryClient.setQueryData<PlannedWorkoutWithCompleted[]>(
-    homePlansQueryKey(sessionChartSettings),
+    homePlansQueryKey,
     (old) => (old ?? []).filter((p) => p.id !== deletedId),
   );
 
@@ -913,11 +912,20 @@ function removePlannedWorkoutFromCaches(
 
 function Home() {
   const data = Route.useLoaderData();
-  const { calendarScope, sessionChartSettings } = data;
+  const { calendarScope } = data;
+  const loaderSessionChart = data.sessionChartSettings;
   const queryClient = useQueryClient();
 
+  const [sessionChartSettings, setSessionChartSettings] = useState(
+    () => data.sessionChartSettings,
+  );
+
+  useEffect(() => {
+    setSessionChartSettings(loaderSessionChart);
+  }, [loaderSessionChart]);
+
   const plansQuery = useQuery({
-    queryKey: homePlansQueryKey(sessionChartSettings),
+    queryKey: homePlansQueryKey,
     queryFn: () => listAllPlannedWorkoutsFn(),
   });
   const plans = plansQuery.data ?? [];
@@ -939,6 +947,7 @@ function Home() {
   async function patchSessionChart(patch: Partial<SessionChartSettings>) {
     const next = { ...sessionChartSettings, ...patch };
     await setSessionChartSettingsFn({ data: next });
+    setSessionChartSettings(next);
   }
 
   async function refreshAfterPlanChange() {
@@ -1235,11 +1244,7 @@ function Home() {
   const deletePlanMutation = useMutation({
     mutationFn: (id: string) => deletePlanFn({ data: { id } }),
     onSuccess: (_, deletedId) => {
-      removePlannedWorkoutFromCaches(
-        queryClient,
-        sessionChartSettings,
-        deletedId,
-      );
+      removePlannedWorkoutFromCaches(queryClient, deletedId);
       backToDaySummary();
     },
     onError: (e) => {
