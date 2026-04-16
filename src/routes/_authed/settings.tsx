@@ -1,3 +1,4 @@
+import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { backfillLinkedWorkoutsFn } from "~/lib/plans/backfill-server-fns";
@@ -15,9 +16,28 @@ function SettingsPage() {
   const { strava } = Route.useLoaderData();
   const router = useRouter();
   const [stravaOAuthMsg, setStravaOAuthMsg] = useState<string | null>(null);
-  const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
   const [backfillErr, setBackfillErr] = useState<string | null>(null);
+
+  const backfillMutation = useMutation({
+    mutationFn: () => backfillLinkedWorkoutsFn(),
+    onMutate: () => {
+      setBackfillMsg(null);
+      setBackfillErr(null);
+    },
+    onSuccess: (r) => {
+      setBackfillMsg(
+        `Imported Strava ${r.importedStrava}, Hevy ${r.importedHevy}. Linked ${r.linked}, skipped ${r.skipped}.${r.errors.length > 0 ? ` ${r.errors.length} error(s) — see below.` : ""}`,
+      );
+      if (r.errors.length > 0) {
+        setBackfillErr(r.errors.join("\n"));
+      }
+      router.invalidate()
+    },
+    onError: (e) => {
+      setBackfillErr(e instanceof Error ? e.message : String(e));
+    },
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -89,29 +109,13 @@ function SettingsPage() {
         </p>
         <button
           type="button"
-          disabled={backfillBusy}
-          onClick={async () => {
-            setBackfillBusy(true);
-            setBackfillMsg(null);
-            setBackfillErr(null);
-            try {
-              const r = await backfillLinkedWorkoutsFn();
-              setBackfillMsg(
-                `Imported Strava ${r.importedStrava}, Hevy ${r.importedHevy}. Linked ${r.linked}, skipped ${r.skipped}.${r.errors.length > 0 ? ` ${r.errors.length} error(s) — see below.` : ""}`,
-              );
-              if (r.errors.length > 0) {
-                setBackfillErr(r.errors.join("\n"));
-              }
-              await router.invalidate();
-            } catch (e) {
-              setBackfillErr(e instanceof Error ? e.message : String(e));
-            } finally {
-              setBackfillBusy(false);
-            }
-          }}
+          disabled={backfillMutation.isPending}
+          onClick={() => backfillMutation.mutate()}
           className="rounded border border-zinc-600 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {backfillBusy ? "Running…" : "Backfill links from Strava & Hevy"}
+          {backfillMutation.isPending
+            ? "Running…"
+            : "Backfill links from Strava & Hevy"}
         </button>
         {backfillMsg ? (
           <p className="text-sm text-emerald-400/90">{backfillMsg}</p>

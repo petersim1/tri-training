@@ -1,14 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
-import { getSessionOk } from "~/lib/auth/session-server";
 import { getDb } from "~/lib/db";
 import { weightEntries } from "~/lib/db/schema";
-
-async function requireAuth() {
-  if (!(await getSessionOk())) {
-    throw new Error("Unauthorized");
-  }
-}
 
 function parseDayKey(
   dayKey: string,
@@ -35,7 +28,6 @@ function parseDayKey(
 export const setWeightForDayFn = createServerFn({ method: "POST" })
   .inputValidator((d: { dayKey: string; weightLb: number }) => d)
   .handler(async ({ data }) => {
-    await requireAuth();
     const parsed = parseDayKey(data.dayKey);
     if (!parsed) {
       throw new Error("Invalid day");
@@ -73,7 +65,6 @@ export const setWeightForDayFn = createServerFn({ method: "POST" })
 export const clearWeightForDayFn = createServerFn({ method: "POST" })
   .inputValidator((d: { dayKey: string }) => d)
   .handler(async ({ data }) => {
-    await requireAuth();
     if (!parseDayKey(data.dayKey)) {
       throw new Error("Invalid day");
     }

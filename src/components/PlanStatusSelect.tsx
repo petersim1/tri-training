@@ -15,6 +15,8 @@ type Props = {
   status: string;
   onUpdated: () => void | Promise<void>;
   className?: string;
+  /** When true (e.g. session linked), status is fixed until unlinked. */
+  disabled?: boolean;
 };
 
 const selectClassName =
@@ -25,6 +27,7 @@ export function PlanStatusSelect({
   status,
   onUpdated,
   className,
+  disabled = false,
 }: Props) {
   const value = normalizePlanStatus(status);
 
@@ -32,7 +35,10 @@ export function PlanStatusSelect({
     <label className={className ?? "inline-flex items-center"}>
       <select
         aria-label="Status"
-        title="Status"
+        title={
+          disabled ? "Unlink the session before changing status" : "Status"
+        }
+        disabled={disabled}
         value={value}
         onChange={async (e) => {
           const next = e.target.value as PlanStatus;
@@ -40,13 +46,6 @@ export function PlanStatusSelect({
             return;
           }
           if (next === "skipped") {
-            if (
-              !confirm(
-                "Skip this plan? Any linked session will be cleared.",
-              )
-            ) {
-              return;
-            }
             await updatePlanFn({
               data: {
                 id: planId,
@@ -60,7 +59,7 @@ export function PlanStatusSelect({
           }
           await onUpdated();
         }}
-        className={selectClassName}
+        className={`${selectClassName} disabled:cursor-not-allowed disabled:opacity-60`}
       >
         <option value="planned">Planned</option>
         <option value="completed">Completed</option>

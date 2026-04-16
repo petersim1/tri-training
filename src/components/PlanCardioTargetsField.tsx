@@ -12,6 +12,8 @@ type Props = {
   distanceUnits: string | null;
   timeSeconds: number | null;
   onUpdated: () => void | Promise<void>;
+  /** Tighter layout for activity list rows. */
+  compact?: boolean;
 };
 
 function sameNum(a: number | null | undefined, b: number | null | undefined) {
@@ -31,6 +33,7 @@ export function PlanCardioTargetsField({
   distanceUnits,
   timeSeconds,
   onUpdated,
+  compact = false,
 }: Props) {
   const [distDraft, setDistDraft] = useState("");
   const [unitsDraft, setUnitsDraft] = useState<string>("");
@@ -108,29 +111,51 @@ export function PlanCardioTargetsField({
     }
   }
 
+  const label = compact
+    ? "text-[10px] text-zinc-500"
+    : "text-[11px] text-zinc-500";
+  const input = compact
+    ? "mt-0.5 w-full rounded border border-zinc-700/80 bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-100 placeholder:text-zinc-600"
+    : "mt-0.5 w-full rounded border border-zinc-700/80 bg-zinc-900 px-1.5 py-1 text-[11px] text-zinc-100 placeholder:text-zinc-600";
+  const select = compact
+    ? "mt-0.5 w-full rounded border border-zinc-700/80 bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-100"
+    : "mt-0.5 w-full rounded border border-zinc-700/80 bg-zinc-900 px-1 py-1 text-[11px] text-zinc-100";
+
   return (
-    <div className="space-y-1.5 rounded border border-zinc-800/80 bg-zinc-900/25 px-2 py-1.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">
+    <div
+      className={
+        compact
+          ? "space-y-1 rounded border border-zinc-800/80 bg-zinc-900/25 px-1.5 py-1"
+          : "space-y-1.5 rounded border border-zinc-800/80 bg-zinc-900/25 px-2 py-1.5"
+      }
+    >
+      <p
+        className={
+          compact
+            ? "text-[9px] font-medium uppercase tracking-wide text-zinc-600"
+            : "text-[10px] font-medium uppercase tracking-wide text-zinc-600"
+        }
+      >
         Planned targets
       </p>
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="min-w-[5rem] flex-1">
-          <span className="text-[11px] text-zinc-500">Distance</span>
+      <div className="flex flex-wrap items-end gap-1.5 sm:gap-2">
+        <label className="min-w-[4.5rem] flex-1">
+          <span className={label}>Distance</span>
           <input
             value={distDraft}
             onChange={(e) => setDistDraft(e.target.value)}
             type="text"
             inputMode="decimal"
             placeholder="—"
-            className="mt-0.5 w-full rounded border border-zinc-700/80 bg-zinc-900 px-1.5 py-1 text-[11px] text-zinc-100 placeholder:text-zinc-600"
+            className={input}
           />
         </label>
-        <label className="w-[4.5rem]">
-          <span className="text-[11px] text-zinc-500">Units</span>
+        <label className="w-[4rem] sm:w-[4.5rem]">
+          <span className={label}>Units</span>
           <select
             value={unitsDraft}
             onChange={(e) => setUnitsDraft(e.target.value)}
-            className="mt-0.5 w-full rounded border border-zinc-700/80 bg-zinc-900 px-1 py-1 text-[11px] text-zinc-100"
+            className={select}
           >
             <option value="">—</option>
             {CARDIO_DISTANCE_UNITS.map((u) => (
@@ -140,15 +165,15 @@ export function PlanCardioTargetsField({
             ))}
           </select>
         </label>
-        <label className="min-w-[6rem] flex-1">
-          <span className="text-[11px] text-zinc-500">Duration (sec)</span>
+        <label className="min-w-[5rem] flex-1">
+          <span className={label}>Duration (sec)</span>
           <input
             value={timeDraft}
             onChange={(e) => setTimeDraft(e.target.value)}
             type="text"
             inputMode="numeric"
             placeholder="—"
-            className="mt-0.5 w-full rounded border border-zinc-700/80 bg-zinc-900 px-1.5 py-1 text-[11px] text-zinc-100 placeholder:text-zinc-600"
+            className={input}
           />
         </label>
       </div>
@@ -157,12 +182,22 @@ export function PlanCardioTargetsField({
           type="button"
           disabled={saving}
           onClick={() => void save()}
-          className="text-[11px] text-emerald-500/90 hover:underline disabled:opacity-50"
+          className={
+            compact
+              ? "text-[10px] text-emerald-500/90 hover:underline disabled:opacity-50"
+              : "text-[11px] text-emerald-500/90 hover:underline disabled:opacity-50"
+          }
         >
           {saving ? "Saving…" : "Save targets"}
         </button>
         {err ? (
-          <span className="text-[11px] text-red-400">{err}</span>
+          <span
+            className={
+              compact ? "text-[10px] text-red-400" : "text-[11px] text-red-400"
+            }
+          >
+            {err}
+          </span>
         ) : null}
       </div>
     </div>

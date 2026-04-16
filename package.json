@@ -5,10 +5,10 @@
   "type": "module",
   "sideEffects": false,
   "scripts": {
-    "dev": "bun vite dev",
-    "build": "bun vite build && bunx tsc --noEmit",
-    "preview": "bun vite preview",
-    "start": "bun .output/server/index.mjs",
+    "dev": "vite dev",
+    "build": "vite build && tsc --noEmit",
+    "preview": "vite preview",
+    "start": "node .output/server/index.mjs",
     "lint": "biome check ./src vite.config.ts package.json biome.json drizzle.config.ts",
     "format": "biome format --write ./src vite.config.ts package.json biome.json drizzle.config.ts",
     "check": "biome check --write ./src vite.config.ts package.json biome.json drizzle.config.ts",
@@ -29,7 +29,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.11",
+    "@biomejs/biome": "^2.4.12",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^22.5.4",
     "@types/react": "^19.0.8",

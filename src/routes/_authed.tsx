@@ -1,17 +1,7 @@
-import {
-  createFileRoute,
-  Link,
-  Outlet,
-  redirect,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { LogoutButton } from "~/components/LogoutButton";
 
 export const Route = createFileRoute("/_authed")({
-  beforeLoad: async ({ context }) => {
-    if (!context.auth.ok) {
-      throw redirect({ to: "/login" });
-    }
-  },
   component: AuthedLayout,
 });
 

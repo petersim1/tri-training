@@ -1,8 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
-import type {
-  StravaOAuthConnectUrls,
-  StravaSettingsStrava,
+import { randomBytes } from "crypto";
+import {
+  buildStravaOAuthQueryString,
+  STRAVA_OAUTH_STATE_COOKIE,
+  type StravaOAuthConnectUrls,
+  type StravaSettingsStrava,
 } from "~/lib/strava/oauth-flow.shared";
+import { getStravaTokensFromCookies } from "./cookie-store";
+import { stravaRedirectUri } from "./oauth";
 
 export type {
   StravaOAuthConnectUrls,
@@ -17,21 +22,43 @@ export {
 export const getStravaLoginOAuthUrlsFn = createServerFn({
   method: "GET",
 }).handler(async (): Promise<StravaOAuthConnectUrls> => {
-  const { issueStravaOAuthConnectUrls } = await import(
-    "~/lib/strava/oauth-flow.server"
-  );
-  return issueStravaOAuthConnectUrls();
+  const clientId = process.env.STRAVA_CLIENT_ID;
+  if (!clientId) {
+    return { kind: "misconfigured" };
+  }
+  const { setCookie } = await import("@tanstack/react-start/server");
+  const redirectUri = stravaRedirectUri();
+  const state = randomBytes(24).toString("hex");
+  setCookie(STRAVA_OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 600,
+    path: "/",
+  });
+  const q = buildStravaOAuthQueryString({ clientId, redirectUri, state });
+  return {
+    kind: "connect",
+    mobileAuthorizeUrl: `https://www.strava.com/oauth/mobile/authorize?${q}`,
+    deepLinkUrl: `strava://oauth/mobile/authorize?${q}`,
+  };
 });
 
-/**
- * Sets OAuth state cookie (for callback CSRF) and returns Strava URLs.
- * Does not hit our own API — use these hrefs to navigate directly to Strava.
- */
+/** Settings: session required; sets OAuth state cookie when reconnecting. */
 export const getStravaSettingsStravaFn = createServerFn({
   method: "GET",
 }).handler(async (): Promise<StravaSettingsStrava> => {
-  const { getStravaSettingsStravaPayload } = await import(
-    "~/lib/strava/oauth-flow.server"
-  );
-  return getStravaSettingsStravaPayload();
+  const existing = getStravaTokensFromCookies();
+  if (existing) {
+    return { kind: "connected", athleteId: existing.athleteId };
+  }
+  const start = await getStravaLoginOAuthUrlsFn();
+  if (start.kind === "misconfigured") {
+    return { kind: "misconfigured" };
+  }
+  return {
+    kind: "connect",
+    mobileAuthorizeUrl: start.mobileAuthorizeUrl,
+    deepLinkUrl: start.deepLinkUrl,
+  };
 });

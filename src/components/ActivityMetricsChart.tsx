@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  nearestIndexFromSvgX,
+  nearestSessionIndexFromSvgX,
   svgLocalXFromMouse,
 } from "~/lib/chart-svg-interaction";
+import type {
+  SessionChartMetric,
+  SessionChartRange,
+  SessionChartSettings,
+} from "~/lib/home/session-chart-settings";
+import { sessionChartRangeLabel } from "~/lib/home/session-chart-settings";
 import type {
   ActivityPlotKind,
   ActivityPlotPoint,
@@ -14,11 +20,11 @@ export type {
 } from "~/lib/plans/activity-plot-points";
 
 const VIEW_W = 800;
-const VIEW_H = 260;
-const PAD_L = 56;
-const PAD_R = 56;
-const PAD_T = 16;
-const PAD_B = 44;
+const VIEW_H = 280;
+const PAD_L = 52;
+const PAD_R = 20;
+const PAD_T = 8;
+const PAD_B = 40;
 
 function shortDateLabel(dayKey: string): string {
   const d = new Date(`${dayKey}T12:00:00`);
@@ -30,6 +36,32 @@ function shortDateLabel(dayKey: string): string {
     day: "numeric",
   });
 }
+
+function enumerateDayKeysInclusive(from: string, to: string): string[] {
+  const start = new Date(`${from}T12:00:00`);
+  const end = new Date(`${to}T12:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return [from];
+  }
+  if (start > end) {
+    return [from];
+  }
+  const out: string[] = [];
+  const cur = new Date(start);
+  while (cur <= end) {
+    const y = cur.getFullYear();
+    const m = String(cur.getMonth() + 1).padStart(2, "0");
+    const d = String(cur.getDate()).padStart(2, "0");
+    out.push(`${y}-${m}-${d}`);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
+
+type PlotDay = {
+  dayKey: string;
+  point: ActivityPlotPoint | null;
+};
 
 function pickXTickIndices(n: number): number[] {
   if (n <= 0) {
@@ -68,40 +100,71 @@ function pickYTicks(yMin: number, yMax: number): number[] {
   return out;
 }
 
-function pathFromYs(
-  ys: (number | null)[],
-  xAt: (i: number) => number,
-  yAt: (v: number) => number,
-): string | null {
-  let d = "";
-  let started = false;
-  for (let i = 0; i < ys.length; i++) {
-    const y = ys[i];
-    if (y == null || !Number.isFinite(y)) {
-      started = false;
-      continue;
-    }
-    const x = xAt(i);
-    const yy = yAt(y);
-    d += started ? ` L ${x} ${yy}` : `M ${x} ${yy}`;
-    started = true;
+function rawMetricValue(
+  point: ActivityPlotPoint | null,
+  metric: SessionChartMetric,
+  isLift: boolean,
+): number {
+  if (!point) {
+    return 0;
   }
-  return d || null;
+  if (isLift || metric === "time") {
+    const t = point.timeMin;
+    return t != null && Number.isFinite(t) ? t : 0;
+  }
+  if (metric === "distance") {
+    const d = point.distanceKm;
+    return d != null && Number.isFinite(d) ? d : 0;
+  }
+  const d = point.distanceKm;
+  const t = point.timeMin;
+  if (
+    d != null &&
+    t != null &&
+    d > 0 &&
+    Number.isFinite(d) &&
+    Number.isFinite(t)
+  ) {
+    return t / d;
+  }
+  return 0;
+}
+
+function formatYTick(
+  v: number,
+  metric: SessionChartMetric,
+  isLift: boolean,
+): string {
+  if (isLift || metric === "time") {
+    return v < 10 ? v.toFixed(1) : Math.round(v).toString();
+  }
+  if (metric === "distance") {
+    return v < 10 ? v.toFixed(2) : v.toFixed(1);
+  }
+  return v < 10 ? v.toFixed(1) : Math.round(v).toString();
+}
+
+function yAxisLabel(metric: SessionChartMetric, isLift: boolean): string {
+  if (isLift || metric === "time") {
+    return "min";
+  }
+  if (metric === "distance") {
+    return "km";
+  }
+  return "min/km";
 }
 
 type Props = {
   kind: ActivityPlotKind;
   onKindChange: (k: ActivityPlotKind) => void;
   points: ActivityPlotPoint[];
-  /** When set, clicking a point or date label jumps the calendar to that day. */
+  sessionChart: SessionChartSettings;
+  onSessionChartPatch: (patch: Partial<SessionChartSettings>) => void;
   onSelectDayKey?: (dayKey: string) => void;
-  /** Highlights the point(s) when that day is selected on the calendar. */
   selectedDayKey?: string | null;
-  /**
-   * `filtered`: copy references narrowing the date range (activities).
-   * `all`: all-time series (home).
-   */
   emptyCopy?: "filtered" | "all";
+  /** Shown while plans query is loading. */
+  isLoading?: boolean;
 };
 
 const KIND_LABEL: Record<ActivityPlotKind, string> = {
@@ -111,272 +174,177 @@ const KIND_LABEL: Record<ActivityPlotKind, string> = {
   lift: "Lift",
 };
 
+const RANGE_OPTIONS: { value: SessionChartRange; label: string }[] = [
+  { value: "3m", label: "3 mo" },
+  { value: "6m", label: "6 mo" },
+  { value: "12m", label: "12 mo" },
+  { value: "ytd", label: "YTD" },
+  { value: "all", label: "All" },
+];
+
 export function ActivityMetricsChart({
   kind,
   onKindChange,
   points,
+  sessionChart,
+  onSessionChartPatch,
   onSelectDayKey,
   selectedDayKey,
   emptyCopy = "all",
+  isLoading = false,
 }: Props) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const isCardio = kind !== "lift";
+  const effectiveMetric: SessionChartMetric = isCardio
+    ? sessionChart.metric
+    : "time";
+  const cumulativeOk = isCardio && effectiveMetric !== "pace";
+  const cumulative = cumulativeOk && sessionChart.cumulative;
 
   const sorted = useMemo(() => {
     return [...points].sort((a, b) => a.dayKey.localeCompare(b.dayKey));
   }, [points]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: clear hover when series data changes (Biome flags prop deps)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <intentional>
   useEffect(() => {
     setHoverIdx(null);
-  }, [points]);
+  }, [points, kind, sessionChart]);
 
-  const geometry = useMemo(() => {
+  const barGeometry = useMemo(() => {
     if (sorted.length === 0) {
       return null;
     }
-    const n = sorted.length;
+    const minKey = sorted[0]?.dayKey ?? "";
+    const maxKey = sorted[sorted.length - 1]?.dayKey ?? minKey;
+    const byDay = new Map<string, ActivityPlotPoint>();
+    for (const p of sorted) {
+      byDay.set(p.dayKey, p);
+    }
+    const dayKeysDense = enumerateDayKeysInclusive(minKey, maxKey);
+    const plotDays: PlotDay[] = dayKeysDense.map((dayKey) => ({
+      dayKey,
+      point: byDay.get(dayKey) ?? null,
+    }));
+    const sessionCount = sorted.reduce((acc, p) => {
+      const parts = p.id.split("+").filter(Boolean);
+      return acc + (parts.length > 0 ? parts.length : 1);
+    }, 0);
+
+    const rawPerDay = plotDays.map((pd) =>
+      rawMetricValue(pd.point, effectiveMetric, !isCardio),
+    );
+
+    let hasAny = false;
+    for (const v of rawPerDay) {
+      if (v > 0) {
+        hasAny = true;
+        break;
+      }
+    }
+    if (!hasAny) {
+      return { empty: true as const };
+    }
+
+    let run = 0;
+    const displayPerDay = cumulative
+      ? rawPerDay.map((v) => {
+          run += v;
+          return run;
+        })
+      : rawPerDay;
+
+    const yMax = Math.max(...displayPerDay, 1e-6);
+    const yMin = 0;
+    const pad = Math.max(yMax * 0.08, yMax * 0.02);
+    const yTop = yMax + pad;
+
+    const n = plotDays.length;
     const innerW = VIEW_W - PAD_L - PAD_R;
     const innerH = VIEW_H - PAD_T - PAD_B;
+    const baselineY = PAD_T + innerH;
     const xAt = (i: number) =>
       PAD_L + (n <= 1 ? innerW / 2 : (i / Math.max(1, n - 1)) * innerW);
 
-    if (!isCardio) {
-      const times = sorted
-        .map((p) => p.timeMin)
-        .filter((t): t is number => t != null && Number.isFinite(t));
-      if (times.length === 0) {
-        return { mode: "lift" as const, empty: true as const };
-      }
-      const tMin = Math.min(...times);
-      const tMax = Math.max(...times);
-      const pad = Math.max(0.5, (tMax - tMin) * 0.12 || 1);
-      const yMin = tMin - pad;
-      const yMax = tMax + pad;
-      const yAt = (v: number) =>
-        PAD_T + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
-      const ys = sorted.map((p) => p.timeMin);
-      const lineD = pathFromYs(ys, xAt, yAt);
-      return {
-        mode: "lift" as const,
-        empty: false as const,
-        cardioLayout: undefined as undefined,
-        n,
-        xAt,
-        yAt,
-        yMin,
-        yMax,
-        yTicks: pickYTicks(yMin, yMax),
-        xTicks: pickXTickIndices(n),
-        lineD,
-        distD: null as string | null,
-        timeD: lineD,
-        rightYTicks: null as number[] | null,
-        rightYMin: null as number | null,
-        rightYMax: null as number | null,
-        yAtRight: null as ((v: number) => number) | null,
-      };
-    }
+    const barW = Math.min(24, Math.max(0.5, (innerW / Math.max(1, n)) * 0.72));
 
-    const distVals = sorted
-      .map((p) => p.distanceKm)
-      .filter((d): d is number => d != null && Number.isFinite(d));
-    const timeVals = sorted
-      .map((p) => p.timeMin)
-      .filter((t): t is number => t != null && Number.isFinite(t));
+    const yAt = (v: number) =>
+      PAD_T + innerH - ((v - yMin) / (yTop - yMin)) * innerH;
 
-    if (distVals.length === 0 && timeVals.length === 0) {
-      return { mode: "cardio" as const, empty: true as const };
-    }
-
-    if (distVals.length === 0 && timeVals.length > 0) {
-      const tMin = Math.min(...timeVals);
-      const tMax = Math.max(...timeVals);
-      const tPad = Math.max(0.5, (tMax - tMin) * 0.12 || 1);
-      const yMin = Math.max(0, tMin - tPad);
-      const yMax = tMax + tPad;
-      const yAt = (v: number) =>
-        PAD_T + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
-      const ys = sorted.map((p) => p.timeMin);
-      const timeOnlyD = pathFromYs(ys, xAt, yAt);
-      return {
-        mode: "cardio" as const,
-        empty: false as const,
-        cardioLayout: "timeOnly" as const,
-        n,
-        xAt,
-        yAt,
-        yMin,
-        yMax,
-        yTicks: pickYTicks(yMin, yMax),
-        xTicks: pickXTickIndices(n),
-        distD: null as string | null,
-        timeD: timeOnlyD,
-        rightYTicks: null as number[] | null,
-        rightYMin: null as number | null,
-        rightYMax: null as number | null,
-        yAtRight: null as ((v: number) => number) | null,
-      };
-    }
-
-    if (timeVals.length === 0 && distVals.length > 0) {
-      const dMin = Math.min(...distVals);
-      const dMax = Math.max(...distVals);
-      const dPad = Math.max(0.05, (dMax - dMin) * 0.12 || 0.2);
-      const yMin = Math.max(0, dMin - dPad);
-      const yMax = dMax + dPad;
-      const yAt = (v: number) =>
-        PAD_T + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
-      const ys = sorted.map((p) => p.distanceKm);
-      const distOnlyD = pathFromYs(ys, xAt, yAt);
-      return {
-        mode: "cardio" as const,
-        empty: false as const,
-        cardioLayout: "distOnly" as const,
-        n,
-        xAt,
-        yAt,
-        yMin,
-        yMax,
-        yTicks: pickYTicks(yMin, yMax),
-        xTicks: pickXTickIndices(n),
-        distD: distOnlyD,
-        timeD: null as string | null,
-        rightYTicks: null as number[] | null,
-        rightYMin: null as number | null,
-        rightYMax: null as number | null,
-        yAtRight: null as ((v: number) => number) | null,
-      };
-    }
-
-    let dMin = 0;
-    let dMax = 1;
-    if (distVals.length > 0) {
-      dMin = Math.min(...distVals);
-      dMax = Math.max(...distVals);
-      const dPad = Math.max(0.05, (dMax - dMin) * 0.12 || 0.2);
-      dMin = Math.max(0, dMin - dPad);
-      dMax = dMax + dPad;
-    }
-
-    let tMin = 0;
-    let tMax = 1;
-    if (timeVals.length > 0) {
-      tMin = Math.min(...timeVals);
-      tMax = Math.max(...timeVals);
-      const tPad = Math.max(0.5, (tMax - tMin) * 0.12 || 1);
-      tMin = Math.max(0, tMin - tPad);
-      tMax = tMax + tPad;
-    }
-
-    const yAtLeft = (v: number) =>
-      PAD_T + innerH - ((v - dMin) / (dMax - dMin)) * innerH;
-    const yAtRight = (v: number) =>
-      PAD_T + innerH - ((v - tMin) / (tMax - tMin)) * innerH;
-
-    const distYs = sorted.map((p) => p.distanceKm);
-    const timeYs = sorted.map((p) => p.timeMin);
-    const distD = distVals.length > 0 ? pathFromYs(distYs, xAt, yAtLeft) : null;
-    const timeD =
-      timeVals.length > 0 ? pathFromYs(timeYs, xAt, yAtRight) : null;
+    const yTicks = pickYTicks(yMin, yTop);
 
     return {
-      mode: "cardio" as const,
       empty: false as const,
-      cardioLayout: "dual" as const,
       n,
+      sessionCount,
+      plotDays,
+      displayPerDay,
       xAt,
-      yAt: yAtLeft,
-      yMin: dMin,
-      yMax: dMax,
-      yTicks: pickYTicks(dMin, dMax),
+      yAt,
+      baselineY,
+      barW,
+      yMin,
+      yTop,
+      yTicks,
       xTicks: pickXTickIndices(n),
-      lineD: null as string | null,
-      distD,
-      timeD,
-      rightYTicks: pickYTicks(tMin, tMax),
-      rightYMin: tMin,
-      rightYMax: tMax,
-      yAtRight,
+      innerW,
+      innerH,
     };
-  }, [sorted, isCardio]);
+  }, [sorted, isCardio, effectiveMetric, cumulative]);
 
-  /** Date = zinc; distance / lift duration = emerald (matches solid paths); time = sky (matches dashed path). */
   const hoverTooltipRows = useMemo(():
     | { text: string; className: string }[]
     | null => {
-    if (!geometry || ("empty" in geometry && geometry.empty)) {
+    if (!barGeometry || barGeometry.empty) {
       return null;
     }
-    if (hoverIdx == null || hoverIdx < 0 || hoverIdx >= sorted.length) {
+    const { plotDays, displayPerDay } = barGeometry;
+    if (hoverIdx == null || hoverIdx < 0 || hoverIdx >= plotDays.length) {
       return null;
     }
-    const p = sorted[hoverIdx];
-    if (!p) {
+    const row = plotDays[hoverIdx];
+    if (!row) {
       return null;
     }
+    const p = row.point;
+    const v = displayPerDay[hoverIdx] ?? 0;
     const dateRow = {
-      text: shortDateLabel(p.dayKey),
+      text: shortDateLabel(row.dayKey),
       className: "fill-zinc-300",
     };
-    if (geometry.mode === "lift") {
-      const t = p.timeMin;
-      return [
-        dateRow,
-        {
-          text: t != null && Number.isFinite(t) ? `${t.toFixed(1)} min` : "—",
-          className: "fill-emerald-400",
-        },
-      ];
+    let line2: string;
+    if (cumulative) {
+      if (!isCardio || effectiveMetric === "time") {
+        line2 = `Cumulative: ${v.toFixed(1)} min`;
+      } else if (effectiveMetric === "distance") {
+        line2 = `Cumulative: ${v.toFixed(2)} km`;
+      } else {
+        line2 = "—";
+      }
+    } else if (!isCardio || effectiveMetric === "time") {
+      line2 =
+        p?.timeMin != null && Number.isFinite(p.timeMin)
+          ? `${p.timeMin.toFixed(1)} min`
+          : "0 min";
+    } else if (effectiveMetric === "distance") {
+      line2 =
+        p?.distanceKm != null && Number.isFinite(p.distanceKm)
+          ? `${p.distanceKm.toFixed(2)} km`
+          : "0 km";
+    } else {
+      line2 =
+        p?.distanceKm != null &&
+        p.distanceKm > 0 &&
+        p?.timeMin != null &&
+        Number.isFinite(p.timeMin)
+          ? `${(p.timeMin / p.distanceKm).toFixed(2)} min/km`
+          : "—";
     }
-    if (geometry.mode === "cardio") {
-      if (geometry.cardioLayout === "dual") {
-        const rows: { text: string; className: string }[] = [dateRow];
-        if (p.distanceKm != null && Number.isFinite(p.distanceKm)) {
-          rows.push({
-            text: `${p.distanceKm.toFixed(2)} km`,
-            className: "fill-emerald-500",
-          });
-        }
-        if (p.timeMin != null && Number.isFinite(p.timeMin)) {
-          rows.push({
-            text: `${p.timeMin.toFixed(1)} min`,
-            className: "fill-sky-400",
-          });
-        }
-        if (rows.length === 1) {
-          rows.push({ text: "—", className: "fill-zinc-500" });
-        }
-        return rows;
-      }
-      if (geometry.cardioLayout === "timeOnly") {
-        const t = p.timeMin;
-        return [
-          dateRow,
-          {
-            text: t != null && Number.isFinite(t) ? `${t.toFixed(1)} min` : "—",
-            className: "fill-sky-400",
-          },
-        ];
-      }
-      if (geometry.cardioLayout === "distOnly") {
-        const km = p.distanceKm;
-        return [
-          dateRow,
-          {
-            text:
-              km != null && Number.isFinite(km) ? `${km.toFixed(2)} km` : "—",
-            className: "fill-emerald-500",
-          },
-        ];
-      }
-    }
-    return [dateRow];
-  }, [geometry, hoverIdx, sorted]);
+    return [dateRow, { text: line2, className: "fill-emerald-400" }];
+  }, [barGeometry, hoverIdx, isCardio, effectiveMetric, cumulative]);
 
   const tabs = (
     <div
-      className="mb-3 flex flex-wrap gap-1.5"
+      className="flex flex-wrap gap-1.5"
       role="tablist"
       aria-label="Activity for chart"
     >
@@ -399,14 +367,114 @@ export function ActivityMetricsChart({
     </div>
   );
 
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-3 py-2">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+        Range
+      </span>
+      <div className="flex flex-wrap gap-2">
+        {RANGE_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onSessionChartPatch({ range: opt.value })}
+            className={
+              sessionChart.range === opt.value
+                ? "rounded-md bg-emerald-600/20 px-2 py-1 text-[11px] font-medium text-emerald-200 ring-1 ring-emerald-500/35"
+                : "rounded-md px-2 py-1 text-[11px] font-medium text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+            }
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {isCardio ? (
+        <>
+          <span className="ml-1 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+            Plot
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["distance", "Distance"],
+                ["time", "Time"],
+                ["pace", "Pace"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  const patch: Partial<SessionChartSettings> = {
+                    metric: value,
+                  };
+                  if (value === "pace") {
+                    patch.cumulative = false;
+                  }
+                  onSessionChartPatch(patch);
+                }}
+                className={
+                  sessionChart.metric === value
+                    ? "rounded-md bg-sky-600/20 px-2 py-1 text-[11px] font-medium text-sky-200 ring-1 ring-sky-500/35"
+                    : "rounded-md px-2 py-1 text-[11px] font-medium text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+      <label
+        className={`ml-auto flex cursor-pointer items-center gap-2 text-[11px] ${
+          cumulativeOk ? "text-zinc-400" : "cursor-not-allowed text-zinc-600"
+        }`}
+      >
+        <input
+          type="checkbox"
+          className="rounded border-zinc-600 bg-zinc-900"
+          checked={cumulativeOk && sessionChart.cumulative}
+          disabled={!cumulativeOk}
+          onChange={(e) =>
+            onSessionChartPatch({ cumulative: e.target.checked })
+          }
+        />
+        Cumulative
+      </label>
+    </div>
+  );
+
+  if (isLoading) {
+    return (
+      <section
+        aria-label="Activity metrics chart"
+        className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
+      >
+        <div className="space-y-2 border-b border-zinc-800/80 px-4 py-3">
+          {tabs}
+          {toolbar}
+        </div>
+        <div
+          className="flex h-[280px] items-center justify-center px-4 py-6"
+          aria-busy="true"
+        >
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-500" />
+        </div>
+      </section>
+    );
+  }
+
   if (sorted.length === 0) {
     return (
       <section
         aria-label="Activity metrics chart"
-        className="rounded-xl border border-zinc-800/90 bg-zinc-950 p-5 shadow-sm"
+        className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
       >
-        {tabs}
-        <p className="text-sm text-zinc-500">
+        <div className="space-y-2 border-b border-zinc-800/80 px-4 py-3">
+          {tabs}
+          {toolbar}
+        </div>
+        <p className="px-4 py-6 text-sm text-zinc-500">
           {emptyCopy === "filtered" ? (
             <>
               No completed sessions with linked data for {KIND_LABEL[kind]} in
@@ -424,23 +492,26 @@ export function ActivityMetricsChart({
     );
   }
 
-  if (!geometry || geometry.empty) {
+  if (!barGeometry || barGeometry.empty) {
     return (
       <section
         aria-label="Activity metrics chart"
-        className="rounded-xl border border-zinc-800/90 bg-zinc-950 p-5 shadow-sm"
+        className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
       >
-        {tabs}
-        <p className="text-sm text-zinc-500">
+        <div className="space-y-2 border-b border-zinc-800/80 px-4 py-3">
+          {tabs}
+          {toolbar}
+        </div>
+        <p className="px-4 py-6 text-sm text-zinc-500">
           {emptyCopy === "filtered" ? (
             <>
-              No distance or duration recorded for {KIND_LABEL[kind]} sessions
-              in this range.
+              No usable metrics for {KIND_LABEL[kind]} in this range (e.g.
+              distance and time for pace).
             </>
           ) : (
             <>
-              No distance or duration recorded for {KIND_LABEL[kind]} sessions
-              with linked data.
+              No usable metrics for {KIND_LABEL[kind]} with linked data in this
+              range.
             </>
           )}
         </p>
@@ -448,64 +519,58 @@ export function ActivityMetricsChart({
     );
   }
 
-  const innerH = VIEW_H - PAD_T - PAD_B;
-  const chartInnerW = VIEW_W - PAD_L - PAD_R;
   const {
     n,
+    sessionCount,
+    plotDays,
+    displayPerDay,
     xAt,
     yAt,
+    baselineY,
+    barW,
     yMin,
-    yMax,
+    yTop,
     yTicks,
     xTicks,
-    distD,
-    timeD,
-    rightYTicks,
-    rightYMin,
-    rightYMax,
-    yAtRight,
-  } = geometry;
-
-  const ariaLabel =
-    geometry.mode === "lift"
-      ? `Lift duration trend, ${n} sessions`
-      : geometry.cardioLayout === "timeOnly"
-        ? `Time trend, ${n} ${KIND_LABEL[kind]} sessions`
-        : geometry.cardioLayout === "distOnly"
-          ? `Distance trend, ${n} ${KIND_LABEL[kind]} sessions`
-          : `Distance and duration trend, ${n} ${KIND_LABEL[kind]} sessions`;
+    innerW,
+    innerH,
+  } = barGeometry;
 
   const interactive = Boolean(onSelectDayKey);
 
-  const caption =
-    geometry.mode === "lift" ? (
-      <p className="mb-2 text-[11px] text-zinc-500">
-        Duration (min) from linked session, or planned duration if not linked.
-      </p>
-    ) : geometry.cardioLayout === "dual" ? (
-      <p className="mb-2 text-[11px] text-zinc-500">
-        Solid: distance (km). Dashed: time (min). Linked session when present;
-        else planned targets.
-      </p>
-    ) : geometry.cardioLayout === "timeOnly" ? (
-      <p className="mb-2 text-[11px] text-zinc-500">
-        Time (min) from linked session or planned duration. No distance on these
-        plans.
-      </p>
-    ) : (
-      <p className="mb-2 text-[11px] text-zinc-500">
-        Distance (km) from linked session or planned distance. No duration on
-        these plans.
-      </p>
-    );
+  const captionSuffix = isCardio
+    ? effectiveMetric === "distance"
+      ? "Distance (km)."
+      : effectiveMetric === "time"
+        ? "Time (min)."
+        : "Pace (min/km) where distance and time exist."
+    : "Duration (min).";
+
+  const chartKindLabel = cumulative ? "line chart" : "bar chart";
+  const ariaLabel = `${sessionChartRangeLabel(sessionChart.range)} · ${KIND_LABEL[kind]} sessions ${chartKindLabel}, ${sessionCount} sessions`;
+
+  const barFill =
+    effectiveMetric === "time" || !isCardio
+      ? "rgb(52 211 153)"
+      : effectiveMetric === "distance"
+        ? "rgb(16 185 129)"
+        : "rgb(251 191 36)";
 
   return (
     <section
       aria-label="Activity metrics chart"
-      className="rounded-xl border border-zinc-800/90 bg-zinc-950 p-5 shadow-sm"
+      className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
     >
-      {tabs}
-      {caption}
+      <div className="space-y-2 border-b border-zinc-800/80 px-4 py-3">
+        {tabs}
+        {toolbar}
+      </div>
+      <p className="border-b border-zinc-800/60 px-4 py-2 text-[11px] text-zinc-500">
+        {cumulative ? "Line chart" : "Bar chart"} ·{" "}
+        {sessionChartRangeLabel(sessionChart.range)} ·{" "}
+        {cumulative ? "Cumulative · " : ""}
+        {captionSuffix}
+      </p>
 
       <svg
         className="h-auto w-full max-w-full"
@@ -516,290 +581,124 @@ export function ActivityMetricsChart({
         <title>{ariaLabel}</title>
 
         <g pointerEvents="none" opacity={0.4}>
-          {geometry.mode === "cardio" &&
-          geometry.cardioLayout === "dual" &&
-          yAtRight != null &&
-          rightYTicks &&
-          rightYMin != null &&
-          rightYMax != null ? (
-            <>
-              {yTicks.map((lb) => {
-                const y =
-                  PAD_T + innerH - ((lb - yMin) / (yMax - yMin)) * innerH;
-                return (
-                  <g key={`yl-${lb}`}>
-                    <line
-                      x1={PAD_L}
-                      y1={y}
-                      x2={VIEW_W - PAD_R}
-                      y2={y}
-                      stroke="rgb(39 39 42)"
-                      strokeWidth={1}
-                    />
-                    <text
-                      x={PAD_L - 8}
-                      y={y + 4}
-                      textAnchor="end"
-                      className="fill-zinc-500 text-[11px]"
-                      fontSize={11}
-                    >
-                      {lb < 10 ? lb.toFixed(2) : lb.toFixed(1)}
-                    </text>
-                  </g>
-                );
-              })}
-              {rightYTicks.map((lb) => {
-                const y =
-                  PAD_T +
-                  innerH -
-                  ((lb - rightYMin) / (rightYMax - rightYMin)) * innerH;
-                return (
-                  <text
-                    key={`yr-${lb}`}
-                    x={VIEW_W - PAD_R + 8}
-                    y={y + 4}
-                    textAnchor="start"
-                    className="fill-sky-500/90 text-[11px]"
-                    fontSize={11}
-                  >
-                    {lb < 10 ? lb.toFixed(1) : Math.round(lb)}
-                  </text>
-                );
-              })}
-              <text
-                x={10}
-                y={VIEW_H / 2}
-                transform={`rotate(-90 10 ${VIEW_H / 2})`}
-                textAnchor="middle"
-                className="fill-emerald-600/90 text-[10px]"
-                fontSize={10}
-              >
-                km
-              </text>
-              <text
-                x={VIEW_W - 10}
-                y={VIEW_H / 2}
-                transform={`rotate(90 ${VIEW_W - 10} ${VIEW_H / 2})`}
-                textAnchor="middle"
-                className="fill-sky-500/80 text-[10px]"
-                fontSize={10}
-              >
-                min
-              </text>
-              {distD ? (
-                <path
-                  d={distD}
-                  fill="none"
-                  pointerEvents="none"
-                  stroke="rgb(16 185 129)"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+          {yTicks.map((lb) => {
+            const y = PAD_T + innerH - ((lb - yMin) / (yTop - yMin)) * innerH;
+            return (
+              <g key={`yl-${lb}`}>
+                <line
+                  x1={PAD_L}
+                  y1={y}
+                  x2={VIEW_W - PAD_R}
+                  y2={y}
+                  stroke="rgb(39 39 42)"
+                  strokeWidth={1}
                 />
-              ) : null}
-              {timeD ? (
-                <path
-                  d={timeD}
-                  fill="none"
-                  pointerEvents="none"
-                  stroke="rgb(56 189 248)"
-                  strokeWidth={2}
-                  strokeDasharray="6 4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  opacity={0.95}
-                />
-              ) : null}
-            </>
-          ) : geometry.mode === "cardio" &&
-            geometry.cardioLayout === "timeOnly" &&
-            timeD ? (
-            <>
-              {yTicks.map((lb) => {
-                const y =
-                  PAD_T + innerH - ((lb - yMin) / (yMax - yMin)) * innerH;
-                return (
-                  <g key={`yl-${lb}`}>
-                    <line
-                      x1={PAD_L}
-                      y1={y}
-                      x2={VIEW_W - PAD_R}
-                      y2={y}
-                      stroke="rgb(39 39 42)"
-                      strokeWidth={1}
-                    />
-                    <text
-                      x={PAD_L - 8}
-                      y={y + 4}
-                      textAnchor="end"
-                      className="fill-zinc-500 text-[11px]"
-                      fontSize={11}
-                    >
-                      {lb < 10 ? lb.toFixed(1) : Math.round(lb)}
-                    </text>
-                  </g>
-                );
-              })}
-              <text
-                x={12}
-                y={VIEW_H / 2}
-                transform={`rotate(-90 12 ${VIEW_H / 2})`}
-                textAnchor="middle"
-                className="fill-sky-500/80 text-[10px]"
-                fontSize={10}
-              >
-                min
-              </text>
-              <path
-                d={timeD}
-                fill="none"
-                pointerEvents="none"
-                stroke="rgb(56 189 248)"
-                strokeWidth={2}
-                strokeDasharray="6 4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={0.95}
-              />
-            </>
-          ) : geometry.mode === "cardio" &&
-            geometry.cardioLayout === "distOnly" &&
-            distD ? (
-            <>
-              {yTicks.map((lb) => {
-                const y =
-                  PAD_T + innerH - ((lb - yMin) / (yMax - yMin)) * innerH;
-                return (
-                  <g key={`yl-${lb}`}>
-                    <line
-                      x1={PAD_L}
-                      y1={y}
-                      x2={VIEW_W - PAD_R}
-                      y2={y}
-                      stroke="rgb(39 39 42)"
-                      strokeWidth={1}
-                    />
-                    <text
-                      x={PAD_L - 8}
-                      y={y + 4}
-                      textAnchor="end"
-                      className="fill-zinc-500 text-[11px]"
-                      fontSize={11}
-                    >
-                      {lb < 10 ? lb.toFixed(2) : lb.toFixed(1)}
-                    </text>
-                  </g>
-                );
-              })}
-              <text
-                x={12}
-                y={VIEW_H / 2}
-                transform={`rotate(-90 12 ${VIEW_H / 2})`}
-                textAnchor="middle"
-                className="fill-emerald-600/90 text-[10px]"
-                fontSize={10}
-              >
-                km
-              </text>
-              <path
-                d={distD}
-                fill="none"
-                pointerEvents="none"
-                stroke="rgb(16 185 129)"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={0.95}
-              />
-            </>
-          ) : geometry.mode === "lift" ? (
-            <>
-              {yTicks.map((lb) => {
-                const y =
-                  PAD_T + innerH - ((lb - yMin) / (yMax - yMin)) * innerH;
-                return (
-                  <g key={`yl-${lb}`}>
-                    <line
-                      x1={PAD_L}
-                      y1={y}
-                      x2={VIEW_W - PAD_R}
-                      y2={y}
-                      stroke="rgb(39 39 42)"
-                      strokeWidth={1}
-                    />
-                    <text
-                      x={PAD_L - 8}
-                      y={y + 4}
-                      textAnchor="end"
-                      className="fill-zinc-500 text-[11px]"
-                      fontSize={11}
-                    >
-                      {lb < 10 ? lb.toFixed(1) : Math.round(lb)}
-                    </text>
-                  </g>
-                );
-              })}
-              <text
-                x={12}
-                y={VIEW_H / 2}
-                transform={`rotate(-90 12 ${VIEW_H / 2})`}
-                textAnchor="middle"
-                className="fill-zinc-600 text-[10px]"
-                fontSize={10}
-              >
-                min
-              </text>
-              {timeD ? (
-                <path
-                  d={timeD}
-                  fill="none"
-                  pointerEvents="none"
-                  stroke="rgb(52 211 153)"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  opacity={0.95}
-                />
-              ) : null}
-            </>
-          ) : null}
+                <text
+                  x={PAD_L - 8}
+                  y={y + 4}
+                  textAnchor="end"
+                  className="fill-zinc-500 text-[11px]"
+                  fontSize={11}
+                >
+                  {formatYTick(lb, effectiveMetric, !isCardio)}
+                </text>
+              </g>
+            );
+          })}
+          <text
+            x={10}
+            y={VIEW_H / 2}
+            transform={`rotate(-90 10 ${VIEW_H / 2})`}
+            textAnchor="middle"
+            className="fill-zinc-500 text-[10px]"
+            fontSize={10}
+          >
+            {yAxisLabel(effectiveMetric, !isCardio)}
+          </text>
         </g>
 
+        {cumulative ? (
+          n >= 2 ? (
+            <polyline
+              fill="none"
+              stroke={barFill}
+              strokeWidth={1}
+              strokeOpacity={0.92}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              pointerEvents="none"
+              points={Array.from({ length: n }, (_, i) => {
+                const v = displayPerDay[i] ?? 0;
+                return `${xAt(i)},${yAt(v)}`;
+              }).join(" ")}
+            />
+          ) : null
+        ) : (
+          plotDays.map((pd, i) => {
+            const v = displayPerDay[i] ?? 0;
+            const cx = xAt(i);
+            const topY = yAt(v);
+            const h = Math.max(0, baselineY - topY);
+            const x = cx - barW / 2;
+            return (
+              <rect
+                key={pd.dayKey}
+                x={x}
+                y={topY}
+                width={barW}
+                height={h}
+                fill={barFill}
+                opacity={0.88}
+                rx={1}
+                pointerEvents="none"
+              />
+            );
+          })
+        )}
+
         {xTicks.map((i) => {
-          const e = sorted[i];
+          const e = plotDays[i];
           if (!e) {
             return null;
           }
+          const pt = e.point;
+          const canJump = pt != null;
           return (
-            // biome-ignore lint/a11y/noStaticElementInteractions: SVG axis label (same pattern as weight chart)
+            // biome-ignore lint/a11y/noStaticElementInteractions: SVG axis label
             <text
-              key={`x-${e.id}`}
+              key={`x-${e.dayKey}`}
               x={xAt(i)}
               y={VIEW_H - 12}
               textAnchor="middle"
               className={
-                interactive
+                interactive && canJump
                   ? "cursor-pointer outline-none focus:outline-none fill-zinc-400/80 underline decoration-zinc-600/80 underline-offset-2 hover:fill-zinc-200"
                   : "fill-zinc-500/70"
               }
               fontSize={11}
               onClick={
-                interactive ? () => onSelectDayKey?.(e.dayKey) : undefined
+                interactive && canJump
+                  ? () => onSelectDayKey?.(pt.dayKey)
+                  : undefined
               }
               onKeyDown={
-                interactive
+                interactive && canJump
                   ? (ev) => {
                       if (ev.key !== "Enter" && ev.key !== " ") {
                         return;
                       }
                       ev.preventDefault();
-                      onSelectDayKey?.(e.dayKey);
+                      onSelectDayKey?.(pt.dayKey);
                     }
                   : undefined
               }
-              role={interactive ? "button" : undefined}
-              tabIndex={interactive ? 0 : undefined}
-              aria-label={`Go to ${shortDateLabel(e.dayKey)} on the calendar`}
+              role={interactive && canJump ? "button" : undefined}
+              tabIndex={interactive && canJump ? 0 : undefined}
+              aria-label={
+                canJump
+                  ? `Go to ${shortDateLabel(e.dayKey)} on the calendar`
+                  : undefined
+              }
             >
               {shortDateLabel(e.dayKey)}
             </text>
@@ -819,165 +718,30 @@ export function ActivityMetricsChart({
           />
         ) : null}
 
-        {sorted.map((p, i) => {
-          const cx = xAt(i);
-          const hasTime = p.timeMin != null && Number.isFinite(p.timeMin);
-          const hasDist = p.distanceKm != null && Number.isFinite(p.distanceKm);
-          const isSelected =
-            selectedDayKey != null && p.dayKey === selectedDayKey;
-          const isHoveredColumn =
-            interactive && hoverIdx != null && hoverIdx === i;
-          const isHighlighted = isSelected || isHoveredColumn;
-          const markOpacity = isHighlighted ? 1 : 0.28;
-
-          if (geometry.mode === "lift") {
-            if (!hasTime) {
-              return null;
-            }
-            const tm = p.timeMin;
-            if (tm == null || !Number.isFinite(tm)) {
-              return null;
-            }
-            const cy = yAt(tm);
-            const r = 4;
-            return (
-              <g key={p.id} opacity={markOpacity}>
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={isHighlighted ? r + 0.75 : r}
-                  fill="rgb(16 185 129)"
-                  stroke="rgb(24 24 27)"
-                  strokeWidth={1}
-                  pointerEvents="none"
-                >
-                  {!interactive ? (
-                    <title>
-                      {shortDateLabel(p.dayKey)} · {tm.toFixed(1)} min
-                    </title>
-                  ) : null}
-                </circle>
-              </g>
-            );
-          }
-          if (
-            geometry.mode === "cardio" &&
-            geometry.cardioLayout === "timeOnly"
-          ) {
-            if (!hasTime) {
-              return null;
-            }
-            const tm = p.timeMin;
-            if (tm == null || !Number.isFinite(tm)) {
-              return null;
-            }
-            const cy = yAt(tm);
-            const r = 4;
-            return (
-              <g key={p.id} opacity={markOpacity}>
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={isHighlighted ? r + 0.75 : r}
-                  fill="rgb(56 189 248)"
-                  stroke="rgb(24 24 27)"
-                  strokeWidth={1}
-                  pointerEvents="none"
-                >
-                  {!interactive ? (
-                    <title>
-                      {shortDateLabel(p.dayKey)} · {tm.toFixed(1)} min
-                    </title>
-                  ) : null}
-                </circle>
-              </g>
-            );
-          }
-          if (
-            geometry.mode === "cardio" &&
-            geometry.cardioLayout === "distOnly"
-          ) {
-            if (!hasDist) {
-              return null;
-            }
-            const dk = p.distanceKm;
-            if (dk == null || !Number.isFinite(dk)) {
-              return null;
-            }
-            const cy = yAt(dk);
-            const r = 4;
-            return (
-              <g key={p.id} opacity={markOpacity}>
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={isHighlighted ? r + 0.75 : r}
-                  fill="rgb(16 185 129)"
-                  stroke="rgb(24 24 27)"
-                  strokeWidth={1}
-                  pointerEvents="none"
-                >
-                  {!interactive ? (
-                    <title>
-                      {shortDateLabel(p.dayKey)} · {dk.toFixed(2)} km
-                    </title>
-                  ) : null}
-                </circle>
-              </g>
-            );
-          }
-          if (!hasTime && !hasDist) {
+        {plotDays.map((pd, ix) => {
+          if (pd.point == null) {
             return null;
           }
-          const tmDual =
-            hasTime && p.timeMin != null && Number.isFinite(p.timeMin)
-              ? p.timeMin
-              : null;
-          const kmDual =
-            hasDist && p.distanceKm != null && Number.isFinite(p.distanceKm)
-              ? p.distanceKm
-              : null;
-          const cyTime = tmDual != null && yAtRight ? yAtRight(tmDual) : null;
-          const cyDist = kmDual != null ? yAt(kmDual) : null;
-          const rDual = isHighlighted ? 4.25 : 3.5;
+          const cx = xAt(ix);
+          const isSelected =
+            selectedDayKey != null && pd.dayKey === selectedDayKey;
+          const isHoveredColumn =
+            interactive && hoverIdx != null && hoverIdx === ix;
+          const isHighlighted = isSelected || isHoveredColumn;
+          const markOpacity = isHighlighted ? 1 : 0.28;
+          const cy = yAt(displayPerDay[ix] ?? 0);
+          const r = 3;
           return (
-            <g key={p.id} opacity={markOpacity}>
-              {hasDist && cyDist != null ? (
-                <circle
-                  cx={cx}
-                  cy={cyDist}
-                  r={rDual}
-                  fill="rgb(16 185 129)"
-                  stroke="rgb(24 24 27)"
-                  strokeWidth={0.5}
-                  pointerEvents="none"
-                >
-                  {!interactive ? (
-                    <title>
-                      {shortDateLabel(p.dayKey)} ·{" "}
-                      {kmDual != null ? kmDual.toFixed(2) : ""} km
-                    </title>
-                  ) : null}
-                </circle>
-              ) : null}
-              {hasTime && cyTime != null ? (
-                <circle
-                  cx={cx}
-                  cy={cyTime}
-                  r={rDual}
-                  fill="rgb(56 189 248)"
-                  stroke="rgb(24 24 27)"
-                  strokeWidth={0.5}
-                  pointerEvents="none"
-                >
-                  {!interactive ? (
-                    <title>
-                      {shortDateLabel(p.dayKey)} ·{" "}
-                      {tmDual != null ? tmDual.toFixed(1) : ""} min
-                    </title>
-                  ) : null}
-                </circle>
-              ) : null}
+            <g key={pd.dayKey} opacity={markOpacity}>
+              <circle
+                cx={cx}
+                cy={cy}
+                r={isHighlighted ? r + 0.75 : r}
+                fill="rgb(24 24 27)"
+                stroke="rgb(244 244 245)"
+                strokeWidth={1}
+                pointerEvents="none"
+              />
             </g>
           );
         })}
@@ -1013,11 +777,11 @@ export function ActivityMetricsChart({
           : null}
 
         {interactive && onSelectDayKey ? (
-          // biome-ignore lint/a11y/noStaticElementInteractions: chart scrubber; x-nearest column matches hover line + click
+          // biome-ignore lint/a11y/noStaticElementInteractions: chart scrubber
           <rect
             x={PAD_L}
             y={PAD_T}
-            width={chartInnerW}
+            width={innerW}
             height={innerH}
             fill="transparent"
             className="cursor-crosshair"
@@ -1027,7 +791,14 @@ export function ActivityMetricsChart({
               if (x == null) {
                 return;
               }
-              setHoverIdx(nearestIndexFromSvgX(x, n, xAt));
+              setHoverIdx(
+                nearestSessionIndexFromSvgX(
+                  x,
+                  n,
+                  xAt,
+                  (i) => plotDays[i]?.point != null,
+                ),
+              );
             }}
             onMouseLeave={() => setHoverIdx(null)}
             onClick={(e) => {
@@ -1036,10 +807,17 @@ export function ActivityMetricsChart({
               if (x == null) {
                 return;
               }
-              const idx = nearestIndexFromSvgX(x, n, xAt);
-              const row = sorted[idx];
-              if (row) {
-                onSelectDayKey(row.dayKey);
+              const idx = nearestSessionIndexFromSvgX(
+                x,
+                n,
+                xAt,
+                (i) => plotDays[i]?.point != null,
+              );
+              if (idx != null) {
+                const row = plotDays[idx];
+                if (row?.point) {
+                  onSelectDayKey(row.point.dayKey);
+                }
               }
             }}
           />

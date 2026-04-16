@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eq, getTableColumns } from "drizzle-orm";
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
-import { getSessionOk } from "~/lib/auth/session-server";
 import { getDb } from "~/lib/db";
 import {
   type CompletedWorkoutRow,
@@ -23,12 +22,6 @@ import {
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
 import type { StravaActivitySummary } from "~/lib/strava/types";
 
-async function requireAuth() {
-  if (!(await getSessionOk())) {
-    throw new Error("Unauthorized");
-  }
-}
-
 function resolveWorkoutLink(
   stravaActivityId: string | null | undefined,
   hevyWorkoutId: string | null | undefined,
@@ -44,22 +37,6 @@ function resolveWorkoutLink(
   return null;
 }
 
-async function deleteCompletedIfOrphaned(
-  db: ReturnType<typeof getDb>,
-  id: string,
-) {
-  const stillUsed = await db
-    .select({ id: plannedWorkouts.id })
-    .from(plannedWorkouts)
-    .where(eq(plannedWorkouts.completedWorkoutId, id))
-    .get();
-  if (!stillUsed) {
-    await db
-      .delete(completedWorkouts)
-      .where(eq(completedWorkouts.id, id))
-      .run();
-  }
-}
 
 export function normalizeCompletedInsert(
   link: { vendor: "strava" | "hevy"; externalId: string },
@@ -147,7 +124,6 @@ function normalizeOptionalTimeSeconds(
 export const getPlanFn = createServerFn({ method: "GET" })
   .inputValidator((d: { id: string }) => d)
   .handler(async ({ data }): Promise<PlannedWorkoutWithCompleted | null> => {
-    await requireAuth();
     const db = getDb();
     const row = await db
       .select({
@@ -183,7 +159,6 @@ export const createPlanFn = createServerFn({ method: "POST" })
     }) => d,
   )
   .handler(async ({ data }) => {
-    await requireAuth();
     const kinds = new Set(["lift", "run", "bike", "swim"]);
     if (!kinds.has(data.kind)) {
       throw new Error("Invalid kind");
@@ -244,7 +219,6 @@ export const createPlanFromActivityFn = createServerFn({ method: "POST" })
     }) => d,
   )
   .handler(async ({ data }) => {
-    await requireAuth();
     const kinds = new Set(["lift", "run", "bike", "swim"]);
     if (!kinds.has(data.kind)) {
       throw new Error("Invalid kind");
@@ -313,7 +287,6 @@ export const updatePlanFn = createServerFn({ method: "POST" })
     }) => d,
   )
   .handler(async ({ data }) => {
-    await requireAuth();
     const db = getDb();
     const now = new Date();
     const row = await db
@@ -362,7 +335,6 @@ export const updatePlanFn = createServerFn({ method: "POST" })
             .set({ ...updates, completedWorkoutId: null })
             .where(eq(plannedWorkouts.id, data.id))
             .run();
-          await deleteCompletedIfOrphaned(db, previousCompletedId);
           return { ok: true };
         }
       } else {
@@ -388,9 +360,6 @@ export const updatePlanFn = createServerFn({ method: "POST" })
           .set(updates)
           .where(eq(plannedWorkouts.id, data.id))
           .run();
-        if (previousCompletedId) {
-          await deleteCompletedIfOrphaned(db, previousCompletedId);
-        }
         return { ok: true };
       }
     }
@@ -440,20 +409,10 @@ export const updatePlanFn = createServerFn({ method: "POST" })
 export const deletePlanFn = createServerFn({ method: "POST" })
   .inputValidator((d: { id: string }) => d)
   .handler(async ({ data }) => {
-    await requireAuth();
     const db = getDb();
-    const row = await db
-      .select()
-      .from(plannedWorkouts)
-      .where(eq(plannedWorkouts.id, data.id))
-      .get();
-    const cid = row?.completedWorkoutId ?? null;
     await db
       .delete(plannedWorkouts)
       .where(eq(plannedWorkouts.id, data.id))
       .run();
-    if (cid) {
-      await deleteCompletedIfOrphaned(db, cid);
-    }
     return { ok: true };
   });

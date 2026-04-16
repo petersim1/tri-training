@@ -73,6 +73,47 @@ function metricsForPlan(
   return { distanceKm, timeMin };
 }
 
+/** Sum multiple completed workouts on the same calendar day into one point. */
+function aggregateActivityPlotPointsByDay(
+  points: ActivityPlotPoint[],
+): ActivityPlotPoint[] {
+  const map = new Map<
+    string,
+    { ids: string[]; distanceKm: number; timeMin: number }
+  >();
+  for (const p of points) {
+    let cur = map.get(p.dayKey);
+    if (!cur) {
+      cur = { ids: [], distanceKm: 0, timeMin: 0 };
+      map.set(p.dayKey, cur);
+    }
+    cur.ids.push(p.id);
+    if (p.distanceKm != null && Number.isFinite(p.distanceKm)) {
+      cur.distanceKm += p.distanceKm;
+    }
+    if (p.timeMin != null && Number.isFinite(p.timeMin)) {
+      cur.timeMin += p.timeMin;
+    }
+  }
+  const out: ActivityPlotPoint[] = [];
+  for (const [dayKey, v] of map) {
+    const distanceKm =
+      v.distanceKm > 0 && Number.isFinite(v.distanceKm) ? v.distanceKm : null;
+    const timeMin =
+      v.timeMin > 0 && Number.isFinite(v.timeMin) ? v.timeMin : null;
+    if (distanceKm == null && timeMin == null) {
+      continue;
+    }
+    out.push({
+      id: v.ids.join("+"),
+      dayKey,
+      distanceKm,
+      timeMin,
+    });
+  }
+  return out.sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+}
+
 /** Completed plans with metrics from linked session or planned targets when not linked. */
 export function buildActivityPlotPoints(
   plans: PlannedWorkoutWithCompleted[],
@@ -80,7 +121,7 @@ export function buildActivityPlotPoints(
   from: string | undefined,
   to: string | undefined,
 ): ActivityPlotPoint[] {
-  return plans
+  const rows = plans
     .filter((p) => {
       if (p.status !== "completed") {
         return false;
@@ -124,4 +165,6 @@ export function buildActivityPlotPoints(
       };
     })
     .filter((row): row is ActivityPlotPoint => row != null);
+
+  return aggregateActivityPlotPointsByDay(rows);
 }

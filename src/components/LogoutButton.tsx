@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useCallback, useState } from "react";
 import { logoutFn } from "~/lib/auth/server-fns";
 
 export function LogoutButton() {

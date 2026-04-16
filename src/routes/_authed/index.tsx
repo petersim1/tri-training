@@ -1,6 +1,21 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type DehydratedState,
+  dehydrate,
+  HydrationBoundary,
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { ActivityMetricsChart } from "~/components/ActivityMetricsChart";
 import { PlanCardioTargetsField } from "~/components/PlanCardioTargetsField";
 import { PlanNotesField } from "~/components/PlanNotesField";
@@ -18,7 +33,20 @@ import type {
   HevyRoutineSummary,
 } from "~/lib/hevy/types";
 import type { CalendarScope } from "~/lib/home/calendar-scope";
-import { getHomeDataFn, setCalendarScopeFn } from "~/lib/home/server-fns";
+import {
+  homeHevyBundleQueryKey,
+  homePlansQueryKey,
+  homeWeightQueryKey,
+} from "~/lib/home/query-keys";
+import {
+  fetchHevyHomeBundleFn,
+  fetchWeightEntriesForHomeFn,
+  loadHomePageDataFn,
+  setCalendarScopeFn,
+  setSessionChartSettingsFn,
+} from "~/lib/home/server-fns";
+import type { SessionChartSettings } from "~/lib/home/session-chart-settings";
+import { sessionChartDayRange } from "~/lib/home/session-chart-settings";
 import {
   type ActivityPlotKind,
   buildActivityPlotPoints,
@@ -36,10 +64,13 @@ import {
   getPlanLinkCandidatesFn,
   getPlanLinkCandidatesForDayFn,
 } from "~/lib/plans/link-candidates-fns";
+import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
 import {
   linkedSessionFromHevyWorkout,
   linkedSessionFromStravaActivity,
 } from "~/lib/plans/linked-session";
+import { listAllPlannedWorkoutsFn } from "~/lib/plans/list-planned-fns";
+import type { PlannedWorkoutsPageResult } from "~/lib/plans/select-with-completed";
 import {
   createPlanFn,
   createPlanFromActivityFn,
@@ -53,19 +84,36 @@ import {
 } from "~/lib/weight/server-fns";
 
 export const Route = createFileRoute("/_authed/")({
-  loader: async () => {
-    return getHomeDataFn();
+  loader: async ({
+    context,
+  }): Promise<{
+    dehydrated: DehydratedState;
+    calendarScope: CalendarScope;
+    sessionChartSettings: SessionChartSettings;
+  }> => {
+    const { queryClient } = context;
+    const data = await loadHomePageDataFn(queryClient);
+    return {
+      dehydrated: dehydrate(queryClient),
+      ...data,
+    };
   },
-  component: Home,
+  component: HomeRoute,
 });
+
+function HomeRoute() {
+  const data = Route.useLoaderData();
+  return (
+    <HydrationBoundary state={data.dehydrated}>
+      <Home />
+    </HydrationBoundary>
+  );
+}
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /** Month grid: day + weight row + activity icons (desktop wide viewport). */
 const CAL_DAY_CELL_MONTH_WIDE_CLASS = "h-18";
-
-/** Narrow month grid: same layout, tighter row height. */
-const CAL_DAY_CELL_MONTH_NARROW_CLASS = "h-16";
 
 function localDayKey(iso: string): string {
   const d = new Date(iso);
@@ -83,6 +131,26 @@ function dayKeyFromParts(y: number, m0: number, day: number): string {
 function todayLocalDayKey(): string {
   const n = new Date();
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Calendar "today" cell — must use the **browser's** local calendar, not SSR/UTC.
+ * Server snapshot is empty so no day is highlighted until the client hydrates.
+ */
+function subscribeTodayDayKey(onChange: () => void): () => void {
+  const id = setInterval(onChange, 60_000);
+  const bump = () => onChange();
+  document.addEventListener("visibilitychange", bump);
+  window.addEventListener("focus", bump);
+  return () => {
+    clearInterval(id);
+    document.removeEventListener("visibilitychange", bump);
+    window.removeEventListener("focus", bump);
+  };
+}
+
+function useTodayDayKeyForCalendar(): string {
+  return useSyncExternalStore(subscribeTodayDayKey, todayLocalDayKey, () => "");
 }
 
 /** `YYYY-MM-DD` strictly after today (local calendar). */
@@ -536,24 +604,6 @@ function buildCalendarGridCells(
   });
 }
 
-/** Narrow viewport: month grid uses dot strip instead of plan preview cards. */
-const VIEWPORT_NARROW_QUERY = "(max-width: 1023px)";
-
-function useViewportNarrowForCalendar(): boolean {
-  const [narrow, setNarrow] = useState(() =>
-    typeof window !== "undefined"
-      ? window.matchMedia(VIEWPORT_NARROW_QUERY).matches
-      : false,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(VIEWPORT_NARROW_QUERY);
-    const fn = () => setNarrow(mq.matches);
-    mq.addEventListener("change", fn);
-    return () => mq.removeEventListener("change", fn);
-  }, []);
-  return narrow;
-}
-
 type HomeCalendarDayLayout = "monthGrid" | "weekList";
 
 type PlanActivityKind = "swim" | "lift" | "run" | "bike";
@@ -573,7 +623,7 @@ const activityIconSvgProps = {
   strokeWidth: 2,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
-  className: "size-3 shrink-0",
+  className: "size-4 shrink-0",
   "aria-hidden": true,
 } as const;
 
@@ -644,10 +694,7 @@ function CalendarDayActivityIcons({
   }
 
   return (
-    <span
-      className="inline-flex max-w-full flex-row flex-wrap items-center justify-center gap-0.5 leading-none"
-      aria-hidden
-    >
+    <>
       {dayPlans.map((p) => (
         <span
           key={p.id}
@@ -661,30 +708,22 @@ function CalendarDayActivityIcons({
           <PlanActivityKindIcon kind={p.kind} />
         </span>
       ))}
-    </span>
+    </>
   );
 }
 
-/** Top-right of day cells; full label on desktop, truncated number on narrow viewports. */
-function DayCellWeightTopRight({
-  entry,
-  compactLabel,
-}: {
-  entry: WeightEntryRow;
-  compactLabel: boolean;
-}) {
+/** Top-right of day cells; full label on lg+, truncated number below (CSS — avoids viewport JS / hydration shift). */
+function DayCellWeightTopRight({ entry }: { entry: WeightEntryRow }) {
+  const v = entry.weightLb.toFixed(1);
   return (
     <span
-      className={`shrink-0 text-right tabular-nums leading-none text-zinc-300 ${
-        compactLabel
-          ? "max-w-[2.75rem] truncate text-[10px] font-medium"
-          : "text-[11px]"
-      }`}
+      className="shrink-0 text-right tabular-nums leading-none text-zinc-300"
       title={`${entry.weightLb.toFixed(1)} lb`}
     >
-      {compactLabel
-        ? entry.weightLb.toFixed(1)
-        : `${entry.weightLb.toFixed(1)} lb`}
+      <span className="hidden text-[11px] lg:inline">{v} lb</span>
+      <span className="inline max-w-[2.75rem] truncate text-[10px] font-medium lg:hidden">
+        {v}
+      </span>
     </span>
   );
 }
@@ -700,7 +739,6 @@ function HomeCalendarDayBlock({
   isToday,
   layout,
   monthCellHeightClass,
-  weightLabelCompact,
   onOpenDay,
 }: {
   y: number;
@@ -713,10 +751,6 @@ function HomeCalendarDayBlock({
   isToday: boolean;
   layout: HomeCalendarDayLayout;
   monthCellHeightClass: string;
-  /**
-   * Narrow viewports: shorter weight text (number only). Wider: `NNN.N lb`.
-   */
-  weightLabelCompact: boolean;
   onOpenDay: () => void;
 }) {
   const dayAriaLabel = new Date(y, m0, day).toLocaleDateString(undefined, {
@@ -758,7 +792,7 @@ function HomeCalendarDayBlock({
           onClick={onOpenDay}
           aria-label={`Open ${weekListAria}`}
         />
-        <div className="relative z-[2] flex h-full min-h-0 w-full flex-col px-0.5 pb-1 pt-1.5 pointer-events-none">
+        <div className="relative z-[2] flex h-full min-h-0 w-full flex-col px-0.5 pt-1.5 pb-0 pointer-events-none">
           <div className="relative mb-0.5 flex min-h-[1.125rem] w-full shrink-0 items-start justify-center">
             {dayWeight ? (
               <span
@@ -779,7 +813,7 @@ function HomeCalendarDayBlock({
               {day}
             </span>
           </div>
-          <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+          <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-2">
             <CalendarDayActivityIcons dayPlans={dayPlans} />
           </div>
         </div>
@@ -790,7 +824,7 @@ function HomeCalendarDayBlock({
   return (
     <div
       id={`home-cal-day-${dayKey}`}
-      className={`relative flex ${monthCellHeightClass} min-w-0 flex-col overflow-hidden bg-zinc-950 px-1 py-0.5 ${
+      className={`relative flex ${monthCellHeightClass} min-w-0 flex-col overflow-hidden bg-zinc-950 px-1 pt-0.5 pb-0 ${
         isHighlightedDay
           ? "z-[4] ring-2 ring-sky-500/80 ring-inset"
           : isToday
@@ -800,7 +834,7 @@ function HomeCalendarDayBlock({
     >
       <button
         type="button"
-        className="absolute inset-0 z-[1] cursor-pointer rounded border-0 bg-transparent p-0 hover:bg-zinc-900/45 focus-visible:z-[5] focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-inset touch-manipulation"
+        className="absolute inset-0 z-[1] cursor-pointer border-0 bg-transparent p-0 hover:bg-zinc-900/45 focus-visible:z-[5] focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-inset touch-manipulation"
         onClick={onOpenDay}
         aria-label={`Open ${weekListAria}`}
       />
@@ -813,14 +847,9 @@ function HomeCalendarDayBlock({
           >
             {day}
           </div>
-          {dayWeight ? (
-            <DayCellWeightTopRight
-              entry={dayWeight}
-              compactLabel={weightLabelCompact}
-            />
-          ) : null}
+          {dayWeight ? <DayCellWeightTopRight entry={dayWeight} /> : null}
         </div>
-        <div className="flex min-h-0 w-full flex-1 items-center justify-center px-0.5">
+        <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-2">
           <CalendarDayActivityIcons dayPlans={dayPlans} />
         </div>
       </div>
@@ -853,28 +882,83 @@ function parseFormOptionalInt(v: FormDataEntryValue | null): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
+function removePlannedWorkoutFromCaches(
+  queryClient: QueryClient,
+  sessionChartSettings: SessionChartSettings,
+  deletedId: string,
+) {
+  queryClient.setQueryData<PlannedWorkoutWithCompleted[]>(
+    homePlansQueryKey(sessionChartSettings),
+    (old) => (old ?? []).filter((p) => p.id !== deletedId),
+  );
+
+  queryClient.setQueriesData(
+    { queryKey: ["plannedWorkouts", "activitiesPage"] },
+    (old) => {
+      if (!old || typeof old !== "object" || !("rows" in old)) return old;
+      const page = old as PlannedWorkoutsPageResult;
+      if (!Array.isArray(page.rows)) return old;
+      const had = page.rows.some((r) => r.id === deletedId);
+      return {
+        ...page,
+        rows: page.rows.filter((r) => r.id !== deletedId),
+        total: had ? Math.max(0, page.total - 1) : page.total,
+        totalAll: Math.max(0, page.totalAll - 1),
+      };
+    },
+  );
+
+  queryClient.removeQueries({ queryKey: ["planLinkCandidates", deletedId] });
+}
+
 function Home() {
   const data = Route.useLoaderData();
-  const {
-    plans,
-    weightEntries,
-    hevyRoutines,
-    hevyRoutineGroups,
-    hevyRoutinesUnfoldered,
-    calendarScope,
-  } = data;
+  const { calendarScope, sessionChartSettings } = data;
   const router = useRouter();
   const queryClient = useQueryClient();
 
+  const plansQuery = useQuery({
+    queryKey: homePlansQueryKey(sessionChartSettings),
+    queryFn: () => listAllPlannedWorkoutsFn(),
+  });
+  const plans = plansQuery.data ?? [];
+
+  const weightQuery = useQuery({
+    queryKey: homeWeightQueryKey,
+    queryFn: () => fetchWeightEntriesForHomeFn(),
+  });
+  const weightEntries = weightQuery.data ?? [];
+
+  const hevyQuery = useQuery({
+    queryKey: homeHevyBundleQueryKey,
+    queryFn: () => fetchHevyHomeBundleFn(),
+  });
+  const hevyRoutines = hevyQuery.data?.hevyRoutines ?? [];
+  const hevyRoutineGroups = hevyQuery.data?.hevyRoutineGroups ?? [];
+  const hevyRoutinesUnfoldered = hevyQuery.data?.hevyRoutinesUnfoldered ?? [];
+
+  async function patchSessionChart(patch: Partial<SessionChartSettings>) {
+    const next = { ...sessionChartSettings, ...patch };
+    await setSessionChartSettingsFn({ data: next });
+  }
+
   async function refreshAfterPlanChange() {
-    await queryClient.invalidateQueries({ queryKey: ["planLinkCandidates"] });
+    await queryClient.invalidateQueries({
+      queryKey: ["planLinkCandidates"],
+      refetchType: "all",
+    });
     await queryClient.invalidateQueries({
       queryKey: ["planLinkCandidatesForDay"],
+      refetchType: "all",
     });
     await queryClient.invalidateQueries({
-      queryKey: ["plannedWorkouts", "list"],
+      queryKey: ["plannedWorkouts"],
+      refetchType: "all",
     });
-    await router.invalidate();
+    await queryClient.invalidateQueries({
+      queryKey: ["weightEntries"],
+      refetchType: "all",
+    });
   }
 
   const [view, setView] = useState(() => {
@@ -887,11 +971,9 @@ function Home() {
     startOfIsoWeekMondayFromDate(new Date()),
   );
 
-  const isNarrowViewport = useViewportNarrowForCalendar();
   const showWeekStrip = calendarScope === "week";
   async function persistCalendarScope(scope: CalendarScope) {
     await setCalendarScopeFn({ data: { scope } });
-    await router.invalidate();
   }
 
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null);
@@ -918,12 +1000,25 @@ function Home() {
     () => weightsByDayKey(weightEntries),
     [weightEntries],
   );
-  const activityPlotPoints = useMemo(
-    () =>
-      buildActivityPlotPoints(plans, activityPlotKind, undefined, undefined),
-    [plans, activityPlotKind],
-  );
+  const activityPlotPoints = useMemo(() => {
+    const { from, to } = sessionChartDayRange(sessionChartSettings.range);
+    return buildActivityPlotPoints(plans, activityPlotKind, from, to);
+  }, [plans, activityPlotKind, sessionChartSettings.range]);
+
+  const weightEntriesInRange = useMemo(() => {
+    const { from, to } = sessionChartDayRange(sessionChartSettings.range);
+    return weightEntries.filter((e) => {
+      if (from && e.dayKey < from) {
+        return false;
+      }
+      if (to && e.dayKey > to) {
+        return false;
+      }
+      return true;
+    });
+  }, [weightEntries, sessionChartSettings.range]);
   const rTitle = useMemo(() => routineTitleMap(hevyRoutines), [hevyRoutines]);
+  const todayDayKey = useTodayDayKeyForCalendar();
 
   const gridCells = useMemo(
     () => buildCalendarGridCells(showWeekStrip, view.y, view.m, weekStart),
@@ -939,10 +1034,9 @@ function Home() {
     ? weekRangeLabel(weekStart)
     : monthLabel;
 
+  /** Responsive height: no JS viewport — avoids cell jump after hydration / when queries resolve. */
   const monthDayCellHeightClass =
-    isNarrowViewport && calendarScope === "month"
-      ? CAL_DAY_CELL_MONTH_NARROW_CLASS
-      : CAL_DAY_CELL_MONTH_WIDE_CLASS;
+    calendarScope === "month" ? "h-16 lg:h-18" : CAL_DAY_CELL_MONTH_WIDE_CLASS;
 
   useEffect(() => {
     if (!selectedDay) {
@@ -1096,7 +1190,106 @@ function Home() {
     setDayModalScreen("summary");
     setPlanErr(null);
     setLinkPlanId(null);
+    setPlanKind("");
+    setLiftRoutineId(null);
+    setRetroActivityNotes("");
   }
+
+  const createPlanMutation = useMutation({
+    mutationFn: (data: {
+      kind: string;
+      scheduledAt: string;
+      notes?: string | null;
+      routineId?: string | null;
+      distance?: number | null;
+      distanceUnits?: string | null;
+      timeSeconds?: number | null;
+    }) => createPlanFn({ data }),
+    onSuccess: async () => {
+      await refreshAfterPlanChange();
+      backToDaySummary();
+    },
+    onError: (e) => {
+      setPlanErr(e instanceof Error ? e.message : "Could not create plan");
+    },
+  });
+
+  const createPlanFromActivityMutation = useMutation({
+    mutationFn: (data: {
+      kind: string;
+      scheduledAt: string;
+      stravaActivityId?: string | null;
+      hevyWorkoutId?: string | null;
+      linkedSession: LinkedSessionPayload;
+      notes?: string | null;
+      routineId?: string | null;
+    }) => createPlanFromActivityFn({ data }),
+    onSuccess: async () => {
+      await refreshAfterPlanChange();
+      backToDaySummary();
+    },
+    onError: (e) => {
+      setPlanErr(e instanceof Error ? e.message : "Could not create plan");
+    },
+  });
+
+  const deletePlanMutation = useMutation({
+    mutationFn: (id: string) => deletePlanFn({ data: { id } }),
+    onSuccess: (_, deletedId) => {
+      removePlannedWorkoutFromCaches(
+        queryClient,
+        sessionChartSettings,
+        deletedId,
+      );
+      backToDaySummary();
+    },
+    onError: (e) => {
+      setPlanErr(e instanceof Error ? e.message : "Could not delete plan");
+    },
+  });
+
+  const setWeightMutation = useMutation({
+    mutationFn: (input: { dayKey: string; weightLb: number }) =>
+      setWeightForDayFn({ data: input }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: homeWeightQueryKey });
+    },
+    onError: (e) => {
+      setWeightErr(e instanceof Error ? e.message : "Could not save");
+    },
+  });
+
+  const clearWeightMutation = useMutation({
+    mutationFn: (dayKey: string) => clearWeightForDayFn({ data: { dayKey } }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: homeWeightQueryKey });
+    },
+    onError: (e) => {
+      setWeightErr(e instanceof Error ? e.message : "Could not clear");
+    },
+  });
+
+  const updatePlanMutation = useMutation({
+    mutationFn: (data: {
+      id: string;
+      notes?: string | null;
+      scheduledAt?: string;
+      status?: string;
+      stravaActivityId?: string | null;
+      hevyWorkoutId?: string | null;
+      linkedSession?: LinkedSessionPayload | null;
+      hevyRoutineId?: string | null;
+      distance?: number | null;
+      distanceUnits?: string | null;
+      timeSeconds?: number | null;
+    }) => updatePlanFn({ data }),
+    onSuccess: async () => {
+      await refreshAfterPlanChange();
+    },
+    onError: (e) => {
+      setPlanErr(e instanceof Error ? e.message : "Could not update plan");
+    },
+  });
 
   function openPlanLinkFromSummary(planId: string) {
     setDayModalScreen("planLink");
@@ -1290,9 +1483,7 @@ function Home() {
                 const key = dayKeyFromParts(cell.y, cell.m0, cell.d);
                 const dayPlans = byDay.get(key) ?? [];
                 const dayWeight = byWeightDay.get(key);
-                const isToday =
-                  new Date().toDateString() ===
-                  new Date(cell.y, cell.m0, cell.d).toDateString();
+                const isToday = todayDayKey !== "" && key === todayDayKey;
                 const isHighlightedDay =
                   (dialogDayKey !== null && key === dialogDayKey) ||
                   (highlightedDayKey !== null && key === highlightedDayKey);
@@ -1309,7 +1500,6 @@ function Home() {
                     isToday={isToday}
                     layout="weekList"
                     monthCellHeightClass={monthDayCellHeightClass}
-                    weightLabelCompact={isNarrowViewport}
                     onOpenDay={() => openDay(cell.y, cell.m0, cell.d)}
                   />
                 );
@@ -1340,9 +1530,7 @@ function Home() {
                 const key = dayKeyFromParts(y, m0, day);
                 const dayPlans = byDay.get(key) ?? [];
                 const dayWeight = byWeightDay.get(key);
-                const isToday =
-                  new Date().toDateString() ===
-                  new Date(y, m0, day).toDateString();
+                const isToday = todayDayKey !== "" && key === todayDayKey;
                 const isHighlightedDay =
                   (dialogDayKey !== null && key === dialogDayKey) ||
                   (highlightedDayKey !== null && key === highlightedDayKey);
@@ -1359,7 +1547,6 @@ function Home() {
                     isToday={isToday}
                     layout="monthGrid"
                     monthCellHeightClass={monthDayCellHeightClass}
-                    weightLabelCompact={isNarrowViewport}
                     onOpenDay={() => openDay(y, m0, day)}
                   />
                 );
@@ -1375,17 +1562,23 @@ function Home() {
           kind={activityPlotKind}
           onKindChange={setActivityPlotKind}
           points={activityPlotPoints}
+          sessionChart={sessionChartSettings}
+          onSessionChartPatch={(patch) => void patchSessionChart(patch)}
           onSelectDayKey={openDayFromDayKey}
           selectedDayKey={dialogDayKey ?? highlightedDayKey}
+          isLoading={plansQuery.isLoading}
         />
       </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium text-zinc-100">Weight</h2>
         <WeightTrendChart
-          entries={weightEntries}
+          entries={weightEntriesInRange}
+          range={sessionChartSettings.range}
+          onRangeChange={(r) => void patchSessionChart({ range: r })}
           onSelectDayKey={openDayFromDayKey}
           selectedDayKey={dialogDayKey ?? highlightedDayKey}
+          isLoading={weightQuery.isLoading}
         />
       </section>
 
@@ -1484,7 +1677,7 @@ function Home() {
                   <form
                     key={`${dialogDayKey ?? "x"}-${dialogWeight?.weightLb ?? "none"}`}
                     className="flex flex-col gap-3 sm:flex-row sm:items-stretch"
-                    onSubmit={async (e) => {
+                    onSubmit={(e) => {
                       e.preventDefault();
                       if (!dialogDayKey) {
                         return;
@@ -1497,16 +1690,10 @@ function Home() {
                         setWeightErr("Enter a valid weight");
                         return;
                       }
-                      try {
-                        await setWeightForDayFn({
-                          data: { dayKey: dialogDayKey, weightLb: w },
-                        });
-                        await router.invalidate();
-                      } catch (e2) {
-                        setWeightErr(
-                          e2 instanceof Error ? e2.message : "Could not save",
-                        );
-                      }
+                      setWeightMutation.mutate({
+                        dayKey: dialogDayKey,
+                        weightLb: w,
+                      });
                     }}
                   >
                     <div className="relative min-w-0 flex-1">
@@ -1534,25 +1721,27 @@ function Home() {
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <button
                         type="submit"
-                        className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-500"
+                        disabled={setWeightMutation.isPending}
+                        className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Save
+                        {setWeightMutation.isPending ? "Saving…" : "Save"}
                       </button>
                       {dialogWeight && dialogDayKey ? (
                         <button
                           type="button"
-                          className="rounded-lg border border-zinc-600 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800"
-                          onClick={async () => {
-                            if (!confirm("Clear weight for this day?")) {
-                              return;
-                            }
-                            await clearWeightForDayFn({
-                              data: { dayKey: dialogDayKey },
-                            });
-                            await router.invalidate();
+                          disabled={
+                            clearWeightMutation.isPending ||
+                            setWeightMutation.isPending
+                          }
+                          className="rounded-lg border border-zinc-600 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                          onClick={() => {
+                            setWeightErr(null);
+                            clearWeightMutation.mutate(dialogDayKey);
                           }}
                         >
-                          Clear
+                          {clearWeightMutation.isPending
+                            ? "Clearing…"
+                            : "Clear"}
                         </button>
                       ) : null}
                     </div>
@@ -1596,7 +1785,7 @@ function Home() {
                   <form
                     key={dialogDayKey}
                     className="space-y-3"
-                    onSubmit={async (e) => {
+                    onSubmit={(e) => {
                       e.preventDefault();
                       const fd = new FormData(e.currentTarget);
                       setPlanErr(null);
@@ -1605,56 +1794,44 @@ function Home() {
                         setPlanErr("Choose a type.");
                         return;
                       }
-                      try {
-                        const scheduledAt = scheduledAtIsoForDay(
-                          selectedDay.y,
-                          selectedDay.m,
-                          selectedDay.d,
-                        );
-                        const notesRaw = fd.get("notes");
-                        const notes =
-                          notesRaw === null || notesRaw === ""
-                            ? null
-                            : String(notesRaw);
-                        const routineId =
-                          planKind === "lift" &&
-                          liftRoutineId &&
-                          liftRoutineId.trim() !== ""
-                            ? liftRoutineId
-                            : null;
-                        const distance = isCardioKind(planKind)
-                          ? parseFormOptionalFloat(fd.get("distance"))
+                      const scheduledAt = scheduledAtIsoForDay(
+                        selectedDay.y,
+                        selectedDay.m,
+                        selectedDay.d,
+                      );
+                      const notesRaw = fd.get("notes");
+                      const notes =
+                        notesRaw === null || notesRaw === ""
+                          ? null
+                          : String(notesRaw);
+                      const routineId =
+                        planKind === "lift" &&
+                        liftRoutineId &&
+                        liftRoutineId.trim() !== ""
+                          ? liftRoutineId
                           : null;
-                        const unitsRaw = String(
-                          fd.get("distanceUnits") ?? "",
-                        ).trim();
-                        const distanceUnits =
-                          isCardioKind(planKind) && unitsRaw !== ""
-                            ? unitsRaw.toLowerCase()
-                            : null;
-                        const timeSeconds = isCardioKind(planKind)
-                          ? parseFormOptionalInt(fd.get("timeSeconds"))
+                      const distance = isCardioKind(planKind)
+                        ? parseFormOptionalFloat(fd.get("distance"))
+                        : null;
+                      const unitsRaw = String(
+                        fd.get("distanceUnits") ?? "",
+                      ).trim();
+                      const distanceUnits =
+                        isCardioKind(planKind) && unitsRaw !== ""
+                          ? unitsRaw.toLowerCase()
                           : null;
-                        await createPlanFn({
-                          data: {
-                            kind: planKind,
-                            scheduledAt,
-                            notes,
-                            routineId,
-                            distance,
-                            distanceUnits,
-                            timeSeconds,
-                          },
-                        });
-                        await refreshAfterPlanChange();
-                        closeWeightDialog();
-                      } catch (e2) {
-                        setPlanErr(
-                          e2 instanceof Error
-                            ? e2.message
-                            : "Could not create plan",
-                        );
-                      }
+                      const timeSeconds = isCardioKind(planKind)
+                        ? parseFormOptionalInt(fd.get("timeSeconds"))
+                        : null;
+                      createPlanMutation.mutate({
+                        kind: planKind,
+                        scheduledAt,
+                        notes,
+                        routineId,
+                        distance,
+                        distanceUnits,
+                        timeSeconds,
+                      });
                     }}
                   >
                     <label className="block space-y-1">
@@ -1744,9 +1921,12 @@ function Home() {
                     ) : null}
                     <button
                       type="submit"
-                      className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+                      disabled={createPlanMutation.isPending}
+                      className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Create plan
+                      {createPlanMutation.isPending
+                        ? "Creating…"
+                        : "Create plan"}
                     </button>
                   </form>
                 ) : null}
@@ -1855,41 +2035,31 @@ function Home() {
                                 <li key={w.id ?? ""}>
                                   <button
                                     type="button"
-                                    disabled={!w.id}
-                                    onClick={async () => {
+                                    disabled={
+                                      !w.id ||
+                                      createPlanFromActivityMutation.isPending
+                                    }
+                                    onClick={() => {
                                       if (!w.id || !selectedDay) {
                                         return;
                                       }
                                       setPlanErr(null);
-                                      try {
-                                        const scheduledAt =
-                                          scheduledAtIsoForDay(
-                                            selectedDay.y,
-                                            selectedDay.m,
-                                            selectedDay.d,
-                                          );
-                                        await createPlanFromActivityFn({
-                                          data: {
-                                            kind: "lift",
-                                            scheduledAt,
-                                            stravaActivityId: "",
-                                            hevyWorkoutId: w.id,
-                                            linkedSession:
-                                              linkedSessionFromHevyWorkout(w),
-                                            notes:
-                                              retroActivityNotes.trim() || null,
-                                            routineId: null,
-                                          },
-                                        });
-                                        await refreshAfterPlanChange();
-                                        closeWeightDialog();
-                                      } catch (e2) {
-                                        setPlanErr(
-                                          e2 instanceof Error
-                                            ? e2.message
-                                            : "Could not create plan",
-                                        );
-                                      }
+                                      const scheduledAt = scheduledAtIsoForDay(
+                                        selectedDay.y,
+                                        selectedDay.m,
+                                        selectedDay.d,
+                                      );
+                                      createPlanFromActivityMutation.mutate({
+                                        kind: "lift",
+                                        scheduledAt,
+                                        stravaActivityId: "",
+                                        hevyWorkoutId: w.id,
+                                        linkedSession:
+                                          linkedSessionFromHevyWorkout(w),
+                                        notes:
+                                          retroActivityNotes.trim() || null,
+                                        routineId: null,
+                                      });
                                     }}
                                     className="w-full rounded border border-zinc-800/90 bg-zinc-950/80 px-2 py-1 text-left text-[11px] leading-snug text-zinc-200 hover:border-zinc-600 disabled:opacity-50"
                                   >
@@ -1934,44 +2104,32 @@ function Home() {
                                 <li key={a.id}>
                                   <button
                                     type="button"
-                                    onClick={async () => {
+                                    disabled={
+                                      createPlanFromActivityMutation.isPending
+                                    }
+                                    onClick={() => {
                                       if (!selectedDay) {
                                         return;
                                       }
                                       setPlanErr(null);
-                                      try {
-                                        const scheduledAt =
-                                          scheduledAtIsoForDay(
-                                            selectedDay.y,
-                                            selectedDay.m,
-                                            selectedDay.d,
-                                          );
-                                        await createPlanFromActivityFn({
-                                          data: {
-                                            kind: planKind,
-                                            scheduledAt,
-                                            stravaActivityId: String(a.id),
-                                            hevyWorkoutId: "",
-                                            linkedSession:
-                                              linkedSessionFromStravaActivity(
-                                                a,
-                                              ),
-                                            notes:
-                                              retroActivityNotes.trim() || null,
-                                            routineId: null,
-                                          },
-                                        });
-                                        await refreshAfterPlanChange();
-                                        closeWeightDialog();
-                                      } catch (e2) {
-                                        setPlanErr(
-                                          e2 instanceof Error
-                                            ? e2.message
-                                            : "Could not create plan",
-                                        );
-                                      }
+                                      const scheduledAt = scheduledAtIsoForDay(
+                                        selectedDay.y,
+                                        selectedDay.m,
+                                        selectedDay.d,
+                                      );
+                                      createPlanFromActivityMutation.mutate({
+                                        kind: planKind,
+                                        scheduledAt,
+                                        stravaActivityId: String(a.id),
+                                        hevyWorkoutId: "",
+                                        linkedSession:
+                                          linkedSessionFromStravaActivity(a),
+                                        notes:
+                                          retroActivityNotes.trim() || null,
+                                        routineId: null,
+                                      });
                                     }}
-                                    className="w-full rounded border border-zinc-800/90 bg-zinc-950/80 px-2 py-1 text-left text-[11px] leading-snug text-zinc-200 hover:border-zinc-600"
+                                    className="w-full rounded border border-zinc-800/90 bg-zinc-950/80 px-2 py-1 text-left text-[11px] leading-snug text-zinc-200 hover:border-zinc-600 disabled:opacity-50"
                                   >
                                     <div className="font-medium text-zinc-100">
                                       {a.name}
@@ -2019,6 +2177,10 @@ function Home() {
                     Close
                   </button>
                 </div>
+
+                {planErr ? (
+                  <p className="mb-2 text-sm text-red-400">{planErr}</p>
+                ) : null}
 
                 {!linkPlan ? (
                   <p className="text-sm text-zinc-500">
@@ -2084,19 +2246,19 @@ function Home() {
                           )}
                           <button
                             type="button"
-                            className="text-[11px] text-amber-400/90 hover:underline"
-                            onClick={async () => {
-                              await updatePlanFn({
-                                data: {
-                                  id: linkPlan.id,
-                                  stravaActivityId: null,
-                                  hevyWorkoutId: null,
-                                },
-                              });
-                              await refreshAfterPlanChange();
-                            }}
+                            disabled={updatePlanMutation.isPending}
+                            className="text-[11px] text-amber-400/90 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() =>
+                              updatePlanMutation.mutate({
+                                id: linkPlan.id,
+                                stravaActivityId: null,
+                                hevyWorkoutId: null,
+                              })
+                            }
                           >
-                            Unlink
+                            {updatePlanMutation.isPending
+                              ? "Unlinking…"
+                              : "Unlink"}
                           </button>
                         </div>
                       ) : (
@@ -2141,17 +2303,13 @@ function Home() {
                       <div className="mt-4 border-t border-zinc-800 pt-2.5">
                         <button
                           type="button"
-                          className="text-[11px] text-red-400/90 hover:underline"
-                          onClick={async () => {
-                            if (!confirm("Delete this plan?")) {
-                              return;
-                            }
-                            await deletePlanFn({ data: { id: linkPlan.id } });
-                            await refreshAfterPlanChange();
-                            closeWeightDialog();
-                          }}
+                          disabled={deletePlanMutation.isPending}
+                          className="text-[11px] text-red-400/90 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                          onClick={() => deletePlanMutation.mutate(linkPlan.id)}
                         >
-                          Delete plan
+                          {deletePlanMutation.isPending
+                            ? "Deleting…"
+                            : "Delete plan"}
                         </button>
                       </div>
                     ) : linkCandidatesQuery.isLoading ? (
@@ -2196,23 +2354,21 @@ function Home() {
                                       <li key={w.id ?? ""}>
                                         <button
                                           type="button"
-                                          disabled={!w.id}
-                                          onClick={async () => {
+                                          disabled={
+                                            !w.id ||
+                                            updatePlanMutation.isPending
+                                          }
+                                          onClick={() => {
                                             if (!w.id) {
                                               return;
                                             }
-                                            await updatePlanFn({
-                                              data: {
-                                                id: linkPlan.id,
-                                                stravaActivityId: "",
-                                                hevyWorkoutId: w.id,
-                                                linkedSession:
-                                                  linkedSessionFromHevyWorkout(
-                                                    w,
-                                                  ),
-                                              },
+                                            updatePlanMutation.mutate({
+                                              id: linkPlan.id,
+                                              stravaActivityId: "",
+                                              hevyWorkoutId: w.id,
+                                              linkedSession:
+                                                linkedSessionFromHevyWorkout(w),
                                             });
-                                            await refreshAfterPlanChange();
                                           }}
                                           className="w-full rounded border border-zinc-800/90 bg-zinc-950/80 px-2 py-1 text-left text-[11px] leading-snug text-zinc-200 hover:border-zinc-600 disabled:opacity-50"
                                         >
@@ -2261,21 +2417,21 @@ function Home() {
                                       <li key={a.id}>
                                         <button
                                           type="button"
-                                          onClick={async () => {
-                                            await updatePlanFn({
-                                              data: {
-                                                id: linkPlan.id,
-                                                stravaActivityId: String(a.id),
-                                                hevyWorkoutId: "",
-                                                linkedSession:
-                                                  linkedSessionFromStravaActivity(
-                                                    a,
-                                                  ),
-                                              },
-                                            });
-                                            await refreshAfterPlanChange();
-                                          }}
-                                          className="w-full rounded border border-zinc-800/90 bg-zinc-950/80 px-2 py-1 text-left text-[11px] leading-snug text-zinc-200 hover:border-zinc-600"
+                                          disabled={
+                                            updatePlanMutation.isPending
+                                          }
+                                          onClick={() =>
+                                            updatePlanMutation.mutate({
+                                              id: linkPlan.id,
+                                              stravaActivityId: String(a.id),
+                                              hevyWorkoutId: "",
+                                              linkedSession:
+                                                linkedSessionFromStravaActivity(
+                                                  a,
+                                                ),
+                                            })
+                                          }
+                                          className="w-full rounded border border-zinc-800/90 bg-zinc-950/80 px-2 py-1 text-left text-[11px] leading-snug text-zinc-200 hover:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                           <div className="font-medium text-zinc-100">
                                             {a.name}
@@ -2296,17 +2452,15 @@ function Home() {
                         <div className="mt-4 border-t border-zinc-800 pt-2.5">
                           <button
                             type="button"
-                            className="text-[11px] text-red-400/90 hover:underline"
-                            onClick={async () => {
-                              if (!confirm("Delete this plan?")) {
-                                return;
-                              }
-                              await deletePlanFn({ data: { id: linkPlan.id } });
-                              await refreshAfterPlanChange();
-                              closeWeightDialog();
-                            }}
+                            disabled={deletePlanMutation.isPending}
+                            className="text-[11px] text-red-400/90 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() =>
+                              deletePlanMutation.mutate(linkPlan.id)
+                            }
                           >
-                            Delete plan
+                            {deletePlanMutation.isPending
+                              ? "Deleting…"
+                              : "Delete plan"}
                           </button>
                         </div>
                       </>

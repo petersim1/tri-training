@@ -1,26 +1,18 @@
 import {
-  defaultShouldDehydrateQuery,
+  type DehydratedState,
   dehydrate,
   HydrationBoundary,
-  QueryClient,
+  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import {
-  createFileRoute,
-  Link,
-  useNavigate,
-  useRouter,
-} from "@tanstack/react-router";
-import { type ReactNode, useEffect, useMemo } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { type ReactNode, useEffect } from "react";
 import { PlanCardioTargetsField } from "~/components/PlanCardioTargetsField";
 import { PlanNotesField } from "~/components/PlanNotesField";
 import { PlanStatusSelect } from "~/components/PlanStatusSelect";
 import { ActivityListSkeleton } from "~/components/Skeleton";
-import type {
-  CompletedWorkoutRow,
-  PlannedWorkoutWithCompleted,
-} from "~/lib/db/schema";
+import type { CompletedWorkoutRow } from "~/lib/db/schema";
 import {
   hevyWebRootUrl,
   hevyWorkoutWebUrl,
@@ -31,8 +23,9 @@ import {
   completedWorkoutCalories,
   completedWorkoutDistanceM,
   completedWorkoutMovingSeconds,
+  completedWorkoutTitle,
 } from "~/lib/plans/completed-workout-data";
-import { listAllPlannedWorkoutsFn } from "~/lib/plans/list-planned-fns";
+import { listPlannedWorkoutsPageFn } from "~/lib/plans/list-planned-fns";
 import { updatePlanFn } from "~/lib/plans/server-fns";
 
 const STRAVA_ACTIVITIES_HOME = "https://www.strava.com/athlete/training";
@@ -40,7 +33,7 @@ const STRAVA_ACTIVITIES_HOME = "https://www.strava.com/athlete/training";
 const KINDS = ["all", "lift", "run", "bike", "swim"] as const;
 const STATUSES = ["all", "planned", "completed", "skipped"] as const;
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 20;
 
 export type ActivitiesSearch = {
   kind: (typeof KINDS)[number];
@@ -49,6 +42,21 @@ export type ActivitiesSearch = {
   to: string | undefined;
   page: number;
 };
+
+function activitiesPlannedQueryKey(search: ActivitiesSearch) {
+  return [
+    "plannedWorkouts",
+    "activitiesPage",
+    {
+      kind: search.kind,
+      status: search.status,
+      from: search.from,
+      to: search.to,
+      page: search.page,
+      pageSize: PAGE_SIZE,
+    },
+  ] as const;
+}
 
 function localDayKey(iso: string): string {
   const d = new Date(iso);
@@ -71,7 +79,17 @@ function formatActualDurationSec(s: number | null | undefined): string | null {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-function CardioActualFromCompleted({ c }: { c: CompletedWorkoutRow }) {
+function formatActivityWhen(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function linkedSessionStatsLine(c: CompletedWorkoutRow): string | null {
   const dist = completedWorkoutDistanceM(c);
   const distLabel =
     dist != null && Number.isFinite(dist)
@@ -83,26 +101,92 @@ function CardioActualFromCompleted({ c }: { c: CompletedWorkoutRow }) {
   const kcalRaw = completedWorkoutCalories(c);
   const kcal =
     kcalRaw != null && Number.isFinite(kcalRaw) ? Math.round(kcalRaw) : null;
-  if (!distLabel && !dur && kcal == null) {
-    return null;
+  const parts: string[] = [];
+  if (distLabel) {
+    parts.push(distLabel);
   }
+  if (dur) {
+    parts.push(dur);
+  }
+  if (kcal != null) {
+    parts.push(`${kcal} kcal`);
+  }
+  return parts.length === 0 ? null : parts.join(" · ");
+}
+
+function LinkedSessionPanel({
+  planId,
+  completed,
+  onUnlinked,
+}: {
+  planId: string;
+  completed: CompletedWorkoutRow;
+  onUnlinked: () => Promise<void>;
+}) {
+  const unlinkMutation = useMutation({
+    mutationFn: () =>
+      updatePlanFn({
+        data: {
+          id: planId,
+          stravaActivityId: null,
+          hevyWorkoutId: null,
+        },
+      }),
+    onSuccess: async () => {
+      await onUnlinked();
+    },
+  });
+
+  const statsLine = linkedSessionStatsLine(completed);
+  const sessionTitle = completedWorkoutTitle(completed);
+  const isStrava = completed.vendor === "strava";
+  const href = isStrava
+    ? stravaActivityWebUrl(completed.vendorId)
+    : hevyWorkoutWebUrl(completed.vendorId);
+  const openLabel = isStrava ? "Open in Strava" : "Open in Hevy";
+
   return (
-    <div className="rounded border border-zinc-800/80 bg-zinc-900/20 px-2 py-1.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">
-        Actual (linked)
-      </p>
-      <div className="mt-0.5 text-[11px] text-zinc-400">
-        {distLabel ? <span>{distLabel}</span> : null}
-        {distLabel && dur ? <span className="text-zinc-600"> · </span> : null}
-        {dur ? <span>{dur}</span> : null}
-        {kcal != null ? (
-          <span>
-            {distLabel || dur ? (
-              <span className="text-zinc-600"> · </span>
-            ) : null}
-            {kcal} kcal
+    <div className="rounded-md border border-emerald-900/40 bg-emerald-950/25 px-2 py-1.5">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] font-medium uppercase tracking-wide text-emerald-600/85">
+            Linked session
+            <span className="ml-1.5 font-normal normal-case text-zinc-500">
+              {isStrava ? "Strava" : "Hevy"}
+            </span>
+          </p>
+          {sessionTitle ? (
+            <p className="mt-0.5 text-[11px] font-medium leading-snug text-zinc-200">
+              {sessionTitle}
+            </p>
+          ) : null}
+          {statsLine ? (
+            <p className="mt-0.5 text-[10px] leading-tight text-zinc-400">
+              {statsLine}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-emerald-900/30 pt-1.5 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] font-medium text-emerald-400/95 hover:text-emerald-300 hover:underline"
+          >
+            {openLabel}
+          </a>
+          <span className="text-[10px] text-zinc-600" aria-hidden>
+            ·
           </span>
-        ) : null}
+          <button
+            type="button"
+            disabled={unlinkMutation.isPending}
+            onClick={() => unlinkMutation.mutate()}
+            className="text-[10px] font-medium text-amber-400/90 hover:text-amber-300 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {unlinkMutation.isPending ? "Unlinking…" : "Unlink"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -152,28 +236,6 @@ function FilterSelect({
   );
 }
 
-function filterPlans(
-  plans: PlannedWorkoutWithCompleted[],
-  criteria: Pick<ActivitiesSearch, "kind" | "status" | "from" | "to">,
-): PlannedWorkoutWithCompleted[] {
-  return plans.filter((p) => {
-    if (criteria.kind !== "all" && p.kind !== criteria.kind) {
-      return false;
-    }
-    if (criteria.status !== "all" && p.status !== criteria.status) {
-      return false;
-    }
-    const dk = localDayKey(p.scheduledAt);
-    if (criteria.from && dk < criteria.from) {
-      return false;
-    }
-    if (criteria.to && dk > criteria.to) {
-      return false;
-    }
-    return true;
-  });
-}
-
 function parsePage(raw: unknown): number {
   if (typeof raw === "number" && Number.isFinite(raw)) {
     return Math.max(1, Math.floor(raw));
@@ -214,29 +276,39 @@ export const Route = createFileRoute("/_authed/activities")({
     const page = parsePage(raw.page);
     return { kind, status, from, to, page };
   },
-  loader: async () => {
-    const queryClient = new QueryClient();
+  loaderDeps: ({ search }) => search,
+  loader: async ({
+    context,
+    deps,
+  }): Promise<{
+    dehydrated: DehydratedState;
+  }> => {
+    const { queryClient } = context;
     await queryClient.prefetchQuery({
-      queryKey: ["plannedWorkouts", "list"],
-      queryFn: () => listAllPlannedWorkoutsFn(),
+      queryKey: activitiesPlannedQueryKey(deps),
+      queryFn: () =>
+        listPlannedWorkoutsPageFn({
+          data: {
+            kind: deps.kind,
+            status: deps.status,
+            from: deps.from,
+            to: deps.to,
+            page: deps.page,
+            pageSize: PAGE_SIZE,
+          },
+        }),
     });
     return {
-      dehydratedState: dehydrate(queryClient, {
-        shouldDehydrateQuery: (query) =>
-          query.state.status === "pending" ||
-          defaultShouldDehydrateQuery(query),
-      }),
+      dehydrated: dehydrate(queryClient),
     };
   },
   component: ActivitiesPage,
 });
 
 function ActivitiesPage() {
-  const { dehydratedState } = Route.useLoaderData() as {
-    dehydratedState: ReturnType<typeof dehydrate>;
-  };
+  const data = Route.useLoaderData();
   return (
-    <HydrationBoundary state={dehydratedState}>
+    <HydrationBoundary state={data.dehydrated}>
       <ActivitiesContent />
     </HydrationBoundary>
   );
@@ -244,27 +316,29 @@ function ActivitiesPage() {
 
 function ActivitiesContent() {
   const queryClient = useQueryClient();
-  const router = useRouter();
   const navigate = useNavigate({ from: "/activities" });
   const search = Route.useSearch();
 
   const plansQuery = useQuery({
-    queryKey: ["plannedWorkouts", "list"] as const,
-    queryFn: () => listAllPlannedWorkoutsFn(),
+    queryKey: activitiesPlannedQueryKey(search),
+    queryFn: () =>
+      listPlannedWorkoutsPageFn({
+        data: {
+          kind: search.kind,
+          status: search.status,
+          from: search.from,
+          to: search.to,
+          page: search.page,
+          pageSize: PAGE_SIZE,
+        },
+      }),
   });
 
-  const filtered = useMemo(
-    () =>
-      filterPlans(plansQuery.data ?? [], {
-        kind: search.kind,
-        status: search.status,
-        from: search.from,
-        to: search.to,
-      }),
-    [plansQuery.data, search.kind, search.status, search.from, search.to],
-  );
+  const total = plansQuery.data?.total ?? 0;
+  const totalAll = plansQuery.data?.totalAll ?? 0;
+  const rows = plansQuery.data?.rows ?? [];
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, search.page), pageCount);
 
   useEffect(() => {
@@ -276,12 +350,6 @@ function ActivitiesContent() {
     }
   }, [navigate, page, search.page]);
 
-  const pageSlice = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
-
-  const totalCount = plansQuery.data?.length ?? 0;
   const hasActiveFilters =
     search.kind !== "all" ||
     search.status !== "all" ||
@@ -291,17 +359,12 @@ function ActivitiesContent() {
   const loading = plansQuery.isPending;
 
   function refresh() {
-    void queryClient.invalidateQueries({
-      queryKey: ["plannedWorkouts", "list"],
-    });
+    void queryClient.invalidateQueries({ queryKey: ["plannedWorkouts"] });
   }
 
   async function refreshAfterPlanChange() {
     await queryClient.invalidateQueries({ queryKey: ["planLinkCandidates"] });
-    await queryClient.invalidateQueries({
-      queryKey: ["plannedWorkouts", "list"],
-    });
-    await router.invalidate();
+    await queryClient.invalidateQueries({ queryKey: ["plannedWorkouts"] });
   }
 
   function patchSearch(patch: Partial<ActivitiesSearch>) {
@@ -357,297 +420,123 @@ function ActivitiesContent() {
         aria-label="Filter plans"
         className="rounded-lg border border-zinc-800/90 bg-zinc-950 p-3"
       >
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-            <div className="flex flex-col gap-0.5">
-              <span
-                className="text-[11px] font-medium text-zinc-500"
-                id="activities-filter-kind-label"
-              >
-                Kind
-              </span>
-              <FilterSelect
-                ariaLabelledBy="activities-filter-kind-label"
-                value={search.kind}
-                onChange={(v) =>
-                  patchSearch({ kind: v as ActivitiesSearch["kind"] })
-                }
-              >
-                <option value="all">All kinds</option>
-                <option value="lift">Lift</option>
-                <option value="run">Run</option>
-                <option value="bike">Bike</option>
-                <option value="swim">Swim</option>
-              </FilterSelect>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span
-                className="text-[11px] font-medium text-zinc-500"
-                id="activities-filter-status-label"
-              >
-                Status
-              </span>
-              <FilterSelect
-                ariaLabelledBy="activities-filter-status-label"
-                value={search.status}
-                onChange={(v) =>
-                  patchSearch({ status: v as ActivitiesSearch["status"] })
-                }
-              >
-                <option value="all">All</option>
-                <option value="planned">Planned</option>
-                <option value="completed">Completed</option>
-                <option value="skipped">Skipped</option>
-              </FilterSelect>
-            </div>
-            <div className="flex flex-wrap items-end gap-1.5">
-              <label
-                className="flex flex-col gap-0.5"
-                htmlFor="activities-day-from"
-              >
-                <span className="text-[11px] font-medium text-zinc-500">
-                  Day from
-                </span>
-                <input
-                  id="activities-day-from"
-                  type="date"
-                  value={search.from ?? ""}
-                  onChange={(e) =>
-                    patchSearch({ from: e.target.value || undefined })
-                  }
-                  className="h-8 max-w-[11rem] rounded border border-zinc-700/80 bg-zinc-900 px-2 text-xs text-zinc-100 focus:border-emerald-600/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/25"
-                />
-              </label>
-              <span className="pb-2 text-xs text-zinc-600" aria-hidden>
-                –
-              </span>
-              <label
-                className="flex flex-col gap-0.5"
-                htmlFor="activities-day-to"
-              >
-                <span className="text-[11px] font-medium text-zinc-500">
-                  Day to
-                </span>
-                <input
-                  id="activities-day-to"
-                  type="date"
-                  value={search.to ?? ""}
-                  onChange={(e) =>
-                    patchSearch({ to: e.target.value || undefined })
-                  }
-                  className="h-8 max-w-[11rem] rounded border border-zinc-700/80 bg-zinc-900 px-2 text-xs text-zinc-100 focus:border-emerald-600/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/25"
-                />
-              </label>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800/80 pt-2.5">
-            {!loading && totalCount > 0 ? (
-              <p className="text-xs text-zinc-500">
-                {hasActiveFilters ? (
-                  <>
-                    <span className="tabular-nums text-zinc-400">
-                      {filtered.length}
-                    </span>{" "}
-                    match
-                    {filtered.length !== totalCount ? (
-                      <>
-                        {" "}
-                        (
-                        <span className="tabular-nums text-zinc-500">
-                          {totalCount}
-                        </span>{" "}
-                        total)
-                      </>
-                    ) : null}
-                    {filtered.length > 0 ? (
-                      <>
-                        {" "}
-                        ·{" "}
-                        <span className="tabular-nums text-zinc-400">
-                          {PAGE_SIZE}
-                        </span>
-                        /page
-                      </>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <span className="tabular-nums text-zinc-400">
-                      {totalCount}
-                    </span>{" "}
-                    {totalCount === 1 ? "plan" : "plans"}
-                    {totalCount > PAGE_SIZE ? (
-                      <>
-                        {" "}
-                        ·{" "}
-                        <span className="tabular-nums text-zinc-400">
-                          {PAGE_SIZE}
-                        </span>
-                        /page
-                      </>
-                    ) : null}
-                  </>
-                )}
-              </p>
-            ) : (
-              <span />
-            )}
-            <button
-              type="button"
-              disabled={!hasActiveFilters}
-              onClick={() =>
-                navigate({
-                  search: {
-                    kind: "all",
-                    status: "all",
-                    from: undefined,
-                    to: undefined,
-                    page: 1,
-                  },
-                })
-              }
-              className="shrink-0 text-xs text-emerald-500/90 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-emerald-500/90"
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <div className="flex flex-col gap-0.5">
+            <span
+              className="text-[11px] font-medium text-zinc-500"
+              id="activities-filter-kind-label"
             >
-              Reset filters
-            </button>
+              Kind
+            </span>
+            <FilterSelect
+              ariaLabelledBy="activities-filter-kind-label"
+              value={search.kind}
+              onChange={(v) =>
+                patchSearch({ kind: v as ActivitiesSearch["kind"] })
+              }
+            >
+              <option value="all">All kinds</option>
+              <option value="lift">Lift</option>
+              <option value="run">Run</option>
+              <option value="bike">Bike</option>
+              <option value="swim">Swim</option>
+            </FilterSelect>
           </div>
+          <div className="flex flex-col gap-0.5">
+            <span
+              className="text-[11px] font-medium text-zinc-500"
+              id="activities-filter-status-label"
+            >
+              Status
+            </span>
+            <FilterSelect
+              ariaLabelledBy="activities-filter-status-label"
+              value={search.status}
+              onChange={(v) =>
+                patchSearch({ status: v as ActivitiesSearch["status"] })
+              }
+            >
+              <option value="all">All</option>
+              <option value="planned">Planned</option>
+              <option value="completed">Completed</option>
+              <option value="skipped">Skipped</option>
+            </FilterSelect>
+          </div>
+          <div className="flex flex-wrap items-end gap-1.5">
+            <label
+              className="flex flex-col gap-0.5"
+              htmlFor="activities-day-from"
+            >
+              <span className="text-[11px] font-medium text-zinc-500">
+                Day from
+              </span>
+              <input
+                id="activities-day-from"
+                type="date"
+                value={search.from ?? ""}
+                onChange={(e) =>
+                  patchSearch({ from: e.target.value || undefined })
+                }
+                className="h-8 max-w-[11rem] rounded border border-zinc-700/80 bg-zinc-900 px-2 text-xs text-zinc-100 focus:border-emerald-600/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/25"
+              />
+            </label>
+            <span className="pb-2 text-xs text-zinc-600" aria-hidden>
+              –
+            </span>
+            <label
+              className="flex flex-col gap-0.5"
+              htmlFor="activities-day-to"
+            >
+              <span className="text-[11px] font-medium text-zinc-500">
+                Day to
+              </span>
+              <input
+                id="activities-day-to"
+                type="date"
+                value={search.to ?? ""}
+                onChange={(e) =>
+                  patchSearch({ to: e.target.value || undefined })
+                }
+                className="h-8 max-w-[11rem] rounded border border-zinc-700/80 bg-zinc-900 px-2 text-xs text-zinc-100 focus:border-emerald-600/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/25"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            disabled={!hasActiveFilters}
+            onClick={() =>
+              navigate({
+                search: {
+                  kind: "all",
+                  status: "all",
+                  from: undefined,
+                  to: undefined,
+                  page: 1,
+                },
+              })
+            }
+            className="ml-auto h-8 shrink-0 rounded border border-transparent px-2 text-xs text-emerald-500/90 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-emerald-500/90"
+          >
+            Reset filters
+          </button>
         </div>
       </section>
 
-      {loading ? <ActivityListSkeleton /> : null}
-
-      {!loading && (plansQuery.data?.length ?? 0) === 0 ? (
-        <p className="text-sm text-zinc-500">
-          No planned workouts yet. Add some on{" "}
-          <Link to="/" className="text-emerald-400 hover:underline">
-            Home
-          </Link>
-          .
-        </p>
-      ) : null}
-
-      {!loading &&
-      (plansQuery.data?.length ?? 0) > 0 &&
-      filtered.length === 0 ? (
-        <p className="text-sm text-zinc-500">
-          No planned workouts match these filters.
-        </p>
-      ) : null}
-
-      {!loading && filtered.length > 0 ? (
-        <div className="overflow-hidden rounded border border-zinc-800">
-          <ul className="divide-y divide-zinc-800">
-            {pageSlice.map((p) => (
-              <li key={p.id} className="px-3 py-2.5">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="text-sm capitalize text-zinc-200">
-                        {p.kind}
-                      </span>
-                      <PlanStatusSelect
-                        planId={p.id}
-                        status={p.status}
-                        onUpdated={refreshAfterPlanChange}
-                      />
-                    </div>
-                    <div className="text-[11px] text-zinc-500">
-                      {localDayKey(p.scheduledAt)} ·{" "}
-                      {new Date(p.scheduledAt).toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </div>
-                    {isCardioKind(p.kind) ? (
-                      <div className="mt-1.5 max-w-xl space-y-1.5">
-                        <PlanCardioTargetsField
-                          planId={p.id}
-                          kind={p.kind}
-                          distance={p.distance}
-                          distanceUnits={p.distanceUnits}
-                          timeSeconds={p.timeSeconds}
-                          onUpdated={refreshAfterPlanChange}
-                        />
-                        {p.completedWorkout ? (
-                          <CardioActualFromCompleted c={p.completedWorkout} />
-                        ) : null}
-                      </div>
-                    ) : null}
-                    <div className="mt-1.5 max-w-xl">
-                      <PlanNotesField
-                        planId={p.id}
-                        notes={p.notes}
-                        onUpdated={refreshAfterPlanChange}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-start gap-1 text-[11px] sm:items-end">
-                    {p.completedWorkout ? (
-                      <>
-                        {p.completedWorkout.vendor === "strava" ? (
-                          <a
-                            href={stravaActivityWebUrl(
-                              p.completedWorkout.vendorId,
-                            )}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-emerald-400/90 hover:underline"
-                          >
-                            Open Strava activity
-                          </a>
-                        ) : (
-                          <a
-                            href={hevyWorkoutWebUrl(
-                              p.completedWorkout.vendorId,
-                            )}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-emerald-400/90 hover:underline"
-                          >
-                            Open Hevy workout
-                          </a>
-                        )}
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await updatePlanFn({
-                              data: {
-                                id: p.id,
-                                stravaActivityId: null,
-                                hevyWorkoutId: null,
-                              },
-                            });
-                            await refreshAfterPlanChange();
-                          }}
-                          className="text-amber-400/90 hover:underline"
-                        >
-                          Unlink session
-                        </button>
-                      </>
-                    ) : (
-                      <span className="text-zinc-600">No session linked</span>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {pageCount > 1 ? (
-            <div className="flex flex-col gap-2 border-t border-zinc-800 bg-zinc-950/80 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-zinc-500">
-                Showing{" "}
-                <span className="tabular-nums text-zinc-400">
-                  {(page - 1) * PAGE_SIZE + 1}
-                </span>
-                –
-                <span className="tabular-nums text-zinc-400">
-                  {Math.min(page * PAGE_SIZE, filtered.length)}
-                </span>{" "}
-                of{" "}
-                <span className="tabular-nums text-zinc-400">
-                  {filtered.length}
-                </span>
-              </p>
+      {!loading && total > 0 ? (
+        <div className="sticky top-0 z-30 -mx-4 mt-4 border-b border-zinc-800/80 bg-zinc-950/95 px-4 py-2 backdrop-blur-md">
+          <div className="mx-auto flex w-full max-w-4xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-zinc-500">
+              Showing{" "}
+              <span className="tabular-nums text-zinc-400">
+                {(page - 1) * PAGE_SIZE + 1}
+              </span>
+              –
+              <span className="tabular-nums text-zinc-400">
+                {Math.min(page * PAGE_SIZE, total)}
+              </span>{" "}
+              of <span className="tabular-nums text-zinc-400">{total}</span>
+            </p>
+            {pageCount > 1 ? (
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -669,8 +558,104 @@ function ActivitiesContent() {
                   Next
                 </button>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {loading ? (
+        <div className="mx-auto w-full max-w-4xl">
+          <ActivityListSkeleton />
+        </div>
+      ) : null}
+
+      {!loading && totalAll === 0 ? (
+        <p className="text-sm text-zinc-500">
+          No planned workouts yet. Add some on{" "}
+          <Link to="/" className="text-emerald-400 hover:underline">
+            Home
+          </Link>
+          .
+        </p>
+      ) : null}
+
+      {!loading && totalAll > 0 && total === 0 ? (
+        <p className="text-sm text-zinc-500">
+          No planned workouts match these filters.
+        </p>
+      ) : null}
+
+      {!loading && rows.length > 0 ? (
+        <div className="mx-auto w-full max-w-4xl">
+          <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-5 md:gap-y-5">
+            {rows.map((p) => {
+              const linked = Boolean(p.completedWorkout);
+              return (
+                <li
+                  key={p.id}
+                  className="min-w-0 rounded-lg border border-zinc-800/90 bg-zinc-950/50 px-3 py-3 shadow-sm shadow-black/30"
+                >
+                  <div className="flex flex-col">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 border-b border-zinc-800/80 pb-2.5">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="text-[11px] font-medium capitalize text-zinc-200">
+                          {p.kind}
+                        </span>
+                        <PlanStatusSelect
+                          planId={p.id}
+                          status={p.status}
+                          disabled={linked}
+                          onUpdated={refreshAfterPlanChange}
+                          className="inline-flex items-center"
+                        />
+                      </div>
+                      <span
+                        className="shrink-0 text-[10px] tabular-nums text-zinc-500"
+                        title={localDayKey(p.scheduledAt)}
+                      >
+                        {formatActivityWhen(p.scheduledAt)}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-col gap-3">
+                      {isCardioKind(p.kind) && !linked ? (
+                        <PlanCardioTargetsField
+                          planId={p.id}
+                          kind={p.kind}
+                          distance={p.distance}
+                          distanceUnits={p.distanceUnits}
+                          timeSeconds={p.timeSeconds}
+                          compact
+                          onUpdated={refreshAfterPlanChange}
+                        />
+                      ) : null}
+
+                      {linked && p.completedWorkout ? (
+                        <LinkedSessionPanel
+                          planId={p.id}
+                          completed={p.completedWorkout}
+                          onUnlinked={refreshAfterPlanChange}
+                        />
+                      ) : !isCardioKind(p.kind) ? (
+                        <p className="rounded border border-dashed border-zinc-800/90 bg-zinc-950/40 px-2 py-1.5 text-[10px] text-zinc-500">
+                          No session linked
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 border-t border-zinc-800/80 pt-3">
+                      <PlanNotesField
+                        planId={p.id}
+                        notes={p.notes}
+                        compact
+                        onUpdated={refreshAfterPlanChange}
+                      />
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
     </div>

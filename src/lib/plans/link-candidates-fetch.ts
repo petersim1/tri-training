@@ -250,7 +250,10 @@ export async function fetchAllStravaActivitiesForBackfill(
       );
       if (list === null) {
         if (page === 1) {
-          console.warn(LOG, "Strava full history: no token / 401 on first page");
+          console.warn(
+            LOG,
+            "Strava full history: no token / 401 on first page",
+          );
           return { list: [], error: "Strava not connected" };
         }
         console.warn(LOG, "Strava full history: null mid-pagination", { page });

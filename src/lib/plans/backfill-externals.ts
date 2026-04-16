@@ -3,16 +3,16 @@ import type { HevyWorkoutSummary } from "~/lib/activities/types";
 import { getDb } from "~/lib/db";
 import { completedWorkouts, plannedWorkouts } from "~/lib/db/schema";
 import {
+  hevyDataFromWorkoutSummary,
+  stravaDataFromActivitySummary,
+} from "~/lib/plans/completed-workout-data";
+import {
   fetchAllHevyWorkoutsForBackfill,
   fetchAllStravaActivitiesForBackfill,
   linkedSessionExcludeKeys,
   localDayKeyFromIso,
   type StravaFetchJson,
 } from "~/lib/plans/link-candidates-fetch";
-import {
-  hevyDataFromWorkoutSummary,
-  stravaDataFromActivitySummary,
-} from "~/lib/plans/completed-workout-data";
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
 import {
   linkedSessionFromHevyWorkout,
@@ -334,12 +334,7 @@ export async function backfillLinkedWorkouts(
         }
         arr.push(w);
         if (
-          await upsertCalendarFromHevyWorkout(
-            db,
-            w,
-            calendarExternalKeys,
-            now,
-          )
+          await upsertCalendarFromHevyWorkout(db, w, calendarExternalKeys, now)
         ) {
           report.importedHevy++;
         }
@@ -368,12 +363,7 @@ export async function backfillLinkedWorkouts(
       }
       arr.push(a);
       if (
-        await upsertCalendarFromStravaActivity(
-          db,
-          a,
-          calendarExternalKeys,
-          now,
-        )
+        await upsertCalendarFromStravaActivity(db, a, calendarExternalKeys, now)
       ) {
         report.importedStrava++;
       }

@@ -1,29 +1,23 @@
 /// <reference types="vite/client" />
-import { QueryClientProvider } from "@tanstack/react-query";
+import { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  createRootRoute,
+  createRootRouteWithContext,
   HeadContent,
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { createServerFn } from "@tanstack/react-start";
 import type * as React from "react";
 import { DefaultCatchBoundary } from "~/components/DefaultCatchBoundary";
 import { NotFound } from "~/components/NotFound";
-import { getSessionOk } from "~/lib/auth/session-server";
 import { getQueryClient } from "~/lib/query/client";
 import appCss from "~/styles/app.css?url";
 
-const fetchAuth = createServerFn({ method: "GET" }).handler(async () => {
-  return { ok: await getSessionOk() };
-});
+interface RouterContext {
+  queryClient: QueryClient;
+}
 
-export const Route = createRootRoute({
-  beforeLoad: async () => {
-    const auth = await fetchAuth();
-    return { auth };
-  },
+export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
