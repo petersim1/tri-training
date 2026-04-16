@@ -41,6 +41,7 @@ export function PlanCardioTargetsField({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <planId required to trigger changes.>
   useEffect(() => {
     setDistDraft(distance != null ? String(distance) : "");
     setUnitsDraft(distanceUnits ?? "");

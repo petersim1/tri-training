@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { randomBytes } from "crypto";
 import {
   buildStravaOAuthQueryString,
   STRAVA_OAUTH_STATE_COOKIE,
@@ -28,6 +27,8 @@ export const getStravaLoginOAuthUrlsFn = createServerFn({
   }
   const { setCookie } = await import("@tanstack/react-start/server");
   const redirectUri = stravaRedirectUri();
+  const { randomBytes } = await import("node:crypto");
+
   const state = randomBytes(24).toString("hex");
   setCookie(STRAVA_OAUTH_STATE_COOKIE, state, {
     httpOnly: true,

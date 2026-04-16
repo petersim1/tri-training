@@ -19,6 +19,7 @@ export function PlanNotesField({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <planId required to trigger changes>
   useEffect(() => {
     setDraft(notes ?? "");
   }, [planId, notes]);

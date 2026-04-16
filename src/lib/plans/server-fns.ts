@@ -37,7 +37,6 @@ function resolveWorkoutLink(
   return null;
 }
 
-
 export function normalizeCompletedInsert(
   link: { vendor: "strava" | "hevy"; externalId: string },
   p: LinkedSessionPayload,

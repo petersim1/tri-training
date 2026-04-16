@@ -4,7 +4,7 @@ import { getStravaLoginOAuthUrlsFn } from "~/lib/strava/oauth-flow";
 
 export const Route = createFileRoute("/login")({
   loader: async () => {
-    console.log("LOADING LOGIN")
+    console.log("LOADING LOGIN");
     return { strava: await getStravaLoginOAuthUrlsFn() };
   },
   component: LoginPage,

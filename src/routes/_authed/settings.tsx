@@ -32,7 +32,7 @@ function SettingsPage() {
       if (r.errors.length > 0) {
         setBackfillErr(r.errors.join("\n"));
       }
-      router.invalidate()
+      router.invalidate();
     },
     onError: (e) => {
       setBackfillErr(e instanceof Error ? e.message : String(e));

@@ -7,7 +7,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   useEffect,
   useLayoutEffect,
@@ -914,7 +914,6 @@ function removePlannedWorkoutFromCaches(
 function Home() {
   const data = Route.useLoaderData();
   const { calendarScope, sessionChartSettings } = data;
-  const router = useRouter();
   const queryClient = useQueryClient();
 
   const plansQuery = useQuery({
