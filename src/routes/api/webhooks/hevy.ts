@@ -8,9 +8,18 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const rawBody = await request.text();
+        await logWebhookDelivery({
+          source: "hevy",
+          idempotencyKey: null,
+          payloadJson: rawBody,
+          outcome: "ignored",
+          detail: "received",
+        });
+
         const secret = process.env.HEVY_WEBHOOK_BEARER_SECRET?.trim();
         if (!secret) {
-          console.error("[hevy webhook] authorization header is not set")
+          console.log("[hevy webhook] authorization header is not set");
           return new Response(
             JSON.stringify({ error: "HEVY_WEBHOOK_BEARER_SECRET is not set" }),
             {
@@ -21,7 +30,7 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
         }
         const auth = request.headers.get("authorization");
         if (auth !== `Bearer ${secret}`) {
-          console.error("[hevy webhook] authorization header did not match")
+          console.log("[hevy webhook] authorization header did not match");
           return new Response(JSON.stringify({ error: "Unauthorized" }), {
             status: 401,
             headers: { "Content-Type": "application/json" },
@@ -30,9 +39,9 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
 
         let body: unknown;
         try {
-          body = await request.json();
+          body = rawBody ? JSON.parse(rawBody) : null;
         } catch {
-          console.error("[hevy webhook] could not parse body")
+          console.log("[hevy webhook] could not parse body");
           return new Response(JSON.stringify({ error: "Invalid JSON" }), {
             status: 400,
             headers: { "Content-Type": "application/json" },
@@ -53,21 +62,17 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
               : "";
 
         if (!workoutId) {
-          console.error("[hevy webhook] could not infer payload workoutId", body)
+          console.log("[hevy webhook] could not infer payload workoutId", body);
           return new Response(JSON.stringify({ error: "workoutId required" }), {
             status: 400,
             headers: { "Content-Type": "application/json" },
           });
         }
 
-        const payloadJson = JSON.stringify(body);
-        await logWebhookDelivery({
-          source: "hevy",
-          idempotencyKey: null,
-          payloadJson,
-          outcome: "ignored",
-          detail: "received",
-        });
+        const payloadJson =
+          typeof body === "object" && body !== null
+            ? JSON.stringify(body)
+            : rawBody;
 
         try {
           const result = await processHevyWorkoutWebhook({ workoutId });

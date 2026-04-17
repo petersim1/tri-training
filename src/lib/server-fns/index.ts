@@ -9,6 +9,6 @@ export * from "./home";
 export * from "./plan-link-candidates";
 export * from "./planned-workouts-list";
 export * from "./plans";
-export * from "./weight";
 export * from "./vendors/hevy";
 export * from "./vendors/strava";
+export * from "./weight";

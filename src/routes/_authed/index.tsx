@@ -6,8 +6,8 @@ import {
 import { createFileRoute } from "@tanstack/react-router";
 import { Home } from "~/components/home/HomePage";
 import type { CalendarScope } from "~/lib/home/calendar-scope";
-import { loadHomePageDataFn } from "~/lib/server-fns/home";
 import type { SessionChartSettings } from "~/lib/home/session-chart-settings";
+import { loadHomePageDataFn } from "~/lib/server-fns/home";
 
 export const Route = createFileRoute("/_authed/")({
   loader: async ({

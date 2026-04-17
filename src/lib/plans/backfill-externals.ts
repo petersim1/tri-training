@@ -2,6 +2,7 @@ import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
 import { getDb } from "~/lib/db";
 import { completedWorkouts, plannedWorkouts } from "~/lib/db/schema";
+import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
 import {
   hevyDataFromWorkoutSummary,
   stravaDataFromActivitySummary,
@@ -18,18 +19,17 @@ import {
   linkedSessionFromHevyWorkout,
   linkedSessionFromStravaActivity,
 } from "~/lib/plans/linked-session";
-import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
 import { normalizeCompletedInsert } from "~/lib/plans/normalize-completed-insert";
 import {
   inferPlanKindFromStravaSport,
   stravaSportMatchesPlanKind,
 } from "~/lib/plans/strava-kind-match";
-import type { StravaActivitySummary } from "~/lib/strava/types";
 import {
   type CompletedActivityKind,
   HEVY_ACTIVITY_KIND,
   normalizeStravaSportType,
 } from "~/lib/strava/sport-types";
+import type { StravaActivitySummary } from "~/lib/strava/types";
 
 const LOG = "[backfill-links]";
 
@@ -434,10 +434,7 @@ export async function backfillLinkedWorkouts(
     }
     const dk = localDayKeyFromIso(p.scheduledAt);
     const key = `${dk}:${p.kind}`;
-    unlinkedCountByDayKind.set(
-      key,
-      (unlinkedCountByDayKind.get(key) ?? 0) + 1,
-    );
+    unlinkedCountByDayKind.set(key, (unlinkedCountByDayKind.get(key) ?? 0) + 1);
   }
 
   for (const plan of rows) {

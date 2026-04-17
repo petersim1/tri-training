@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie } from "@tanstack/react-start/server";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "~/lib/db";
+import type { CompletedWorkoutRow } from "~/lib/db/schema";
 import { completedWorkouts, weightEntries } from "~/lib/db/schema";
 import {
   CALENDAR_SCOPE_COOKIE,
@@ -21,14 +22,12 @@ import {
   type SessionChartSettings,
   serializeSessionChartSettings,
 } from "~/lib/home/session-chart-settings";
-import type { CompletedWorkoutRow } from "~/lib/db/schema";
 import { completedWorkoutLocalDayKey } from "~/lib/plans/completed-workout-data";
 import { listAllPlannedWorkoutsFn } from "~/lib/server-fns/planned-workouts-list";
 import { fetchHevyHomeBundleFn } from "~/lib/server-fns/vendors/hevy";
 
-export { fetchHevyHomeBundleFn };
-
 export type { SessionChartSettings } from "~/lib/home/session-chart-settings";
+export { fetchHevyHomeBundleFn };
 
 function validateSessionChartSettings(d: SessionChartSettings): void {
   const ok =

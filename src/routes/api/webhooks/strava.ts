@@ -28,9 +28,18 @@ export const Route = createFileRoute("/api/webhooks/strava")({
         return new Response(null, { status: 403 });
       },
       POST: async ({ request }) => {
+        const rawBody = await request.text();
+        await logWebhookDelivery({
+          source: "strava",
+          idempotencyKey: null,
+          payloadJson: rawBody,
+          outcome: "ignored",
+          detail: "received",
+        });
+
         let body: unknown;
         try {
-          body = await request.json();
+          body = rawBody ? JSON.parse(rawBody) : null;
         } catch {
           return new Response(null, { status: 400 });
         }
@@ -47,20 +56,15 @@ export const Route = createFileRoute("/api/webhooks/strava")({
           return new Response(null, { status: 200 });
         }
 
-        const payloadJson = JSON.stringify(body);
+        const payloadJson =
+          typeof body === "object" && body !== null
+            ? JSON.stringify(body)
+            : rawBody;
         const sub = ev.subscription_id ?? 0;
         const oid = ev.object_id ?? 0;
         const aspect = ev.aspect_type ?? "";
         const et = ev.event_time ?? 0;
         const idempotencyKey = `strava:${sub}:${oid}:${aspect}:${et}`;
-
-        await logWebhookDelivery({
-          source: "strava",
-          idempotencyKey: null,
-          payloadJson,
-          outcome: "ignored",
-          detail: "received",
-        });
 
         try {
           const result = await processStravaWebhookEvent(ev);

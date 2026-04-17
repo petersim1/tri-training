@@ -4,11 +4,11 @@ import { localDayKeyFromIso } from "~/lib/plans/link-candidates-fetch";
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
 import { durationSecondsFromIsoRange } from "~/lib/plans/linked-session";
 import { inferPlanKindFromStravaSport } from "~/lib/plans/strava-kind-match";
-import type { StravaActivitySummary } from "~/lib/strava/types";
 import {
   HEVY_ACTIVITY_KIND,
   normalizeStravaSportType,
 } from "~/lib/strava/sport-types";
+import type { StravaActivitySummary } from "~/lib/strava/types";
 
 /** Full vendor payload as stored in `completed_workouts.data` (JSON). */
 export type CompletedWorkoutJson =
@@ -89,7 +89,9 @@ function asHevyData(data: unknown): HevyWorkoutSummary | null {
  * Falls back to JSON for legacy rows if needed.
  */
 /** Local calendar day (`YYYY-MM-DD`) for this session — for calendar dots / grouping. */
-export function completedWorkoutLocalDayKey(c: CompletedWorkoutRow): string | null {
+export function completedWorkoutLocalDayKey(
+  c: CompletedWorkoutRow,
+): string | null {
   if (c.vendor === "strava") {
     const a = asStravaData(c.data);
     const iso = a?.start_date;

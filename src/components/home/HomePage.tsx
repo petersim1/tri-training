@@ -475,9 +475,7 @@ function LiftRoutineReadOnlyPreview({
     (routineId ? routineId.slice(0, 8) : null);
 
   if (!routineId) {
-    return (
-      <p className="text-xs text-zinc-500">No Hevy routine selected.</p>
-    );
+    return <p className="text-xs text-zinc-500">No Hevy routine selected.</p>;
   }
 
   return (
@@ -1802,7 +1800,9 @@ export function Home() {
                       Current Plans
                     </h3>
                     {plannedOrSkippedPlans.length === 0 ? (
-                      <p className="text-sm text-zinc-500">None for this day.</p>
+                      <p className="text-sm text-zinc-500">
+                        None for this day.
+                      </p>
                     ) : (
                       <ul className="space-y-2">
                         {plannedOrSkippedPlans.map((p) => (
@@ -1875,136 +1875,139 @@ export function Home() {
                         </p>
                       ) : (
                         <ul className="space-y-3">
-                        {[...(unresolvedForDayQuery.data ?? [])]
-                          .sort((a, b) => a.id.localeCompare(b.id))
-                          .map((cw) => {
-                            const title =
-                              completedWorkoutTitle(cw) ?? "Session";
-                            const kindLabel =
-                              inferPlanKindFromCompletedRow(cw) ?? cw.activityKind;
-                            const matchingPlans = dialogPlans.filter((p) =>
-                              planAcceptsLinkForCompleted(p, cw),
-                            );
-                            const pk = inferPlanKindFromCompletedRow(cw);
-                            return (
-                              <li
-                                key={cw.id}
-                                className="rounded border border-zinc-800 bg-zinc-900/80 px-3 py-2"
-                              >
-                                <div className="text-sm text-zinc-100">
-                                  {title}
-                                </div>
-                                <div className="mt-0.5 text-xs capitalize text-zinc-500">
-                                  {cw.vendor === "hevy" ? "Hevy" : "Strava"} ·{" "}
-                                  {kindLabel}
-                                </div>
-                                <div className="mt-2">
-                                  {matchingPlans.length === 1 ? (
-                                    <button
-                                      type="button"
-                                      disabled={
-                                        updatePlanMutation.isPending &&
-                                        linkingCompletedWorkoutId === cw.id
-                                      }
-                                      onClick={() => {
-                                        setPlanErr(null);
-                                        setLinkingCompletedWorkoutId(cw.id);
-                                        updatePlanMutation.mutate(
-                                          updatePlanPayloadForCompletedLink(
-                                            cw,
-                                            matchingPlans[0].id,
-                                          ),
-                                          {
-                                            onSettled: () =>
-                                              setLinkingCompletedWorkoutId(null),
-                                          },
-                                        );
-                                      }}
-                                      className="rounded border border-violet-500/60 bg-violet-950/40 px-2.5 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-950/70 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      {updatePlanMutation.isPending &&
-                                      linkingCompletedWorkoutId === cw.id
-                                        ? "Linking…"
-                                        : "Link to plan"}
-                                    </button>
-                                  ) : matchingPlans.length > 1 ? (
-                                    <div className="space-y-1.5">
-                                      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                                        Choose a plan to link
-                                      </p>
-                                      <ul className="flex flex-col gap-1">
-                                        {matchingPlans.map((p) => (
-                                          <li key={p.id}>
-                                            <button
-                                              type="button"
-                                              disabled={
-                                                updatePlanMutation.isPending &&
-                                                linkingCompletedWorkoutId ===
-                                                  cw.id
-                                              }
-                                              onClick={() => {
-                                                setPlanErr(null);
+                          {[...(unresolvedForDayQuery.data ?? [])]
+                            .sort((a, b) => a.id.localeCompare(b.id))
+                            .map((cw) => {
+                              const title =
+                                completedWorkoutTitle(cw) ?? "Session";
+                              const kindLabel =
+                                inferPlanKindFromCompletedRow(cw) ??
+                                cw.activityKind;
+                              const matchingPlans = dialogPlans.filter((p) =>
+                                planAcceptsLinkForCompleted(p, cw),
+                              );
+                              const pk = inferPlanKindFromCompletedRow(cw);
+                              return (
+                                <li
+                                  key={cw.id}
+                                  className="rounded border border-zinc-800 bg-zinc-900/80 px-3 py-2"
+                                >
+                                  <div className="text-sm text-zinc-100">
+                                    {title}
+                                  </div>
+                                  <div className="mt-0.5 text-xs capitalize text-zinc-500">
+                                    {cw.vendor === "hevy" ? "Hevy" : "Strava"} ·{" "}
+                                    {kindLabel}
+                                  </div>
+                                  <div className="mt-2">
+                                    {matchingPlans.length === 1 ? (
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          updatePlanMutation.isPending &&
+                                          linkingCompletedWorkoutId === cw.id
+                                        }
+                                        onClick={() => {
+                                          setPlanErr(null);
+                                          setLinkingCompletedWorkoutId(cw.id);
+                                          updatePlanMutation.mutate(
+                                            updatePlanPayloadForCompletedLink(
+                                              cw,
+                                              matchingPlans[0].id,
+                                            ),
+                                            {
+                                              onSettled: () =>
                                                 setLinkingCompletedWorkoutId(
-                                                  cw.id,
-                                                );
-                                                updatePlanMutation.mutate(
-                                                  updatePlanPayloadForCompletedLink(
-                                                    cw,
-                                                    p.id,
-                                                  ),
-                                                  {
-                                                    onSettled: () =>
-                                                      setLinkingCompletedWorkoutId(
-                                                        null,
-                                                      ),
-                                                  },
-                                                );
-                                              }}
-                                              className="w-full rounded border border-violet-500/50 bg-violet-950/30 px-2 py-1.5 text-left text-xs text-violet-200 hover:bg-violet-950/55 disabled:cursor-not-allowed disabled:opacity-50"
-                                            >
-                                              <span className="capitalize">
-                                                {p.kind}
-                                              </span>
-                                              <span className="text-zinc-500">
-                                                {" "}
-                                                · {p.status}
-                                              </span>
-                                              {(p.notes?.trim() ?? "") !==
-                                              "" ? (
-                                                <span className="mt-1 block whitespace-pre-wrap text-[11px] leading-snug text-zinc-500">
-                                                  {p.notes?.trim()}
+                                                  null,
+                                                ),
+                                            },
+                                          );
+                                        }}
+                                        className="rounded border border-violet-500/60 bg-violet-950/40 px-2.5 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-950/70 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {updatePlanMutation.isPending &&
+                                        linkingCompletedWorkoutId === cw.id
+                                          ? "Linking…"
+                                          : "Link to plan"}
+                                      </button>
+                                    ) : matchingPlans.length > 1 ? (
+                                      <div className="space-y-1.5">
+                                        <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                                          Choose a plan to link
+                                        </p>
+                                        <ul className="flex flex-col gap-1">
+                                          {matchingPlans.map((p) => (
+                                            <li key={p.id}>
+                                              <button
+                                                type="button"
+                                                disabled={
+                                                  updatePlanMutation.isPending &&
+                                                  linkingCompletedWorkoutId ===
+                                                    cw.id
+                                                }
+                                                onClick={() => {
+                                                  setPlanErr(null);
+                                                  setLinkingCompletedWorkoutId(
+                                                    cw.id,
+                                                  );
+                                                  updatePlanMutation.mutate(
+                                                    updatePlanPayloadForCompletedLink(
+                                                      cw,
+                                                      p.id,
+                                                    ),
+                                                    {
+                                                      onSettled: () =>
+                                                        setLinkingCompletedWorkoutId(
+                                                          null,
+                                                        ),
+                                                    },
+                                                  );
+                                                }}
+                                                className="w-full rounded border border-violet-500/50 bg-violet-950/30 px-2 py-1.5 text-left text-xs text-violet-200 hover:bg-violet-950/55 disabled:cursor-not-allowed disabled:opacity-50"
+                                              >
+                                                <span className="capitalize">
+                                                  {p.kind}
                                                 </span>
-                                              ) : null}
-                                            </button>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  ) : pk &&
-                                    dialogDayKey !== null &&
-                                    !isLocalDayKeyInFuture(dialogDayKey) ? (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        openAddFromActivityForKind(pk)
-                                      }
-                                      className="rounded border border-violet-500/60 bg-violet-950/40 px-2.5 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-950/70"
-                                    >
-                                      Link unplanned activity?
-                                    </button>
-                                  ) : (
-                                    <p className="text-xs text-zinc-500">
-                                      {!pk
-                                        ? "This activity type cannot be linked to a plan here."
-                                        : "Linking from a future day is not available."}
-                                    </p>
-                                  )}
-                                </div>
-                              </li>
-                            );
-                          })}
-                      </ul>
-                    )}
+                                                <span className="text-zinc-500">
+                                                  {" "}
+                                                  · {p.status}
+                                                </span>
+                                                {(p.notes?.trim() ?? "") !==
+                                                "" ? (
+                                                  <span className="mt-1 block whitespace-pre-wrap text-[11px] leading-snug text-zinc-500">
+                                                    {p.notes?.trim()}
+                                                  </span>
+                                                ) : null}
+                                              </button>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    ) : pk &&
+                                      dialogDayKey !== null &&
+                                      !isLocalDayKeyInFuture(dialogDayKey) ? (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          openAddFromActivityForKind(pk)
+                                        }
+                                        className="rounded border border-violet-500/60 bg-violet-950/40 px-2.5 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-950/70"
+                                      >
+                                        Link unplanned activity?
+                                      </button>
+                                    ) : (
+                                      <p className="text-xs text-zinc-500">
+                                        {!pk
+                                          ? "This activity type cannot be linked to a plan here."
+                                          : "Linking from a future day is not available."}
+                                      </p>
+                                    )}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                        </ul>
+                      )}
                     </section>
                   ) : null}
 

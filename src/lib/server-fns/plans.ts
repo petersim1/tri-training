@@ -4,10 +4,10 @@ import { getDb } from "~/lib/db";
 import {
   type CompletedWorkoutRow,
   completedWorkouts,
-  plannedWorkouts,
-  type PlannedWorkoutWithCompleted,
   type PlanKind,
+  type PlannedWorkoutWithCompleted,
   type PlanStatus,
+  plannedWorkouts,
 } from "~/lib/db/schema";
 import {
   CARDIO_DISTANCE_UNITS,

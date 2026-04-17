@@ -12,8 +12,8 @@ import {
   type CompletedWorkoutRow,
   completedWorkouts,
   type PlanKind,
-  type PlanStatus,
   type PlannedWorkoutWithCompleted,
+  type PlanStatus,
   plannedWorkouts,
 } from "~/lib/db/schema";
 

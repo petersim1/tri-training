@@ -1,12 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getStravaTokensFromCookies } from "~/lib/strava/cookie-store";
+import { stravaRedirectUri } from "~/lib/strava/oauth";
 import {
   buildStravaOAuthQueryString,
   STRAVA_OAUTH_STATE_COOKIE,
   type StravaOAuthConnectUrls,
   type StravaSettingsStrava,
 } from "~/lib/strava/oauth-flow.shared";
-import { getStravaTokensFromCookies } from "~/lib/strava/cookie-store";
-import { stravaRedirectUri } from "~/lib/strava/oauth";
 
 export type {
   StravaOAuthConnectUrls,

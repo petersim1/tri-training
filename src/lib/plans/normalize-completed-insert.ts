@@ -1,6 +1,5 @@
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
 import type { JsonValue, NewCompletedWorkout } from "~/lib/db/schema";
-import type { CompletedActivityKind } from "~/lib/strava/sport-types";
 import {
   hevyDataFromLinkedPayload,
   hevyDataFromWorkoutSummary,
@@ -8,11 +7,12 @@ import {
   stravaDataFromLinkedPayload,
 } from "~/lib/plans/completed-workout-data";
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
-import type { StravaActivitySummary } from "~/lib/strava/types";
+import type { CompletedActivityKind } from "~/lib/strava/sport-types";
 import {
   HEVY_ACTIVITY_KIND,
   normalizeStravaSportType,
 } from "~/lib/strava/sport-types";
+import type { StravaActivitySummary } from "~/lib/strava/types";
 
 function activityKindForInsert(
   link: { vendor: "strava" | "hevy"; externalId: string },

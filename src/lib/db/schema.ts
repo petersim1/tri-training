@@ -35,7 +35,9 @@ export const completedWorkouts = sqliteTable(
     /**
      * Normalized activity: Strava `sport_type` lowercased (see `~/lib/strava/sport-types`), or `lift` for Hevy.
      */
-    activityKind: text("activity_kind").notNull().$type<CompletedActivityKind>(),
+    activityKind: text("activity_kind")
+      .notNull()
+      .$type<CompletedActivityKind>(),
     /**
      * `true` when at least one `planned_workout` references this row. Used for “floating” sessions (webhook-only) and fast filters.
      */
@@ -58,10 +60,7 @@ export const plannedWorkouts = sqliteTable("planned_workouts", {
   kind: text("kind").notNull().$type<PlanKind>(),
   scheduledAt: text("scheduled_at").notNull(),
   notes: text("notes"),
-  status: text("status")
-    .$type<PlanStatus>()
-    .notNull()
-    .default("planned"),
+  status: text("status").$type<PlanStatus>().notNull().default("planned"),
   routineVendor: text("routine_vendor").$type<"strava" | "hevy">().notNull(),
   routineId: text("routine_id"),
   completedWorkoutId: text("completed_workout_id").references(

@@ -62,7 +62,9 @@ const KNOWN_STRAVA_SPORTS = new Set<string>(STRAVA_SPORT_TYPES);
 /** Hevy strength sessions — not from Strava. */
 export const HEVY_ACTIVITY_KIND = "lift" as const;
 
-export type CompletedActivityKind = StravaSportTypeLowercase | typeof HEVY_ACTIVITY_KIND;
+export type CompletedActivityKind =
+  | StravaSportTypeLowercase
+  | typeof HEVY_ACTIVITY_KIND;
 
 /**
  * Normalize Strava `sport_type` (PascalCase or otherwise) to lowercase for storage.
