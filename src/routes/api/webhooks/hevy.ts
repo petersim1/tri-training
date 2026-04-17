@@ -29,11 +29,11 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
           );
         }
         const auth = request.headers.get("authorization");
-        if (auth !== `Bearer ${secret}`) {
-          console.log("[hevy webhook] authorization header did not match", {
-            authorization: auth,
-            headers: Object.fromEntries(request.headers),
-          });
+        if (auth !== secret) {
+          console.log(
+            "[hevy webhook] authorization header did not match",
+            auth,
+          );
           return new Response(JSON.stringify({ error: "Unauthorized" }), {
             status: 401,
             headers: { "Content-Type": "application/json" },
