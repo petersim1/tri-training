@@ -1,8 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { backfillLinkedWorkoutsFn } from "~/lib/plans/backfill-server-fns";
-import { getStravaSettingsStravaFn } from "~/lib/strava/oauth-flow";
+import {
+  backfillLinkedWorkoutsFn,
+  getStravaSettingsStravaFn,
+} from "~/lib/server-fns";
 
 export const Route = createFileRoute("/_authed/settings")({
   loader: async () => {

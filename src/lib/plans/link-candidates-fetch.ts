@@ -1,8 +1,13 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
 import type { getDb } from "~/lib/db";
-import { completedWorkouts, plannedWorkouts } from "~/lib/db/schema";
+import {
+  type CompletedWorkoutRow,
+  completedWorkouts,
+  plannedWorkouts,
+} from "~/lib/db/schema";
 import { hevyFetch } from "~/lib/hevy/client";
+import { stravaSportMatchesPlanKind } from "~/lib/plans/strava-kind-match";
 import type { StravaActivitySummary } from "~/lib/strava/types";
 
 /** Same shape as `stravaFetchJson` from `~/lib/strava/tokens` (cookies in app, env in tests). */
@@ -39,6 +44,28 @@ function inTimeRange(iso: string | undefined, startMs: number, endMs: number) {
   return Number.isFinite(t) && t >= startMs && t <= endMs;
 }
 
+function hevySummaryFromCompletedRow(
+  row: CompletedWorkoutRow,
+): HevyWorkoutSummary {
+  const w = row.data as HevyWorkoutSummary;
+  const id = w.id?.trim() || row.vendorId.trim();
+  return { ...w, id };
+}
+
+function stravaSummaryFromCompletedRow(
+  row: CompletedWorkoutRow,
+): StravaActivitySummary | null {
+  const a = row.data as StravaActivitySummary;
+  if (a == null || typeof a !== "object") {
+    return null;
+  }
+  const id = a.id ?? Number(row.vendorId);
+  if (!Number.isFinite(id)) {
+    return null;
+  }
+  return { ...a, id };
+}
+
 /** Workouts / activities on this calendar day (local `dayStartMs`/`dayEndMs`). */
 export type PlanLinkCandidatesResult = {
   hevy: HevyWorkoutSummary[];
@@ -65,9 +92,14 @@ async function forEachHevyWorkoutPage(
   let page = 1;
   let pagesFetched = 0;
   while (page <= HEVY_MAX_PAGES) {
-    const data = await hevyFetch<HevyWorkoutsPageJson>(
-      `/workouts?page=${page}&pageSize=${HEVY_PAGE_SIZE}`,
-    );
+    let data: HevyWorkoutsPageJson;
+    try {
+      data = await hevyFetch<HevyWorkoutsPageJson>(
+        `/workouts?page=${page}&pageSize=${HEVY_PAGE_SIZE}`,
+      );
+    } catch {
+      break;
+    }
     const batch = data.workouts ?? [];
     const declaredPages = Math.max(1, data.page_count ?? data.pageCount ?? 1);
     pagesFetched++;
@@ -114,36 +146,53 @@ export async function fetchAllHevyWorkoutsForBackfill(): Promise<{
   }
 }
 
+/**
+ * Plan-link candidates for a calendar window: `completed_workouts` rows (Hevy),
+ * excluding sessions already linked to a plan. Populated by webhooks / backfill — not the Hevy API.
+ */
 export async function fetchHevyWorkoutsInRange(
+  db: ReturnType<typeof getDb>,
   startMs: number,
   endMs: number,
   excludeKeys: Set<string>,
 ): Promise<{ list: HevyWorkoutSummary[]; error?: string }> {
   const out: HevyWorkoutSummary[] = [];
   try {
-    const { pagesFetched } = await forEachHevyWorkoutPage((batch) => {
-      for (const w of batch) {
-        const id = w.id?.trim();
-        if (!id || !inTimeRange(w.start_time, startMs, endMs)) {
-          continue;
-        }
-        if (excludeKeys.has(`hevy:${id}`)) {
-          continue;
-        }
-        out.push(w);
+    const rows = await db
+      .select()
+      .from(completedWorkouts)
+      .where(
+        and(
+          eq(completedWorkouts.vendor, "hevy"),
+          eq(completedWorkouts.isResolved, false),
+        ),
+      )
+      .all();
+    for (const row of rows) {
+      const vid = row.vendorId.trim();
+      if (!vid || excludeKeys.has(`hevy:${vid}`)) {
+        continue;
       }
+      const summary = hevySummaryFromCompletedRow(row);
+      if (!inTimeRange(summary.start_time, startMs, endMs)) {
+        continue;
+      }
+      out.push(summary);
+    }
+    out.sort((a, b) => {
+      const ta = new Date(a.start_time ?? "").getTime();
+      const tb = new Date(b.start_time ?? "").getTime();
+      return ta - tb;
     });
-    console.log(LOG, "Hevy workouts in day window", {
+    console.log(LOG, "Hevy workouts in day window (DB)", {
       dayStart: new Date(startMs).toISOString(),
       dayEnd: new Date(endMs).toISOString(),
-      pagesFetched,
-      pageSize: HEVY_PAGE_SIZE,
       matchesInRange: out.length,
     });
     return { list: out };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Hevy request failed";
-    console.warn(LOG, "Hevy fetch failed", msg);
+    const msg = e instanceof Error ? e.message : "Hevy DB read failed";
+    console.warn(LOG, "Hevy candidates from DB failed", msg);
     return {
       list: [],
       error: msg,
@@ -174,59 +223,64 @@ export async function linkedSessionExcludeKeys(
   return excludeKeys;
 }
 
+/**
+ * Plan-link candidates for a calendar window: `completed_workouts` rows (Strava),
+ * excluding sessions already linked to a plan. Populated by webhooks / backfill — not the Strava API.
+ */
 export async function fetchStravaActivitiesInRange(
+  db: ReturnType<typeof getDb>,
   startMs: number,
   endMs: number,
   excludeKeys: Set<string>,
-  stravaFetchJsonImpl: StravaFetchJson,
+  /** When set (run / bike / swim), only sessions whose stored `activity_kind` match that plan kind. */
+  cardioPlanKind?: "run" | "bike" | "swim",
 ): Promise<{ list: StravaActivitySummary[]; error?: string }> {
   const out: StravaActivitySummary[] = [];
   try {
-    const afterSec = Math.floor(startMs / 1000);
-    const beforeSec = Math.floor(endMs / 1000);
-    let page = 1;
-    let pagesWithData = 0;
-    while (page <= STRAVA_MAX_PAGES) {
-      const list = await stravaFetchJsonImpl<StravaActivitySummary[]>(
-        `/athlete/activities?after=${afterSec}&before=${beforeSec}&per_page=${STRAVA_PER_PAGE}&page=${page}`,
-      );
-      if (list === null) {
-        if (page === 1) {
-          console.warn(LOG, "Strava: no token / 401 on first page");
-          return { list: [], error: "Strava not connected" };
-        }
-        console.warn(LOG, "Strava: null response mid-pagination", { page });
-        break;
+    const rows = await db
+      .select()
+      .from(completedWorkouts)
+      .where(
+        and(
+          eq(completedWorkouts.vendor, "strava"),
+          eq(completedWorkouts.isResolved, false),
+        ),
+      )
+      .all();
+    for (const row of rows) {
+      const summary = stravaSummaryFromCompletedRow(row);
+      if (!summary) {
+        continue;
       }
-      if (list.length === 0) {
-        break;
+      if (
+        cardioPlanKind &&
+        !stravaSportMatchesPlanKind(cardioPlanKind, row.activityKind)
+      ) {
+        continue;
       }
-      pagesWithData++;
-      for (const a of list) {
-        const key = `strava:${String(a.id)}`;
-        if (excludeKeys.has(key)) {
-          continue;
-        }
-        out.push(a);
+      const key = `strava:${String(summary.id)}`;
+      if (excludeKeys.has(key)) {
+        continue;
       }
-      if (list.length < STRAVA_PER_PAGE) {
-        break;
+      if (!inTimeRange(summary.start_date, startMs, endMs)) {
+        continue;
       }
-      page++;
+      out.push(summary);
     }
-    console.log(LOG, "Strava activities in day window", {
+    out.sort((a, b) => {
+      const ta = new Date(a.start_date).getTime();
+      const tb = new Date(b.start_date).getTime();
+      return ta - tb;
+    });
+    console.log(LOG, "Strava activities in day window (DB)", {
       dayStart: new Date(startMs).toISOString(),
       dayEnd: new Date(endMs).toISOString(),
-      afterSec,
-      beforeSec,
-      perPage: STRAVA_PER_PAGE,
-      pagesWithData,
       activitiesReturned: out.length,
     });
     return { list: out };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Strava request failed";
-    console.warn(LOG, "Strava fetch failed", msg);
+    const msg = e instanceof Error ? e.message : "Strava DB read failed";
+    console.warn(LOG, "Strava candidates from DB failed", msg);
     return {
       list: [],
       error: msg,
@@ -284,16 +338,20 @@ export async function fetchAllStravaActivitiesForBackfill(
   }
 }
 
+/**
+ * Candidates for linking a plan to a session: reads `completed_workouts` only (after backfill / webhooks).
+ */
 export async function candidatesForKindAndDay(
+  db: ReturnType<typeof getDb>,
   kind: string,
   dayStartMs: number,
   dayEndMs: number,
   excludeKeys: Set<string>,
-  stravaFetchJsonImpl: StravaFetchJson,
 ): Promise<PlanLinkCandidatesResult> {
   const useHevy = kind === "lift";
   if (useHevy) {
     const hevyBlock = await fetchHevyWorkoutsInRange(
+      db,
       dayStartMs,
       dayEndMs,
       excludeKeys,
@@ -306,10 +364,11 @@ export async function candidatesForKindAndDay(
     };
   }
   const stravaBlock = await fetchStravaActivitiesInRange(
+    db,
     dayStartMs,
     dayEndMs,
     excludeKeys,
-    stravaFetchJsonImpl,
+    kind === "run" || kind === "bike" || kind === "swim" ? kind : undefined,
   );
   return {
     hevy: [],

@@ -1,7 +1,8 @@
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
+import type { CompletedWorkoutRow } from "~/lib/db/schema";
 import type { StravaActivitySummary } from "~/lib/strava/types";
 
-/** Sent with `updatePlanFn` when linking — all fields come from the candidate row (no extra API calls). */
+/** Sent when linking — mirrors the candidate row; server attaches existing `completed_workouts` by vendor + id. */
 export type LinkedSessionPayload = {
   vendor: "strava" | "hevy";
   externalId: string;
@@ -75,5 +76,38 @@ export function linkedSessionFromHevyWorkout(
     calories: null,
     startTimeIso: w.start_time ?? null,
     endTimeIso: w.end_time ?? null,
+  };
+}
+
+/**
+ * Build `linkedSession` for `updatePlanFn` from a stored `completed_workouts` row
+ * (same shape as linking from Strava/Hevy candidate lists).
+ */
+export function linkedSessionFromCompletedRow(
+  c: CompletedWorkoutRow,
+): LinkedSessionPayload {
+  if (c.vendor === "strava") {
+    const raw = c.data as unknown;
+    if (raw && typeof raw === "object" && raw !== null && "id" in raw) {
+      return linkedSessionFromStravaActivity(raw as StravaActivitySummary);
+    }
+    return {
+      vendor: "strava",
+      externalId: c.vendorId.trim(),
+      title: null,
+    };
+  }
+  const raw = c.data as unknown;
+  if (raw && typeof raw === "object" && raw !== null) {
+    const w = raw as HevyWorkoutSummary;
+    const id = w.id?.trim() || c.vendorId.trim();
+    if (id) {
+      return linkedSessionFromHevyWorkout({ ...w, id });
+    }
+  }
+  return {
+    vendor: "hevy",
+    externalId: c.vendorId.trim(),
+    title: null,
   };
 }

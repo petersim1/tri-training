@@ -1,4 +1,4 @@
-import { updatePlanFn } from "~/lib/plans/server-fns";
+import { updatePlanFn } from "~/lib/server-fns/plans";
 
 export const PLAN_STATUSES = ["planned", "completed", "skipped"] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];

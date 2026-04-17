@@ -7,13 +7,12 @@ import {
   linkedSessionExcludeKeys,
   type PlanLinkCandidatesResult,
 } from "~/lib/plans/link-candidates-fetch";
-import { stravaFetchJson } from "~/lib/strava/tokens";
 
 export type { PlanLinkCandidatesResult };
 
 /**
  * Sessions for the given calendar day that are not linked to another plan.
- * **Lift** plans: only Hevy workouts are fetched. **Run / bike / swim**: only Strava.
+ * **Lift**: Hevy rows in `completed_workouts`. **Run / bike / swim**: Strava rows.
  * `dayStartMs` / `dayEndMs` must match the plan’s local calendar day (browser).
  */
 export const getPlanLinkCandidatesFn = createServerFn({ method: "GET" })
@@ -32,11 +31,11 @@ export const getPlanLinkCandidatesFn = createServerFn({ method: "GET" })
     }
     const excludeKeys = await linkedSessionExcludeKeys(db);
     return candidatesForKindAndDay(
+      db,
       plan.kind,
       data.dayStartMs,
       data.dayEndMs,
       excludeKeys,
-      stravaFetchJson,
     );
   });
 
@@ -56,10 +55,10 @@ export const getPlanLinkCandidatesForDayFn = createServerFn({ method: "GET" })
     const db = getDb();
     const excludeKeys = await linkedSessionExcludeKeys(db);
     return candidatesForKindAndDay(
+      db,
       data.kind,
       data.dayStartMs,
       data.dayEndMs,
       excludeKeys,
-      stravaFetchJson,
     );
   });

@@ -1,8 +1,14 @@
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
 import type { CompletedWorkoutRow, JsonValue } from "~/lib/db/schema";
+import { localDayKeyFromIso } from "~/lib/plans/link-candidates-fetch";
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
 import { durationSecondsFromIsoRange } from "~/lib/plans/linked-session";
+import { inferPlanKindFromStravaSport } from "~/lib/plans/strava-kind-match";
 import type { StravaActivitySummary } from "~/lib/strava/types";
+import {
+  HEVY_ACTIVITY_KIND,
+  normalizeStravaSportType,
+} from "~/lib/strava/sport-types";
 
 /** Full vendor payload as stored in `completed_workouts.data` (JSON). */
 export type CompletedWorkoutJson =
@@ -76,6 +82,44 @@ function asHevyData(data: unknown): HevyWorkoutSummary | null {
     return null;
   }
   return data as HevyWorkoutSummary;
+}
+
+/**
+ * Stored normalized sport (`activity_kind`): Strava `sport_type` lowercased, or `lift` for Hevy.
+ * Falls back to JSON for legacy rows if needed.
+ */
+/** Local calendar day (`YYYY-MM-DD`) for this session — for calendar dots / grouping. */
+export function completedWorkoutLocalDayKey(c: CompletedWorkoutRow): string | null {
+  if (c.vendor === "strava") {
+    const a = asStravaData(c.data);
+    const iso = a?.start_date;
+    return iso ? localDayKeyFromIso(iso) : null;
+  }
+  const w = asHevyData(c.data);
+  const iso = w?.start_time;
+  return iso ? localDayKeyFromIso(iso) : null;
+}
+
+export function completedWorkoutActivityKind(c: CompletedWorkoutRow): string {
+  const k = c.activityKind?.trim();
+  if (k) {
+    return k;
+  }
+  if (c.vendor === "hevy") {
+    return HEVY_ACTIVITY_KIND;
+  }
+  const a = asStravaData(c.data);
+  return normalizeStravaSportType(a?.sport_type);
+}
+
+/** Map a stored session row to a plan `kind` (lift / run / bike / swim), or null if unsupported. */
+export function inferPlanKindFromCompletedRow(
+  c: CompletedWorkoutRow,
+): "lift" | "run" | "bike" | "swim" | null {
+  if (c.vendor === "hevy") {
+    return "lift";
+  }
+  return inferPlanKindFromStravaSport(c.activityKind);
 }
 
 export function completedWorkoutTitle(c: CompletedWorkoutRow): string | null {

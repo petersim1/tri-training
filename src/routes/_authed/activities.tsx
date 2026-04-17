@@ -14,7 +14,7 @@ import { PlanStatusSelect } from "~/components/PlanStatusSelect";
 import { ActivityListSkeleton } from "~/components/Skeleton";
 import { hevyWebRootUrl } from "~/lib/hevy/links";
 import { isCardioKind } from "~/lib/plans/cardio-targets";
-import { listPlannedWorkoutsPageFn } from "~/lib/plans/list-planned-fns";
+import { listPlannedWorkoutsPageFn } from "~/lib/server-fns/planned-workouts-list";
 
 const STRAVA_ACTIVITIES_HOME = "https://www.strava.com/athlete/training";
 

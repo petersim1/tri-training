@@ -1,6 +1,6 @@
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
 
-const BASE = "https://api.hevyapp.com/v1";
+const BASE = "https://api.hevy.com/v1";
 
 function headers(): HeadersInit {
   const key = process.env.HEVY_API_KEY;

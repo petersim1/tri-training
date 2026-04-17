@@ -10,6 +10,7 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
       POST: async ({ request }) => {
         const secret = process.env.HEVY_WEBHOOK_BEARER_SECRET?.trim();
         if (!secret) {
+          console.error("[hevy webhook] authorization header is not set")
           return new Response(
             JSON.stringify({ error: "HEVY_WEBHOOK_BEARER_SECRET is not set" }),
             {
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
         }
         const auth = request.headers.get("authorization");
         if (auth !== `Bearer ${secret}`) {
+          console.error("[hevy webhook] authorization header did not match")
           return new Response(JSON.stringify({ error: "Unauthorized" }), {
             status: 401,
             headers: { "Content-Type": "application/json" },
@@ -30,6 +32,7 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
         try {
           body = await request.json();
         } catch {
+          console.error("[hevy webhook] could not parse body")
           return new Response(JSON.stringify({ error: "Invalid JSON" }), {
             status: 400,
             headers: { "Content-Type": "application/json" },
@@ -50,18 +53,28 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
               : "";
 
         if (!workoutId) {
+          console.error("[hevy webhook] could not infer payload workoutId", body)
           return new Response(JSON.stringify({ error: "workoutId required" }), {
             status: 400,
             headers: { "Content-Type": "application/json" },
           });
         }
 
+        const payloadJson = JSON.stringify(body);
+        await logWebhookDelivery({
+          source: "hevy",
+          idempotencyKey: null,
+          payloadJson,
+          outcome: "ignored",
+          detail: "received",
+        });
+
         try {
           const result = await processHevyWorkoutWebhook({ workoutId });
           await logWebhookDelivery({
             source: "hevy",
             idempotencyKey: null,
-            payloadJson: JSON.stringify(body),
+            payloadJson,
             outcome: "ok",
             detail: result.detail,
           });
@@ -70,7 +83,8 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
           const msg = e instanceof Error ? e.message : String(e);
           await logWebhookDelivery({
             source: "hevy",
-            payloadJson: JSON.stringify(body),
+            idempotencyKey: null,
+            payloadJson,
             outcome: "error",
             detail: msg.slice(0, 500),
           });

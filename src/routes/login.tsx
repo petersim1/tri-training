@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { getStravaLoginOAuthUrlsFn } from "~/lib/strava/oauth-flow";
+import { getStravaLoginOAuthUrlsFn } from "~/lib/server-fns/vendors/strava";
 
 export const Route = createFileRoute("/login")({
   loader: async () => {

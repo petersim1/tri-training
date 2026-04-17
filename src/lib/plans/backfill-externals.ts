@@ -18,12 +18,18 @@ import {
   linkedSessionFromHevyWorkout,
   linkedSessionFromStravaActivity,
 } from "~/lib/plans/linked-session";
-import { normalizeCompletedInsert } from "~/lib/plans/server-fns";
+import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
+import { normalizeCompletedInsert } from "~/lib/plans/normalize-completed-insert";
 import {
   inferPlanKindFromStravaSport,
   stravaSportMatchesPlanKind,
 } from "~/lib/plans/strava-kind-match";
 import type { StravaActivitySummary } from "~/lib/strava/types";
+import {
+  type CompletedActivityKind,
+  HEVY_ACTIVITY_KIND,
+  normalizeStravaSportType,
+} from "~/lib/strava/sport-types";
 
 const LOG = "[backfill-links]";
 
@@ -94,6 +100,24 @@ async function planExistsForCompletedWorkoutId(
   return row != null;
 }
 
+/**
+ * Any plan row for this activity kind on the same local calendar day as the session.
+ * When true, webhook/backfill should **not** auto-create a plan — user links manually.
+ */
+async function plannedWorkoutExistsSameLocalDayAndKind(
+  db: ReturnType<typeof getDb>,
+  kind: "lift" | "run" | "bike" | "swim",
+  sessionScheduledAtIso: string,
+): Promise<boolean> {
+  const targetDay = localDayKeyFromIso(sessionScheduledAtIso);
+  const rows = await db
+    .select({ scheduledAt: plannedWorkouts.scheduledAt })
+    .from(plannedWorkouts)
+    .where(eq(plannedWorkouts.kind, kind))
+    .all();
+  return rows.some((r) => localDayKeyFromIso(r.scheduledAt) === targetDay);
+}
+
 /** Reuse an existing row or insert; returns `completed_workouts.id`. */
 async function findOrCreateCompletedWorkoutId(
   db: ReturnType<typeof getDb>,
@@ -124,6 +148,9 @@ async function findOrCreateCompletedWorkoutId(
         .update(completedWorkouts)
         .set({
           data: stravaDataFromActivitySummary(opts.stravaActivity),
+          activityKind: normalizeStravaSportType(
+            opts.stravaActivity.sport_type,
+          ) as CompletedActivityKind,
           updatedAt: now,
         })
         .where(eq(completedWorkouts.id, row.id))
@@ -133,6 +160,7 @@ async function findOrCreateCompletedWorkoutId(
         .update(completedWorkouts)
         .set({
           data: hevyDataFromWorkoutSummary(opts.hevyWorkout),
+          activityKind: HEVY_ACTIVITY_KIND,
           updatedAt: now,
         })
         .where(eq(completedWorkouts.id, row.id))
@@ -190,6 +218,13 @@ export async function upsertCalendarFromHevyWorkout(
     calendarExternalKeys.add(key);
     return false;
   }
+  const scheduledAtIso = new Date(w.start_time).toISOString();
+  if (
+    await plannedWorkoutExistsSameLocalDayAndKind(db, "lift", scheduledAtIso)
+  ) {
+    await syncCompletedResolvedForId(db, completedId);
+    return false;
+  }
   const planId = crypto.randomUUID();
   const routineId =
     w.routine_id?.trim() && w.routine_id.trim() !== ""
@@ -200,7 +235,7 @@ export async function upsertCalendarFromHevyWorkout(
     .values({
       id: planId,
       kind: "lift",
-      scheduledAt: new Date(w.start_time).toISOString(),
+      scheduledAt: scheduledAtIso,
       notes: null,
       status: "completed",
       routineVendor: "hevy",
@@ -213,6 +248,7 @@ export async function upsertCalendarFromHevyWorkout(
       updatedAt: now,
     })
     .run();
+  await syncCompletedResolvedForId(db, completedId);
   calendarExternalKeys.add(key);
   return true;
 }
@@ -252,13 +288,18 @@ export async function upsertCalendarFromStravaActivity(
     calendarExternalKeys.add(key);
     return false;
   }
+  const scheduledAtIso = new Date(a.start_date).toISOString();
+  if (await plannedWorkoutExistsSameLocalDayAndKind(db, kind, scheduledAtIso)) {
+    await syncCompletedResolvedForId(db, completedId);
+    return false;
+  }
   const planId = crypto.randomUUID();
   await db
     .insert(plannedWorkouts)
     .values({
       id: planId,
       kind,
-      scheduledAt: new Date(a.start_date).toISOString(),
+      scheduledAt: scheduledAtIso,
       notes: null,
       status: "completed",
       routineVendor: "strava",
@@ -271,6 +312,7 @@ export async function upsertCalendarFromStravaActivity(
       updatedAt: now,
     })
     .run();
+  await syncCompletedResolvedForId(db, completedId);
   calendarExternalKeys.add(key);
   return true;
 }
@@ -384,6 +426,20 @@ export async function backfillLinkedWorkouts(
     stravaDaysIndexed: stravaByDay.size,
   });
 
+  /** When >1 unlinked plan shares the same local day + kind, do not auto-pick — user links in the app. */
+  const unlinkedCountByDayKind = new Map<string, number>();
+  for (const p of rows) {
+    if (!KINDS.has(p.kind)) {
+      continue;
+    }
+    const dk = localDayKeyFromIso(p.scheduledAt);
+    const key = `${dk}:${p.kind}`;
+    unlinkedCountByDayKind.set(
+      key,
+      (unlinkedCountByDayKind.get(key) ?? 0) + 1,
+    );
+  }
+
   for (const plan of rows) {
     if (!KINDS.has(plan.kind)) {
       report.skipped++;
@@ -407,8 +463,18 @@ export async function backfillLinkedWorkouts(
       },
     });
 
+    const dayKey = localDayKeyFromIso(plan.scheduledAt);
+    const dayKindKey = `${dayKey}:${plan.kind}`;
+    if ((unlinkedCountByDayKind.get(dayKindKey) ?? 0) > 1) {
+      report.skipped++;
+      report.details.push({
+        planId: plan.id,
+        action: "skip: multiple unlinked plans same day+kind — link manually",
+      });
+      continue;
+    }
+
     try {
-      const dayKey = localDayKeyFromIso(plan.scheduledAt);
       const linkNow = new Date();
 
       if (plan.kind === "lift") {
@@ -477,6 +543,7 @@ export async function backfillLinkedWorkouts(
           })
           .where(eq(plannedWorkouts.id, plan.id))
           .run();
+        await syncCompletedResolvedForId(db, completedId);
         excludeKeys.add(`hevy:${link.externalId}`);
         report.linked++;
         report.details.push({
@@ -543,6 +610,7 @@ export async function backfillLinkedWorkouts(
         })
         .where(eq(plannedWorkouts.id, plan.id))
         .run();
+      await syncCompletedResolvedForId(db, completedId);
       excludeKeys.add(`strava:${id}`);
       report.linked++;
       report.details.push({

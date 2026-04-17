@@ -5,8 +5,8 @@ import {
   type StravaOAuthConnectUrls,
   type StravaSettingsStrava,
 } from "~/lib/strava/oauth-flow.shared";
-import { getStravaTokensFromCookies } from "./cookie-store";
-import { stravaRedirectUri } from "./oauth";
+import { getStravaTokensFromCookies } from "~/lib/strava/cookie-store";
+import { stravaRedirectUri } from "~/lib/strava/oauth";
 
 export type {
   StravaOAuthConnectUrls,

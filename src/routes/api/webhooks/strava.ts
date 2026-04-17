@@ -48,23 +48,30 @@ export const Route = createFileRoute("/api/webhooks/strava")({
         }
 
         const payloadJson = JSON.stringify(body);
-        let outcome: "ok" | "ignored" | "error" = "ok";
-        let detail = "";
-        try {
-          const sub = ev.subscription_id ?? 0;
-          const oid = ev.object_id ?? 0;
-          const aspect = ev.aspect_type ?? "";
-          const et = ev.event_time ?? 0;
-          const idempotencyKey = `strava:${sub}:${oid}:${aspect}:${et}`;
+        const sub = ev.subscription_id ?? 0;
+        const oid = ev.object_id ?? 0;
+        const aspect = ev.aspect_type ?? "";
+        const et = ev.event_time ?? 0;
+        const idempotencyKey = `strava:${sub}:${oid}:${aspect}:${et}`;
 
+        await logWebhookDelivery({
+          source: "strava",
+          idempotencyKey: null,
+          payloadJson,
+          outcome: "ignored",
+          detail: "received",
+        });
+
+        try {
           const result = await processStravaWebhookEvent(ev);
-          detail = result.detail;
           if (result.duplicate) {
             return new Response(null, { status: 200 });
           }
-          if (detail.includes("ignored") || detail.includes("duplicate")) {
-            outcome = "ignored";
-          }
+          const detail = result.detail;
+          const outcome: "ok" | "ignored" =
+            detail.includes("ignored") || detail.includes("duplicate")
+              ? "ignored"
+              : "ok";
           await logWebhookDelivery({
             source: "strava",
             idempotencyKey,
@@ -74,19 +81,12 @@ export const Route = createFileRoute("/api/webhooks/strava")({
           });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          detail = msg.slice(0, 500);
-          outcome = "error";
-          const sub = ev.subscription_id ?? 0;
-          const oid = ev.object_id ?? 0;
-          const aspect = ev.aspect_type ?? "";
-          const et = ev.event_time ?? 0;
-          const idempotencyKey = `strava:${sub}:${oid}:${aspect}:${et}`;
           await logWebhookDelivery({
             source: "strava",
             idempotencyKey,
             payloadJson,
-            outcome,
-            detail,
+            outcome: "error",
+            detail: msg.slice(0, 500),
           });
           return new Response(JSON.stringify({ error: msg }), {
             status: 500,

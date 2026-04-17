@@ -7,7 +7,7 @@ import {
   completedWorkoutMovingSeconds,
   completedWorkoutTitle,
 } from "~/lib/plans/completed-workout-data";
-import { updatePlanFn } from "~/lib/plans/server-fns";
+import { updatePlanFn } from "~/lib/server-fns/plans";
 
 function formatActualDurationSec(s: number | null | undefined): string | null {
   if (s == null || !Number.isFinite(s)) {

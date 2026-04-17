@@ -3,7 +3,7 @@ import {
   CARDIO_DISTANCE_UNITS,
   isCardioKind,
 } from "~/lib/plans/cardio-targets";
-import { updatePlanFn } from "~/lib/plans/server-fns";
+import { updatePlanFn } from "~/lib/server-fns/plans";
 
 type Props = {
   planId: string;

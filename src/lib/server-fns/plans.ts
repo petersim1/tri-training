@@ -1,33 +1,57 @@
 import { createServerFn } from "@tanstack/react-start";
-import { eq, getTableColumns } from "drizzle-orm";
-import type { HevyWorkoutSummary } from "~/lib/activities/types";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import { getDb } from "~/lib/db";
 import {
   type CompletedWorkoutRow,
   completedWorkouts,
-  type JsonValue,
-  type PlannedWorkoutWithCompleted,
   plannedWorkouts,
+  type PlannedWorkoutWithCompleted,
+  type PlanKind,
+  type PlanStatus,
 } from "~/lib/db/schema";
 import {
   CARDIO_DISTANCE_UNITS,
   isCardioKind,
 } from "~/lib/plans/cardio-targets";
-import {
-  hevyDataFromLinkedPayload,
-  hevyDataFromWorkoutSummary,
-  stravaDataFromActivitySummary,
-  stravaDataFromLinkedPayload,
-} from "~/lib/plans/completed-workout-data";
+import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
-import type { StravaActivitySummary } from "~/lib/strava/types";
+
+const SESSION_NOT_IN_DB =
+  "Session not in your library yet. Wait for sync or run backfill before linking.";
+
+async function completedWorkoutIdForVendorLink(
+  db: ReturnType<typeof getDb>,
+  link: { vendor: "strava" | "hevy"; externalId: string },
+): Promise<string | null> {
+  const vid = link.externalId.trim();
+  if (!vid) {
+    return null;
+  }
+  const row = await db
+    .select({ id: completedWorkouts.id })
+    .from(completedWorkouts)
+    .where(
+      and(
+        eq(completedWorkouts.vendor, link.vendor),
+        eq(completedWorkouts.vendorId, vid),
+      ),
+    )
+    .get();
+  return row?.id ?? null;
+}
 
 function resolveWorkoutLink(
   stravaActivityId: string | null | undefined,
   hevyWorkoutId: string | null | undefined,
 ): { vendor: "strava" | "hevy"; externalId: string } | null {
-  const s = stravaActivityId?.trim() ?? "";
-  const h = hevyWorkoutId?.trim() ?? "";
+  const s =
+    stravaActivityId === undefined || stravaActivityId === null
+      ? ""
+      : String(stravaActivityId).trim();
+  const h =
+    hevyWorkoutId === undefined || hevyWorkoutId === null
+      ? ""
+      : String(hevyWorkoutId).trim();
   if (s.length > 0) {
     return { vendor: "strava", externalId: s };
   }
@@ -35,46 +59,6 @@ function resolveWorkoutLink(
     return { vendor: "hevy", externalId: h };
   }
   return null;
-}
-
-export function normalizeCompletedInsert(
-  link: { vendor: "strava" | "hevy"; externalId: string },
-  p: LinkedSessionPayload,
-  now: Date,
-  opts?: {
-    stravaActivity?: StravaActivitySummary;
-    hevyWorkout?: HevyWorkoutSummary;
-    planKind?: string;
-    scheduledAtIso?: string;
-  },
-): typeof completedWorkouts.$inferInsert {
-  if (p.vendor !== link.vendor || p.externalId.trim() !== link.externalId) {
-    throw new Error("Linked session does not match selected activity");
-  }
-  const id = crypto.randomUUID();
-  let data: JsonValue;
-  if (link.vendor === "strava") {
-    if (opts?.stravaActivity) {
-      data = stravaDataFromActivitySummary(opts.stravaActivity);
-    } else {
-      data = stravaDataFromLinkedPayload(p, {
-        planKind: opts?.planKind ?? "run",
-        scheduledAtIso: opts?.scheduledAtIso ?? new Date().toISOString(),
-      });
-    }
-  } else if (opts?.hevyWorkout) {
-    data = hevyDataFromWorkoutSummary(opts.hevyWorkout);
-  } else {
-    data = hevyDataFromLinkedPayload(p);
-  }
-  return {
-    id,
-    vendor: link.vendor,
-    vendorId: link.externalId.trim(),
-    data,
-    createdAt: now,
-    updatedAt: now,
-  };
 }
 
 function normalizeDistanceUnit(raw: string | null | undefined): string | null {
@@ -162,17 +146,18 @@ export const createPlanFn = createServerFn({ method: "POST" })
     if (!kinds.has(data.kind)) {
       throw new Error("Invalid kind");
     }
+    const planKind = data.kind as PlanKind;
     const id = crypto.randomUUID();
     const now = new Date();
     const db = getDb();
 
-    const isLift = data.kind === "lift";
+    const isLift = planKind === "lift";
     const routineId =
       isLift && data.routineId && String(data.routineId).trim() !== ""
         ? String(data.routineId).trim()
         : null;
 
-    const cardio = isCardioKind(data.kind);
+    const cardio = isCardioKind(planKind);
     const distance = cardio
       ? normalizeOptionalDistance(data.distance ?? null)
       : null;
@@ -187,7 +172,7 @@ export const createPlanFn = createServerFn({ method: "POST" })
       .insert(plannedWorkouts)
       .values({
         id,
-        kind: data.kind,
+        kind: planKind,
         scheduledAt: new Date(data.scheduledAt).toISOString(),
         notes: data.notes ?? null,
         status: "planned",
@@ -222,42 +207,49 @@ export const createPlanFromActivityFn = createServerFn({ method: "POST" })
     if (!kinds.has(data.kind)) {
       throw new Error("Invalid kind");
     }
+    const planKind = data.kind as PlanKind;
     const link = resolveWorkoutLink(data.stravaActivityId, data.hevyWorkoutId);
     if (!link) {
       throw new Error("Choose an activity");
     }
-    const isLift = data.kind === "lift";
+    const isLift = planKind === "lift";
     if (isLift && link.vendor !== "hevy") {
       throw new Error("Lift sessions must use a Hevy workout");
     }
     if (!isLift && link.vendor !== "strava") {
       throw new Error("Run, bike, and swim use Strava activities");
     }
+    const p = data.linkedSession;
+    if (
+      p.vendor !== link.vendor ||
+      p.externalId.trim() !== link.externalId.trim()
+    ) {
+      throw new Error("linkedSession does not match selected activity");
+    }
     const now = new Date();
-    const completed = normalizeCompletedInsert(link, data.linkedSession, now, {
-      planKind: data.kind,
-      scheduledAtIso: new Date(data.scheduledAt).toISOString(),
-    });
-    const id = crypto.randomUUID();
     const db = getDb();
-    await db.insert(completedWorkouts).values(completed).run();
+    const completedId = await completedWorkoutIdForVendorLink(db, link);
+    if (!completedId) {
+      throw new Error(SESSION_NOT_IN_DB);
+    }
 
     const routineId =
       isLift && data.routineId && String(data.routineId).trim() !== ""
         ? String(data.routineId).trim()
         : null;
 
+    const id = crypto.randomUUID();
     await db
       .insert(plannedWorkouts)
       .values({
         id,
-        kind: data.kind,
+        kind: planKind,
         scheduledAt: new Date(data.scheduledAt).toISOString(),
         notes: data.notes?.trim() ? data.notes.trim() : null,
         status: "completed",
         routineVendor: isLift ? "hevy" : "strava",
         routineId: isLift ? routineId : null,
-        completedWorkoutId: completed.id,
+        completedWorkoutId: completedId,
         distance: null,
         distanceUnits: null,
         timeSeconds: null,
@@ -265,6 +257,7 @@ export const createPlanFromActivityFn = createServerFn({ method: "POST" })
         updatedAt: now,
       })
       .run();
+    await syncCompletedResolvedForId(db, completedId);
     return { id };
   });
 
@@ -308,9 +301,9 @@ export const updatePlanFn = createServerFn({ method: "POST" })
       updates.scheduledAt = new Date(data.scheduledAt).toISOString();
     }
 
-    const explicitStatus =
+    const explicitStatus: PlanStatus | undefined =
       data.status && ["planned", "completed", "skipped"].includes(data.status)
-        ? data.status
+        ? (data.status as PlanStatus)
         : undefined;
 
     const workoutTouched =
@@ -324,43 +317,46 @@ export const updatePlanFn = createServerFn({ method: "POST" })
       const previousCompletedId = row.completedWorkoutId;
 
       if (!link) {
-        updates.completedWorkoutId = null;
-        if (explicitStatus === undefined) {
-          updates.status = "planned";
-        }
         if (previousCompletedId) {
+          updates.completedWorkoutId = null;
+          if (explicitStatus === undefined) {
+            updates.status = "planned";
+          }
           await db
             .update(plannedWorkouts)
             .set({ ...updates, completedWorkoutId: null })
             .where(eq(plannedWorkouts.id, data.id))
             .run();
+          await syncCompletedResolvedForId(db, previousCompletedId);
           return { ok: true };
         }
-      } else {
-        if (!data.linkedSession) {
-          throw new Error("linkedSession is required when linking a session");
-        }
-        const completed = normalizeCompletedInsert(
-          link,
-          data.linkedSession,
-          now,
-          {
-            planKind: row.kind,
-            scheduledAtIso: new Date(row.scheduledAt).toISOString(),
-          },
-        );
-        await db.insert(completedWorkouts).values(completed).run();
-        updates.completedWorkoutId = completed.id;
-        if (explicitStatus === undefined) {
-          updates.status = "completed";
-        }
-        await db
-          .update(plannedWorkouts)
-          .set(updates)
-          .where(eq(plannedWorkouts.id, data.id))
-          .run();
         return { ok: true };
       }
+      if (data.linkedSession) {
+        const p = data.linkedSession;
+        if (
+          p.vendor !== link.vendor ||
+          p.externalId.trim() !== link.externalId.trim()
+        ) {
+          throw new Error("linkedSession does not match selected activity");
+        }
+      }
+      const completedId = await completedWorkoutIdForVendorLink(db, link);
+      if (!completedId) {
+        throw new Error(SESSION_NOT_IN_DB);
+      }
+      updates.completedWorkoutId = completedId;
+      updates.status = "completed";
+      await db
+        .update(plannedWorkouts)
+        .set(updates)
+        .where(eq(plannedWorkouts.id, data.id))
+        .run();
+      await syncCompletedResolvedForId(db, completedId);
+      if (previousCompletedId && previousCompletedId !== completedId) {
+        await syncCompletedResolvedForId(db, previousCompletedId);
+      }
+      return { ok: true };
     }
 
     if (explicitStatus !== undefined) {
@@ -409,9 +405,18 @@ export const deletePlanFn = createServerFn({ method: "POST" })
   .inputValidator((d: { id: string }) => d)
   .handler(async ({ data }) => {
     const db = getDb();
+    const plan = await db
+      .select({ completedWorkoutId: plannedWorkouts.completedWorkoutId })
+      .from(plannedWorkouts)
+      .where(eq(plannedWorkouts.id, data.id))
+      .get();
+    const cwId = plan?.completedWorkoutId ?? null;
     await db
       .delete(plannedWorkouts)
       .where(eq(plannedWorkouts.id, data.id))
       .run();
+    if (cwId) {
+      await syncCompletedResolvedForId(db, cwId);
+    }
     return { ok: true };
   });

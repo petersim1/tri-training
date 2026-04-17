@@ -11,6 +11,8 @@ import { getDb } from "~/lib/db";
 import {
   type CompletedWorkoutRow,
   completedWorkouts,
+  type PlanKind,
+  type PlanStatus,
   type PlannedWorkoutWithCompleted,
   plannedWorkouts,
 } from "~/lib/db/schema";
@@ -28,10 +30,10 @@ function plannedWorkoutsWhere(
 ): SQL | undefined {
   const parts: SQL[] = [];
   if (filters.kind !== "all") {
-    parts.push(eq(plannedWorkouts.kind, filters.kind));
+    parts.push(eq(plannedWorkouts.kind, filters.kind as PlanKind));
   }
   if (filters.status !== "all") {
-    parts.push(eq(plannedWorkouts.status, filters.status));
+    parts.push(eq(plannedWorkouts.status, filters.status as PlanStatus));
   }
   if (filters.from) {
     parts.push(

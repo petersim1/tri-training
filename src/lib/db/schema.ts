@@ -1,10 +1,12 @@
 import {
+  index,
   integer,
   real,
   sqliteTable,
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+import type { CompletedActivityKind } from "~/lib/strava/sport-types";
 
 /** JSON value — structured so TanStack Start can serialize server responses. */
 export type JsonPrimitive = string | number | boolean | null;
@@ -12,6 +14,12 @@ export type JsonValue =
   | JsonPrimitive
   | JsonValue[]
   | { [key: string]: JsonValue };
+
+/** Planned workout `kind` — cardio + lift. */
+export type PlanKind = "lift" | "run" | "bike" | "swim";
+
+/** Planned workout `status`. */
+export type PlanStatus = "planned" | "completed" | "skipped";
 
 /**
  * Linked session: full Strava activity or Hevy workout JSON from vendor APIs.
@@ -24,12 +32,21 @@ export const completedWorkouts = sqliteTable(
     vendor: text("vendor").$type<"strava" | "hevy">().notNull(),
     /** Strava activity id or Hevy workout id (string). */
     vendorId: text("vendor_id").notNull(),
+    /**
+     * Normalized activity: Strava `sport_type` lowercased (see `~/lib/strava/sport-types`), or `lift` for Hevy.
+     */
+    activityKind: text("activity_kind").notNull().$type<CompletedActivityKind>(),
+    /**
+     * `true` when at least one `planned_workout` references this row. Used for “floating” sessions (webhook-only) and fast filters.
+     */
+    isResolved: integer("is_resolved", { mode: "boolean" }).notNull(),
     data: text("data", { mode: "json" }).notNull().$type<JsonValue>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
   (t) => [
     uniqueIndex("completed_workouts_vendor_vendor_id").on(t.vendor, t.vendorId),
+    index("completed_workouts_is_resolved").on(t.isResolved),
   ],
 );
 
@@ -38,10 +55,13 @@ export type NewCompletedWorkout = typeof completedWorkouts.$inferInsert;
 
 export const plannedWorkouts = sqliteTable("planned_workouts", {
   id: text("id").primaryKey(),
-  kind: text("kind").notNull(),
+  kind: text("kind").notNull().$type<PlanKind>(),
   scheduledAt: text("scheduled_at").notNull(),
   notes: text("notes"),
-  status: text("status").notNull().default("planned"),
+  status: text("status")
+    .$type<PlanStatus>()
+    .notNull()
+    .default("planned"),
   routineVendor: text("routine_vendor").$type<"strava" | "hevy">().notNull(),
   routineId: text("routine_id"),
   completedWorkoutId: text("completed_workout_id").references(

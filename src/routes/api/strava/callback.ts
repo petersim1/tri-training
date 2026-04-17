@@ -6,7 +6,7 @@ import {
   setStravaTokensCookie,
 } from "~/lib/strava/cookie-store";
 import { stravaRedirectUri } from "~/lib/strava/oauth";
-import { STRAVA_OAUTH_STATE_COOKIE } from "~/lib/strava/oauth-flow";
+import { STRAVA_OAUTH_STATE_COOKIE } from "~/lib/strava/oauth-flow.shared";
 import { persistServiceStravaTokens } from "~/lib/strava/service-tokens";
 
 const TOKEN_URL = "https://www.strava.com/oauth/token";

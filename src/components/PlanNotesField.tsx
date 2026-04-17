@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { updatePlanFn } from "~/lib/plans/server-fns";
+import { updatePlanFn } from "~/lib/server-fns/plans";
 
 type Props = {
   planId: string;

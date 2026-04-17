@@ -1,19 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie } from "@tanstack/react-start/server";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb } from "~/lib/db";
-import { weightEntries } from "~/lib/db/schema";
-import {
-  fetchAllHevyRoutines,
-  fetchAllRoutineFolders,
-} from "~/lib/hevy/fetch-all";
-import { groupRoutinesByFolder } from "~/lib/hevy/group-routines";
-import type {
-  HevyRoutineFolderGroup,
-  HevyRoutineFolderSummary,
-  HevyRoutineSummary,
-} from "~/lib/hevy/types";
+import { completedWorkouts, weightEntries } from "~/lib/db/schema";
 import {
   CALENDAR_SCOPE_COOKIE,
   type CalendarScope,
@@ -22,6 +12,7 @@ import {
 import {
   homeHevyBundleQueryKey,
   homePlansQueryKey,
+  homeUnresolvedCompletedDayKeysQueryKey,
   homeWeightQueryKey,
 } from "~/lib/home/query-keys";
 import {
@@ -30,13 +21,12 @@ import {
   type SessionChartSettings,
   serializeSessionChartSettings,
 } from "~/lib/home/session-chart-settings";
-import { listAllPlannedWorkoutsFn } from "~/lib/plans/list-planned-fns";
+import type { CompletedWorkoutRow } from "~/lib/db/schema";
+import { completedWorkoutLocalDayKey } from "~/lib/plans/completed-workout-data";
+import { listAllPlannedWorkoutsFn } from "~/lib/server-fns/planned-workouts-list";
+import { fetchHevyHomeBundleFn } from "~/lib/server-fns/vendors/hevy";
 
-export type {
-  HevyRoutineFolderGroup,
-  HevyRoutineFolderSummary,
-  HevyRoutineSummary,
-} from "~/lib/hevy/types";
+export { fetchHevyHomeBundleFn };
 
 export type { SessionChartSettings } from "~/lib/home/session-chart-settings";
 
@@ -50,12 +40,6 @@ function validateSessionChartSettings(d: SessionChartSettings): void {
   }
 }
 
-export type HevyHomeBundle = {
-  hevyRoutines: HevyRoutineSummary[];
-  hevyRoutineGroups: HevyRoutineFolderGroup[];
-  hevyRoutinesUnfoldered: HevyRoutineSummary[];
-};
-
 /** Weight rows for home — use with `homeWeightQueryKey`. */
 export const fetchWeightEntriesForHomeFn = createServerFn({
   method: "GET",
@@ -68,37 +52,43 @@ export const fetchWeightEntriesForHomeFn = createServerFn({
     .all();
 });
 
-/** Hevy routines + folder grouping for home — use with `homeHevyBundleQueryKey`. */
-export const fetchHevyHomeBundleFn = createServerFn({ method: "GET" }).handler(
-  async (): Promise<HevyHomeBundle> => {
-    let hevyRoutines: HevyRoutineSummary[] = [];
-    let hevyRoutineGroups: HevyRoutineFolderGroup[] = [];
-    let hevyRoutinesUnfoldered: HevyRoutineSummary[] = [];
-    try {
-      hevyRoutines = await fetchAllHevyRoutines();
-      try {
-        const folders =
-          await fetchAllRoutineFolders<HevyRoutineFolderSummary>();
-        const { groups, unfoldered } = groupRoutinesByFolder(
-          folders,
-          hevyRoutines,
-        );
-        hevyRoutineGroups = groups;
-        hevyRoutinesUnfoldered = unfoldered;
-      } catch {
-        hevyRoutineGroups = [];
-        hevyRoutinesUnfoldered = [...hevyRoutines];
-      }
-    } catch {
-      hevyRoutines = [];
+/** Distinct local day keys (`YYYY-MM-DD`) with at least one unlinked completed session — calendar “floating” dot. */
+export const fetchUnresolvedCompletedDayKeysFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<{ dayKeys: string[] }> => {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(completedWorkouts)
+    .where(eq(completedWorkouts.isResolved, false))
+    .all();
+  const keys = new Set<string>();
+  for (const row of rows) {
+    const dk = completedWorkoutLocalDayKey(row);
+    if (dk) {
+      keys.add(dk);
     }
-    return {
-      hevyRoutines,
-      hevyRoutineGroups,
-      hevyRoutinesUnfoldered,
-    };
-  },
-);
+  }
+  return { dayKeys: [...keys].sort() };
+});
+
+/** Unlinked `completed_workouts` rows whose local calendar day matches `dayKey` (`YYYY-MM-DD`). */
+export const fetchUnresolvedCompletedForDayFn = createServerFn({
+  method: "GET",
+})
+  .inputValidator((d: { dayKey: string }) => d)
+  .handler(async ({ data }): Promise<CompletedWorkoutRow[]> => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.dayKey)) {
+      throw new Error("Invalid dayKey");
+    }
+    const db = getDb();
+    const rows = await db
+      .select()
+      .from(completedWorkouts)
+      .where(eq(completedWorkouts.isResolved, false))
+      .all();
+    return rows.filter((r) => completedWorkoutLocalDayKey(r) === data.dayKey);
+  });
 
 /**
  * Home `/` loader: cookie-backed settings (defaults if missing) + dehydrated React Query state only.
@@ -129,6 +119,11 @@ export const loadHomePageDataFn = async (
   queryClient.prefetchQuery({
     queryKey: homeHevyBundleQueryKey,
     queryFn: () => fetchHevyHomeBundleFn(),
+  });
+
+  queryClient.prefetchQuery({
+    queryKey: homeUnresolvedCompletedDayKeysQueryKey,
+    queryFn: () => fetchUnresolvedCompletedDayKeysFn(),
   });
 
   return {
