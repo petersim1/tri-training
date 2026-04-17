@@ -5,10 +5,8 @@ import {
 } from "~/lib/chart-svg-interaction";
 import type {
   SessionChartMetric,
-  SessionChartRange,
   SessionChartSettings,
 } from "~/lib/home/session-chart-settings";
-import { sessionChartRangeLabel } from "~/lib/home/session-chart-settings";
 import type {
   ActivityPlotKind,
   ActivityPlotPoint,
@@ -173,14 +171,6 @@ const KIND_LABEL: Record<ActivityPlotKind, string> = {
   swim: "Swim",
   lift: "Lift",
 };
-
-const RANGE_OPTIONS: { value: SessionChartRange; label: string }[] = [
-  { value: "3m", label: "3 mo" },
-  { value: "6m", label: "6 mo" },
-  { value: "12m", label: "12 mo" },
-  { value: "ytd", label: "YTD" },
-  { value: "all", label: "All" },
-];
 
 export function ActivityMetricsChart({
   kind,
@@ -367,32 +357,11 @@ export function ActivityMetricsChart({
     </div>
   );
 
-  const toolbar = (
-    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-3 py-2">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-        Range
-      </span>
-      <div className="flex flex-wrap gap-2">
-        {RANGE_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onSessionChartPatch({ range: opt.value })}
-            className={
-              sessionChart.range === opt.value
-                ? "rounded-md bg-emerald-600/20 px-2 py-1 text-[11px] font-medium text-emerald-200 ring-1 ring-emerald-500/35"
-                : "rounded-md px-2 py-1 text-[11px] font-medium text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-            }
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-      {isCardio ? (
-        <>
-          <span className="ml-1 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-            Plot
-          </span>
+  const chartHeader = (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-zinc-800/80 px-4 py-3">
+      {tabs}
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+        {isCardio ? (
           <div className="flex flex-wrap gap-2">
             {(
               [
@@ -423,24 +392,24 @@ export function ActivityMetricsChart({
               </button>
             ))}
           </div>
-        </>
-      ) : null}
-      <label
-        className={`ml-auto flex cursor-pointer items-center gap-2 text-[11px] ${
-          cumulativeOk ? "text-zinc-400" : "cursor-not-allowed text-zinc-600"
-        }`}
-      >
-        <input
-          type="checkbox"
-          className="rounded border-zinc-600 bg-zinc-900"
-          checked={cumulativeOk && sessionChart.cumulative}
-          disabled={!cumulativeOk}
-          onChange={(e) =>
-            onSessionChartPatch({ cumulative: e.target.checked })
-          }
-        />
-        Cumulative
-      </label>
+        ) : null}
+        <label
+          className={`flex cursor-pointer items-center gap-2 text-[11px] ${
+            cumulativeOk ? "text-zinc-400" : "cursor-not-allowed text-zinc-600"
+          }`}
+        >
+          <input
+            type="checkbox"
+            className="rounded border-zinc-600 bg-zinc-900"
+            checked={cumulativeOk && sessionChart.cumulative}
+            disabled={!cumulativeOk}
+            onChange={(e) =>
+              onSessionChartPatch({ cumulative: e.target.checked })
+            }
+          />
+          Cumulative
+        </label>
+      </div>
     </div>
   );
 
@@ -450,10 +419,7 @@ export function ActivityMetricsChart({
         aria-label="Activity metrics chart"
         className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
       >
-        <div className="space-y-2 px-4 py-3">
-          {tabs}
-          {toolbar}
-        </div>
+        {chartHeader}
         <div
           className="flex h-[280px] items-center justify-center px-4 py-6"
           aria-busy="true"
@@ -470,10 +436,7 @@ export function ActivityMetricsChart({
         aria-label="Activity metrics chart"
         className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
       >
-        <div className="space-y-2 border-b border-zinc-800/80 px-4 py-3">
-          {tabs}
-          {toolbar}
-        </div>
+        {chartHeader}
         <p className="px-4 py-6 text-sm text-zinc-500">
           {emptyCopy === "filtered" ? (
             <>
@@ -498,10 +461,7 @@ export function ActivityMetricsChart({
         aria-label="Activity metrics chart"
         className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
       >
-        <div className="space-y-2 px-4 py-3">
-          {tabs}
-          {toolbar}
-        </div>
+        {chartHeader}
         <p className="px-4 py-6 text-sm text-zinc-500">
           {emptyCopy === "filtered" ? (
             <>
@@ -521,7 +481,6 @@ export function ActivityMetricsChart({
 
   const {
     n,
-    sessionCount,
     plotDays,
     displayPerDay,
     xAt,
@@ -538,9 +497,6 @@ export function ActivityMetricsChart({
 
   const interactive = Boolean(onSelectDayKey);
 
-  const chartKindLabel = cumulative ? "line chart" : "bar chart";
-  const ariaLabel = `${sessionChartRangeLabel(sessionChart.range)} · ${KIND_LABEL[kind]} sessions ${chartKindLabel}, ${sessionCount} sessions`;
-
   const barFill =
     effectiveMetric === "time" || !isCardio
       ? "rgb(52 211 153)"
@@ -553,18 +509,12 @@ export function ActivityMetricsChart({
       aria-label="Activity metrics chart"
       className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
     >
-      <div className="space-y-2 px-4 py-3">
-        {tabs}
-        {toolbar}
-      </div>
+      {chartHeader}
       <svg
         className="h-auto w-full max-w-full"
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         role="img"
-        aria-label={ariaLabel}
       >
-        <title>{ariaLabel}</title>
-
         <g pointerEvents="none" opacity={0.4}>
           {yTicks.map((lb) => {
             const y = PAD_T + innerH - ((lb - yMin) / (yTop - yMin)) * innerH;
@@ -607,7 +557,7 @@ export function ActivityMetricsChart({
             <polyline
               fill="none"
               stroke={barFill}
-              strokeWidth={1}
+              strokeWidth={2}
               strokeOpacity={0.92}
               strokeLinejoin="round"
               strokeLinecap="round"

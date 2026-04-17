@@ -14,6 +14,7 @@ import {
   isCardioKind,
 } from "~/lib/plans/cardio-targets";
 import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
+import { isValidDayKey } from "~/lib/plans/day-key";
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
 
 const SESSION_NOT_IN_DB =
@@ -133,7 +134,7 @@ export const createPlanFn = createServerFn({ method: "POST" })
   .inputValidator(
     (d: {
       kind: string;
-      scheduledAt: string;
+      dayKey: string;
       notes?: string | null;
       routineId?: string | null;
       distance?: number | null;
@@ -145,6 +146,10 @@ export const createPlanFn = createServerFn({ method: "POST" })
     const kinds = new Set(["lift", "run", "bike", "swim"]);
     if (!kinds.has(data.kind)) {
       throw new Error("Invalid kind");
+    }
+    const dk = String(data.dayKey ?? "").trim();
+    if (!isValidDayKey(dk)) {
+      throw new Error("Invalid day");
     }
     const planKind = data.kind as PlanKind;
     const id = crypto.randomUUID();
@@ -173,7 +178,7 @@ export const createPlanFn = createServerFn({ method: "POST" })
       .values({
         id,
         kind: planKind,
-        scheduledAt: new Date(data.scheduledAt).toISOString(),
+        dayKey: dk,
         notes: data.notes ?? null,
         status: "planned",
         routineVendor: isLift ? "hevy" : "strava",
@@ -194,7 +199,7 @@ export const createPlanFromActivityFn = createServerFn({ method: "POST" })
   .inputValidator(
     (d: {
       kind: string;
-      scheduledAt: string;
+      dayKey: string;
       stravaActivityId?: string | null;
       hevyWorkoutId?: string | null;
       linkedSession: LinkedSessionPayload;
@@ -206,6 +211,10 @@ export const createPlanFromActivityFn = createServerFn({ method: "POST" })
     const kinds = new Set(["lift", "run", "bike", "swim"]);
     if (!kinds.has(data.kind)) {
       throw new Error("Invalid kind");
+    }
+    const dk = String(data.dayKey ?? "").trim();
+    if (!isValidDayKey(dk)) {
+      throw new Error("Invalid day");
     }
     const planKind = data.kind as PlanKind;
     const link = resolveWorkoutLink(data.stravaActivityId, data.hevyWorkoutId);
@@ -244,7 +253,7 @@ export const createPlanFromActivityFn = createServerFn({ method: "POST" })
       .values({
         id,
         kind: planKind,
-        scheduledAt: new Date(data.scheduledAt).toISOString(),
+        dayKey: dk,
         notes: data.notes?.trim() ? data.notes.trim() : null,
         status: "completed",
         routineVendor: isLift ? "hevy" : "strava",
@@ -266,7 +275,7 @@ export const updatePlanFn = createServerFn({ method: "POST" })
     (d: {
       id: string;
       notes?: string | null;
-      scheduledAt?: string;
+      dayKey?: string;
       status?: string;
       stravaActivityId?: string | null;
       hevyWorkoutId?: string | null;
@@ -297,8 +306,14 @@ export const updatePlanFn = createServerFn({ method: "POST" })
     if (data.notes !== undefined) {
       updates.notes = data.notes;
     }
-    if (data.scheduledAt) {
-      updates.scheduledAt = new Date(data.scheduledAt).toISOString();
+    if (data.dayKey !== undefined && data.dayKey !== null) {
+      const dk = String(data.dayKey).trim();
+      if (dk !== "") {
+        if (!isValidDayKey(dk)) {
+          throw new Error("Invalid day");
+        }
+        updates.dayKey = dk;
+      }
     }
 
     const explicitStatus: PlanStatus | undefined =

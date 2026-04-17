@@ -1,15 +1,26 @@
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
 import { getDb } from "~/lib/db";
-import { completedWorkouts, plannedWorkouts } from "~/lib/db/schema";
+import {
+  completedWorkouts,
+  plannedWorkouts,
+  weightEntries,
+} from "~/lib/db/schema";
 import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
 import {
   hevyDataFromWorkoutSummary,
   stravaDataFromActivitySummary,
 } from "~/lib/plans/completed-workout-data";
 import {
+  dayBoundsLocalFromDayKey,
+  noonIsoFromDayKey,
+  scheduledMsAnchorFromDayKey,
+} from "~/lib/plans/day-key";
+import {
+  fetchAllHevyBodyMeasurementsForBackfill,
   fetchAllHevyWorkoutsForBackfill,
   fetchAllStravaActivitiesForBackfill,
+  type HevyBodyMeasurementRow,
   linkedSessionExcludeKeys,
   localDayKeyFromIso,
   type StravaFetchJson,
@@ -33,29 +44,88 @@ import type { StravaActivitySummary } from "~/lib/strava/types";
 
 const LOG = "[backfill-links]";
 
+/** kg → lb (same factor as common conversions). */
+const KG_TO_LB = 2.2046226218;
+
 export type BackfillReport = {
-  /** New calendar rows from Strava (planned_workout + completed_workout when missing). */
+  /** New `completed_workouts` rows ingested from Strava (no auto-created plans). */
   importedStrava: number;
-  /** New calendar rows from Hevy. */
+  /** New `completed_workouts` rows ingested from Hevy (no auto-created plans). */
   importedHevy: number;
+  /** New `weight_entries` rows from Hevy `body_measurements.weight_kg` (skips days that already have a weight). */
+  importedHevyWeights: number;
   linked: number;
   skipped: number;
   errors: string[];
   details: { planId: string; action: string }[];
 };
 
-/** Local calendar day bounds for `scheduledAt` (same idea as the day modal). */
-function dayBoundsLocalFromScheduledAt(iso: string): {
-  startMs: number;
-  endMs: number;
-} {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = d.getMonth();
-  const day = d.getDate();
-  const startMs = new Date(y, m, day, 0, 0, 0, 0).getTime();
-  const endMs = new Date(y, m, day, 23, 59, 59, 999).getTime();
-  return { startMs, endMs };
+function dayKeyFromHevyBodyDate(dateStr: string): string | null {
+  const t = dateStr.trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  if (!m) {
+    return null;
+  }
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(y, mo - 1, d);
+  if (
+    dt.getFullYear() !== y ||
+    dt.getMonth() !== mo - 1 ||
+    dt.getDate() !== d
+  ) {
+    return null;
+  }
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+/**
+ * Inserts weight from Hevy body measurements for days that don't already have an entry.
+ */
+async function importHevyWeightsIfMissing(
+  db: ReturnType<typeof getDb>,
+  rows: HevyBodyMeasurementRow[],
+  now: Date,
+): Promise<number> {
+  const seenDay = new Set<string>();
+  let inserted = 0;
+  for (const row of rows) {
+    const dayKey = dayKeyFromHevyBodyDate(row.date);
+    if (!dayKey || seenDay.has(dayKey)) {
+      continue;
+    }
+    seenDay.add(dayKey);
+    const kg = row.weight_kg;
+    if (kg == null || !Number.isFinite(kg) || kg <= 0) {
+      continue;
+    }
+    const existing = await db
+      .select({ id: weightEntries.id })
+      .from(weightEntries)
+      .where(eq(weightEntries.dayKey, dayKey))
+      .get();
+    if (existing) {
+      continue;
+    }
+    const weightLb = kg * KG_TO_LB;
+    const [y, mo, d] = dayKey.split("-").map(Number);
+    const measuredAt = new Date(y, mo - 1, d, 12, 0, 0, 0).toISOString();
+    await db
+      .insert(weightEntries)
+      .values({
+        id: crypto.randomUUID(),
+        dayKey,
+        measuredAt,
+        weightLb,
+        notes: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+    inserted++;
+  }
+  return inserted;
 }
 
 function pickClosestByStartTime<T>(
@@ -88,37 +158,7 @@ function pickClosestByStartTime<T>(
 
 const KINDS = new Set(["lift", "run", "bike", "swim"]);
 
-async function planExistsForCompletedWorkoutId(
-  db: ReturnType<typeof getDb>,
-  completedId: string,
-): Promise<boolean> {
-  const row = await db
-    .select({ id: plannedWorkouts.id })
-    .from(plannedWorkouts)
-    .where(eq(plannedWorkouts.completedWorkoutId, completedId))
-    .get();
-  return row != null;
-}
-
-/**
- * Any plan row for this activity kind on the same local calendar day as the session.
- * When true, webhook/backfill should **not** auto-create a plan — user links manually.
- */
-async function plannedWorkoutExistsSameLocalDayAndKind(
-  db: ReturnType<typeof getDb>,
-  kind: "lift" | "run" | "bike" | "swim",
-  sessionScheduledAtIso: string,
-): Promise<boolean> {
-  const targetDay = localDayKeyFromIso(sessionScheduledAtIso);
-  const rows = await db
-    .select({ scheduledAt: plannedWorkouts.scheduledAt })
-    .from(plannedWorkouts)
-    .where(eq(plannedWorkouts.kind, kind))
-    .all();
-  return rows.some((r) => localDayKeyFromIso(r.scheduledAt) === targetDay);
-}
-
-/** Reuse an existing row or insert; returns `completed_workouts.id`. */
+/** Reuse an existing row or insert. */
 async function findOrCreateCompletedWorkoutId(
   db: ReturnType<typeof getDb>,
   link: { vendor: "strava" | "hevy"; externalId: string },
@@ -130,7 +170,7 @@ async function findOrCreateCompletedWorkoutId(
     planKind?: string;
     scheduledAtIso?: string;
   },
-): Promise<string> {
+): Promise<{ id: string; created: boolean }> {
   const vid = link.externalId.trim();
   const row = await db
     .select({ id: completedWorkouts.id })
@@ -166,7 +206,7 @@ async function findOrCreateCompletedWorkoutId(
         .where(eq(completedWorkouts.id, row.id))
         .run();
     }
-    return row.id;
+    return { id: row.id, created: false };
   }
   const ins = normalizeCompletedInsert(link, payload, now, {
     stravaActivity: opts?.stravaActivity,
@@ -175,12 +215,12 @@ async function findOrCreateCompletedWorkoutId(
     scheduledAtIso: opts?.scheduledAtIso,
   });
   await db.insert(completedWorkouts).values(ins).run();
-  return ins.id;
+  return { id: ins.id, created: true };
 }
 
 /**
- * Insert `completed_workouts` + `planned_workouts` so the session appears on the calendar.
- * Skips if this external id already has a plan. Returns true if a new plan row was created.
+ * Upsert `completed_workouts` only. Does not create plans or resolve — calendar day is decided in the app.
+ * Returns true if a new `completed_workouts` row was inserted.
  */
 export async function upsertCalendarFromHevyWorkout(
   db: ReturnType<typeof getDb>,
@@ -203,7 +243,7 @@ export async function upsertCalendarFromHevyWorkout(
     return false;
   }
   const link = { vendor: "hevy" as const, externalId: id };
-  const completedId = await findOrCreateCompletedWorkoutId(
+  const { id: _completedId, created } = await findOrCreateCompletedWorkoutId(
     db,
     link,
     payload,
@@ -214,43 +254,8 @@ export async function upsertCalendarFromHevyWorkout(
       scheduledAtIso: new Date(w.start_time).toISOString(),
     },
   );
-  if (await planExistsForCompletedWorkoutId(db, completedId)) {
-    calendarExternalKeys.add(key);
-    return false;
-  }
-  const scheduledAtIso = new Date(w.start_time).toISOString();
-  if (
-    await plannedWorkoutExistsSameLocalDayAndKind(db, "lift", scheduledAtIso)
-  ) {
-    await syncCompletedResolvedForId(db, completedId);
-    return false;
-  }
-  const planId = crypto.randomUUID();
-  const routineId =
-    w.routine_id?.trim() && w.routine_id.trim() !== ""
-      ? w.routine_id.trim()
-      : null;
-  await db
-    .insert(plannedWorkouts)
-    .values({
-      id: planId,
-      kind: "lift",
-      scheduledAt: scheduledAtIso,
-      notes: null,
-      status: "completed",
-      routineVendor: "hevy",
-      routineId,
-      completedWorkoutId: completedId,
-      distance: null,
-      distanceUnits: null,
-      timeSeconds: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run();
-  await syncCompletedResolvedForId(db, completedId);
   calendarExternalKeys.add(key);
-  return true;
+  return created;
 }
 
 export async function upsertCalendarFromStravaActivity(
@@ -273,7 +278,7 @@ export async function upsertCalendarFromStravaActivity(
   }
   const link = { vendor: "strava" as const, externalId: sid };
   const payload = linkedSessionFromStravaActivity(a);
-  const completedId = await findOrCreateCompletedWorkoutId(
+  const { id: _cid, created } = await findOrCreateCompletedWorkoutId(
     db,
     link,
     payload,
@@ -284,43 +289,13 @@ export async function upsertCalendarFromStravaActivity(
       scheduledAtIso: new Date(a.start_date).toISOString(),
     },
   );
-  if (await planExistsForCompletedWorkoutId(db, completedId)) {
-    calendarExternalKeys.add(key);
-    return false;
-  }
-  const scheduledAtIso = new Date(a.start_date).toISOString();
-  if (await plannedWorkoutExistsSameLocalDayAndKind(db, kind, scheduledAtIso)) {
-    await syncCompletedResolvedForId(db, completedId);
-    return false;
-  }
-  const planId = crypto.randomUUID();
-  await db
-    .insert(plannedWorkouts)
-    .values({
-      id: planId,
-      kind,
-      scheduledAt: scheduledAtIso,
-      notes: null,
-      status: "completed",
-      routineVendor: "strava",
-      routineId: null,
-      completedWorkoutId: completedId,
-      distance: null,
-      distanceUnits: null,
-      timeSeconds: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run();
-  await syncCompletedResolvedForId(db, completedId);
   calendarExternalKeys.add(key);
-  return true;
+  return created;
 }
 
 /**
- * 1) Paginate all Strava + Hevy; for each session not already on the calendar, insert
- *    `completed_workouts` and `planned_workouts` (same pattern as `createPlanFromActivityFn`).
- * 2) Link remaining unlinked plans to same-day matches.
+ * 1) Ingest Strava + Hevy sessions into `completed_workouts` only (no auto plans / resolution).
+ * 2) Link remaining unlinked plans to same-day matches (user-chosen calendar `day_key`).
  */
 export async function backfillLinkedWorkouts(
   stravaFetchJsonImpl: StravaFetchJson,
@@ -335,12 +310,13 @@ export async function backfillLinkedWorkouts(
         ne(plannedWorkouts.status, "skipped"),
       ),
     )
-    .orderBy(asc(plannedWorkouts.scheduledAt))
+    .orderBy(asc(plannedWorkouts.dayKey))
     .all();
 
   const report: BackfillReport = {
     importedStrava: 0,
     importedHevy: 0,
+    importedHevyWeights: 0,
     linked: 0,
     skipped: 0,
     errors: [],
@@ -380,6 +356,21 @@ export async function backfillLinkedWorkouts(
         ) {
           report.importedHevy++;
         }
+      }
+    }
+    const bm = await fetchAllHevyBodyMeasurementsForBackfill();
+    if (bm.error) {
+      report.errors.push(`Hevy body_measurements: ${bm.error}`);
+    } else {
+      try {
+        report.importedHevyWeights = await importHevyWeightsIfMissing(
+          db,
+          bm.measurements,
+          now,
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        report.errors.push(`Hevy weight import: ${msg}`);
       }
     }
   }
@@ -422,6 +413,7 @@ export async function backfillLinkedWorkouts(
     hevyWorkoutsFetched,
     importedStrava: report.importedStrava,
     importedHevy: report.importedHevy,
+    importedHevyWeights: report.importedHevyWeights,
     hevyDaysIndexed: hevyByDay.size,
     stravaDaysIndexed: stravaByDay.size,
   });
@@ -432,8 +424,7 @@ export async function backfillLinkedWorkouts(
     if (!KINDS.has(p.kind)) {
       continue;
     }
-    const dk = localDayKeyFromIso(p.scheduledAt);
-    const key = `${dk}:${p.kind}`;
+    const key = `${p.dayKey}:${p.kind}`;
     unlinkedCountByDayKind.set(key, (unlinkedCountByDayKind.get(key) ?? 0) + 1);
   }
 
@@ -447,20 +438,20 @@ export async function backfillLinkedWorkouts(
       continue;
     }
 
-    const { startMs, endMs } = dayBoundsLocalFromScheduledAt(plan.scheduledAt);
-    const scheduledMs = new Date(plan.scheduledAt).getTime();
+    const { startMs, endMs } = dayBoundsLocalFromDayKey(plan.dayKey);
+    const scheduledMs = scheduledMsAnchorFromDayKey(plan.dayKey);
 
     console.log(LOG, "plan", {
       id: plan.id,
       kind: plan.kind,
-      scheduledAt: plan.scheduledAt,
+      dayKey: plan.dayKey,
       dayWindow: {
         start: new Date(startMs).toISOString(),
         end: new Date(endMs).toISOString(),
       },
     });
 
-    const dayKey = localDayKeyFromIso(plan.scheduledAt);
+    const dayKey = plan.dayKey;
     const dayKindKey = `${dayKey}:${plan.kind}`;
     if ((unlinkedCountByDayKind.get(dayKindKey) ?? 0) > 1) {
       report.skipped++;
@@ -520,7 +511,7 @@ export async function backfillLinkedWorkouts(
         }
         const link = { vendor: "hevy" as const, externalId: best.id.trim() };
         const payload = linkedSessionFromHevyWorkout(best);
-        const completedId = await findOrCreateCompletedWorkoutId(
+        const { id: completedId } = await findOrCreateCompletedWorkoutId(
           db,
           link,
           payload,
@@ -528,7 +519,7 @@ export async function backfillLinkedWorkouts(
           {
             hevyWorkout: best,
             planKind: plan.kind,
-            scheduledAtIso: new Date(plan.scheduledAt).toISOString(),
+            scheduledAtIso: noonIsoFromDayKey(plan.dayKey),
           },
         );
         await db
@@ -587,7 +578,7 @@ export async function backfillLinkedWorkouts(
       const id = String(best.id);
       const link = { vendor: "strava" as const, externalId: id };
       const payload = linkedSessionFromStravaActivity(best);
-      const completedId = await findOrCreateCompletedWorkoutId(
+      const { id: completedId } = await findOrCreateCompletedWorkoutId(
         db,
         link,
         payload,
@@ -595,7 +586,7 @@ export async function backfillLinkedWorkouts(
         {
           stravaActivity: best,
           planKind: plan.kind,
-          scheduledAtIso: new Date(plan.scheduledAt).toISOString(),
+          scheduledAtIso: noonIsoFromDayKey(plan.dayKey),
         },
       );
       await db
@@ -623,6 +614,7 @@ export async function backfillLinkedWorkouts(
   console.log(LOG, "backfill done", {
     importedStrava: report.importedStrava,
     importedHevy: report.importedHevy,
+    importedHevyWeights: report.importedHevyWeights,
     linked: report.linked,
     skipped: report.skipped,
     errorLines: report.errors.length,

@@ -58,7 +58,8 @@ export type NewCompletedWorkout = typeof completedWorkouts.$inferInsert;
 export const plannedWorkouts = sqliteTable("planned_workouts", {
   id: text("id").primaryKey(),
   kind: text("kind").notNull().$type<PlanKind>(),
-  scheduledAt: text("scheduled_at").notNull(),
+  /** Calendar day `YYYY-MM-DD` from the browser (timezone-invariant intention). */
+  dayKey: text("day_key").notNull(),
   notes: text("notes"),
   status: text("status").$type<PlanStatus>().notNull().default("planned"),
   routineVendor: text("routine_vendor").$type<"strava" | "hevy">().notNull(),

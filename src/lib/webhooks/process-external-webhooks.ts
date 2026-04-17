@@ -112,9 +112,9 @@ export async function processHevyWorkoutWebhook(args: {
     now,
   );
   if (created) {
-    return { detail: "hevy: imported new calendar entry" };
+    return { detail: "hevy: imported new completed workout row" };
   }
-  return { detail: "hevy: completed workout stored / calendar unchanged" };
+  return { detail: "hevy: completed workout updated / no new row" };
 }
 
 export async function processStravaWebhookEvent(
@@ -181,11 +181,11 @@ export async function processStravaWebhookEvent(
     );
     if (imported) {
       return {
-        detail: `strava: calendar imported (${aspect})`,
+        detail: `strava: new completed workout row (${aspect})`,
       };
     }
     return {
-      detail: `strava: completed workout JSON updated; calendar unchanged (${aspect})`,
+      detail: `strava: completed workout updated; no new row (${aspect})`,
     };
   }
 

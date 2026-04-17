@@ -4,8 +4,9 @@ import {
   desc,
   eq,
   getTableColumns,
+  gte,
+  lte,
   type SQL,
-  sql,
 } from "drizzle-orm";
 import { getDb } from "~/lib/db";
 import {
@@ -36,14 +37,10 @@ function plannedWorkoutsWhere(
     parts.push(eq(plannedWorkouts.status, filters.status as PlanStatus));
   }
   if (filters.from) {
-    parts.push(
-      sql`date(${plannedWorkouts.scheduledAt}, 'localtime') >= ${filters.from}`,
-    );
+    parts.push(gte(plannedWorkouts.dayKey, filters.from));
   }
   if (filters.to) {
-    parts.push(
-      sql`date(${plannedWorkouts.scheduledAt}, 'localtime') <= ${filters.to}`,
-    );
+    parts.push(lte(plannedWorkouts.dayKey, filters.to));
   }
   if (parts.length === 0) {
     return undefined;
@@ -111,12 +108,12 @@ export async function selectPlannedWorkoutsWithCompletedPage(input: {
   const rows = whereFiltered
     ? await pageBase
         .where(whereFiltered)
-        .orderBy(desc(plannedWorkouts.scheduledAt))
+        .orderBy(desc(plannedWorkouts.dayKey))
         .limit(size)
         .offset(offset)
         .all()
     : await pageBase
-        .orderBy(desc(plannedWorkouts.scheduledAt))
+        .orderBy(desc(plannedWorkouts.dayKey))
         .limit(size)
         .offset(offset)
         .all();
@@ -145,7 +142,7 @@ export async function selectPlannedWorkoutsWithCompleted(): Promise<
       completedWorkouts,
       eq(plannedWorkouts.completedWorkoutId, completedWorkouts.id),
     )
-    .orderBy(desc(plannedWorkouts.scheduledAt))
+    .orderBy(desc(plannedWorkouts.dayKey))
     .all();
 
   return rows.map((r) => {

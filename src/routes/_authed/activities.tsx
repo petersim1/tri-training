@@ -46,21 +46,18 @@ function activitiesPlannedQueryKey(search: ActivitiesSearch) {
   ] as const;
 }
 
-function localDayKey(iso: string): string {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function formatActivityWhen(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
+/** Local display for a plan `day_key` from the browser (calendar intention). */
+function formatPlanDayKey(dayKey: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey.trim());
+  if (!m) {
+    return dayKey;
+  }
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
     month: "short",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    year: "numeric",
   });
 }
 
@@ -483,9 +480,9 @@ function ActivitiesContent() {
                       </div>
                       <span
                         className="shrink-0 text-[10px] tabular-nums text-zinc-500"
-                        title={localDayKey(p.scheduledAt)}
+                        title={p.dayKey}
                       >
-                        {formatActivityWhen(p.scheduledAt)}
+                        {formatPlanDayKey(p.dayKey)}
                       </span>
                     </div>
 

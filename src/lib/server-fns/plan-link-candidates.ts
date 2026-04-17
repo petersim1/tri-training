@@ -38,27 +38,3 @@ export const getPlanLinkCandidatesFn = createServerFn({ method: "GET" })
       excludeKeys,
     );
   });
-
-/**
- * Same candidate lists as {@link getPlanLinkCandidatesFn}, but for a chosen `kind`
- * when creating a new plan (no `planId` yet).
- */
-export const getPlanLinkCandidatesForDayFn = createServerFn({ method: "GET" })
-  .inputValidator(
-    (d: { kind: string; dayStartMs: number; dayEndMs: number }) => d,
-  )
-  .handler(async ({ data }): Promise<PlanLinkCandidatesResult> => {
-    const kinds = new Set(["lift", "run", "bike", "swim"]);
-    if (!kinds.has(data.kind)) {
-      throw new Error("Invalid kind");
-    }
-    const db = getDb();
-    const excludeKeys = await linkedSessionExcludeKeys(db);
-    return candidatesForKindAndDay(
-      db,
-      data.kind,
-      data.dayStartMs,
-      data.dayEndMs,
-      excludeKeys,
-    );
-  });

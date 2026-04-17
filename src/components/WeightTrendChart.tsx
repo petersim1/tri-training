@@ -14,14 +14,6 @@ const PAD_R = 20;
 const PAD_T = 20;
 const PAD_B = 44;
 
-const RANGE_OPTIONS: { value: SessionChartRange; label: string }[] = [
-  { value: "3m", label: "3 mo" },
-  { value: "6m", label: "6 mo" },
-  { value: "12m", label: "12 mo" },
-  { value: "ytd", label: "YTD" },
-  { value: "all", label: "All" },
-];
-
 function shortDateLabel(dayKey: string): string {
   const d = new Date(`${dayKey}T12:00:00`);
   if (Number.isNaN(d.getTime())) {
@@ -71,8 +63,8 @@ function pickYTicks(yMin: number, yMax: number): number[] {
 
 type Props = {
   entries: WeightEntryRow[];
+  /** Used for empty-state copy and accessibility (range is controlled by parent `ChartRangeToolbar`). */
   range: SessionChartRange;
-  onRangeChange: (range: SessionChartRange) => void;
   onSelectDayKey?: (dayKey: string) => void;
   selectedDayKey?: string | null;
   isLoading?: boolean;
@@ -81,7 +73,6 @@ type Props = {
 export function WeightTrendChart({
   entries,
   range,
-  onRangeChange,
   onSelectDayKey,
   selectedDayKey,
   isLoading = false,
@@ -171,37 +162,12 @@ export function WeightTrendChart({
     };
   }, [series]);
 
-  const toolbar = (
-    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-3 py-2">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-        Range
-      </span>
-      <div className="flex flex-wrap gap-2">
-        {RANGE_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onRangeChange(opt.value)}
-            className={
-              range === opt.value
-                ? "rounded-md bg-emerald-600/20 px-2 py-1 text-[11px] font-medium text-emerald-200 ring-1 ring-emerald-500/35"
-                : "rounded-md px-2 py-1 text-[11px] font-medium text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-            }
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
   if (isLoading) {
     return (
       <section
         aria-label="Weight trend chart"
         className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
       >
-        {toolbar}
         <div
           className="flex h-[240px] items-center justify-center px-4 py-6"
           aria-busy="true"
@@ -218,7 +184,6 @@ export function WeightTrendChart({
         aria-label="Weight trend chart"
         className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
       >
-        {toolbar}
         <p className="px-4 py-6 text-sm text-zinc-500">
           No weight entries in {sessionChartRangeLabel(range)}. Log weight from
           a day on the calendar, or widen the range.
@@ -236,7 +201,6 @@ export function WeightTrendChart({
   const innerH = VIEW_H - PAD_T - PAD_B;
   const n = series.length;
 
-  const ariaLabel = `${sessionChartRangeLabel(range)} · Weight trend, ${series.length} entries from ${series[0]?.dayKey} to ${series[series.length - 1]?.dayKey}`;
   const interactive = Boolean(onSelectDayKey);
 
   return (
@@ -244,15 +208,12 @@ export function WeightTrendChart({
       aria-label="Weight trend chart"
       className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
     >
-      {toolbar}
       <div className="p-4">
         <svg
           className="h-auto w-full max-w-full"
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           role="img"
-          aria-label={ariaLabel}
         >
-          <title>{ariaLabel}</title>
           <defs>
             <linearGradient id="weight-area-fill" x1="0" y1="0" x2="0" y2="1">
               <stop
@@ -318,6 +279,56 @@ export function WeightTrendChart({
             opacity={0.95}
           />
 
+          {xTicks.map((i) => {
+            const e = series[i];
+            if (!e) {
+              return null;
+            }
+            return (
+              // biome-ignore lint/a11y/noStaticElementInteractions: SVG axis label (same pattern as activity chart)
+              <text
+                key={`x-${e.id}`}
+                x={xAt(i)}
+                y={VIEW_H - 12}
+                textAnchor="middle"
+                className={
+                  interactive
+                    ? "cursor-pointer outline-none focus:outline-none fill-zinc-400/80 underline decoration-zinc-600/80 underline-offset-2 hover:fill-zinc-200"
+                    : "fill-zinc-500/70"
+                }
+                fontSize={11}
+                onPointerDown={
+                  interactive
+                    ? (ev) => {
+                        if (ev.pointerType === "mouse") {
+                          ev.preventDefault();
+                        }
+                      }
+                    : undefined
+                }
+                onClick={
+                  interactive ? () => onSelectDayKey?.(e.dayKey) : undefined
+                }
+                onKeyDown={
+                  interactive
+                    ? (ev) => {
+                        if (ev.key !== "Enter" && ev.key !== " ") {
+                          return;
+                        }
+                        ev.preventDefault();
+                        onSelectDayKey?.(e.dayKey);
+                      }
+                    : undefined
+                }
+                role={interactive ? "button" : undefined}
+                tabIndex={interactive ? 0 : undefined}
+                aria-label={`Go to ${shortDateLabel(e.dayKey)} on the calendar`}
+              >
+                {shortDateLabel(e.dayKey)}
+              </text>
+            );
+          })}
+
           {interactive && hoverIdx != null && hoverIdx >= 0 && hoverIdx < n ? (
             <line
               x1={xAt(hoverIdx)}
@@ -334,35 +345,23 @@ export function WeightTrendChart({
           {series.map((e, i) => {
             const cx = xAt(i);
             const cy = yAt(e.weightLb);
-            const r = series.length === 1 ? 5 : 4;
             const isSelected =
               selectedDayKey != null && e.dayKey === selectedDayKey;
             const isHoveredColumn =
               interactive && hoverIdx != null && hoverIdx === i;
             const isHighlighted = isSelected || isHoveredColumn;
+            const markOpacity = !interactive ? 1 : isHighlighted ? 1 : 0.28;
+            const r = 3;
             return (
-              <g key={e.id}>
-                {isSelected ? (
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={r + 5}
-                    fill="none"
-                    stroke="rgb(56 189 248)"
-                    strokeWidth={2}
-                    strokeOpacity={0.85}
-                    pointerEvents="none"
-                  />
-                ) : null}
+              <g key={e.id} opacity={markOpacity}>
                 <circle
                   cx={cx}
                   cy={cy}
-                  r={r}
-                  fill="rgb(16 185 129)"
-                  stroke={isSelected ? "rgb(56 189 248)" : "rgb(24 24 27)"}
-                  strokeWidth={isSelected ? 2 : 1}
+                  r={isHighlighted ? r + 0.75 : r}
+                  fill="rgb(24 24 27)"
+                  stroke="rgb(244 244 245)"
+                  strokeWidth={1}
                   pointerEvents="none"
-                  opacity={interactive && !isHighlighted ? 0.28 : 1}
                 >
                   {!interactive ? (
                     <title>
@@ -403,56 +402,6 @@ export function WeightTrendChart({
                 );
               })()
             : null}
-
-          {xTicks.map((i) => {
-            const e = series[i];
-            if (!e) {
-              return null;
-            }
-            return (
-              // biome-ignore lint/a11y/noStaticElementInteractions: SVG axis label (same pattern as activity chart)
-              <text
-                key={`x-${e.id}`}
-                x={xAt(i)}
-                y={VIEW_H - 12}
-                textAnchor="middle"
-                className={
-                  interactive
-                    ? "cursor-pointer outline-none focus:outline-none fill-zinc-400 underline decoration-zinc-600 underline-offset-2 hover:fill-zinc-200"
-                    : "fill-zinc-500"
-                }
-                fontSize={11}
-                onPointerDown={
-                  interactive
-                    ? (ev) => {
-                        if (ev.pointerType === "mouse") {
-                          ev.preventDefault();
-                        }
-                      }
-                    : undefined
-                }
-                onClick={
-                  interactive ? () => onSelectDayKey?.(e.dayKey) : undefined
-                }
-                onKeyDown={
-                  interactive
-                    ? (ev) => {
-                        if (ev.key !== "Enter" && ev.key !== " ") {
-                          return;
-                        }
-                        ev.preventDefault();
-                        onSelectDayKey?.(e.dayKey);
-                      }
-                    : undefined
-                }
-                role={interactive ? "button" : undefined}
-                tabIndex={interactive ? 0 : undefined}
-                aria-label={`Go to ${shortDateLabel(e.dayKey)} on the calendar`}
-              >
-                {shortDateLabel(e.dayKey)}
-              </text>
-            );
-          })}
 
           {interactive && onSelectDayKey ? (
             // biome-ignore lint/a11y/noStaticElementInteractions: chart scrubber

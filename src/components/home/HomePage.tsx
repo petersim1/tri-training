@@ -15,6 +15,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { ActivityMetricsChart } from "~/components/ActivityMetricsChart";
+import { ChartRangeToolbar } from "~/components/ChartRangeToolbar";
 import { LinkedSessionPanel } from "~/components/LinkedSessionPanel";
 import { PlanCardioTargetsField } from "~/components/PlanCardioTargetsField";
 import { PlanNotesField } from "~/components/PlanNotesField";
@@ -67,10 +68,7 @@ import {
   setCalendarScopeFn,
   setSessionChartSettingsFn,
 } from "~/lib/server-fns/home";
-import {
-  getPlanLinkCandidatesFn,
-  getPlanLinkCandidatesForDayFn,
-} from "~/lib/server-fns/plan-link-candidates";
+import { getPlanLinkCandidatesFn } from "~/lib/server-fns/plan-link-candidates";
 import { listAllPlannedWorkoutsFn } from "~/lib/server-fns/planned-workouts-list";
 import {
   createPlanFn,
@@ -96,14 +94,6 @@ const CAL_DAY_DOT_UNLINKED = `${CAL_DAY_DOT_BASE} bg-violet-400`;
 
 /** Month grid: day + weight row + activity icons (desktop wide viewport). */
 const CAL_DAY_CELL_MONTH_WIDE_CLASS = "h-18";
-
-function localDayKey(iso: string): string {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 /** Calendar cell `key` format — matches `day_key` / chart `YYYY-MM-DD`. */
 function dayKeyFromParts(y: number, m0: number, day: number): string {
@@ -181,6 +171,43 @@ function updatePlanPayloadForCompletedLink(
   };
 }
 
+/** New plan row + link to an existing `completed_workouts` row (same payload shape as add-from-activity). */
+function createPlanFromActivityPayloadForCompleted(
+  cw: CompletedWorkoutRow,
+  kind: "lift" | "run" | "bike" | "swim",
+  dayKey: string,
+): {
+  kind: string;
+  dayKey: string;
+  stravaActivityId?: string | null;
+  hevyWorkoutId?: string | null;
+  linkedSession: LinkedSessionPayload;
+  notes?: string | null;
+  routineId?: string | null;
+} {
+  const linkedSession = linkedSessionFromCompletedRow(cw);
+  if (cw.vendor === "strava") {
+    return {
+      kind,
+      dayKey,
+      stravaActivityId: cw.vendorId,
+      hevyWorkoutId: "",
+      linkedSession,
+      notes: null,
+      routineId: null,
+    };
+  }
+  return {
+    kind,
+    dayKey,
+    stravaActivityId: "",
+    hevyWorkoutId: cw.vendorId,
+    linkedSession,
+    notes: null,
+    routineId: null,
+  };
+}
+
 function formatSessionTime(iso: string | undefined) {
   if (!iso) {
     return "";
@@ -202,16 +229,13 @@ function plansByDayKey(
 ): Map<string, PlannedWorkoutWithCompleted[]> {
   const m = new Map<string, PlannedWorkoutWithCompleted[]>();
   for (const p of plans) {
-    const k = localDayKey(p.scheduledAt);
+    const k = p.dayKey;
     const list = m.get(k) ?? [];
     list.push(p);
     m.set(k, list);
   }
   for (const [, list] of m) {
-    list.sort(
-      (a, b) =>
-        new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime(),
-    );
+    list.sort((a, b) => a.id.localeCompare(b.id));
   }
   return m;
 }
@@ -908,12 +932,7 @@ function HomeCalendarDayBlock({
 
 type SelectedDay = { y: number; m: number; d: number };
 
-type DayModalScreen = "summary" | "addPlan" | "addFromActivity" | "planLink";
-
-/** Plan scheduled time for this calendar day (local noon); no separate date UI. */
-function scheduledAtIsoForDay(y: number, m0: number, d: number): string {
-  return new Date(y, m0, d, 12, 0, 0, 0).toISOString();
-}
+type DayModalScreen = "summary" | "addPlan" | "planLink";
 
 function parseFormOptionalFloat(v: FormDataEntryValue | null): number | null {
   if (v === null || v === "") {
@@ -1083,8 +1102,6 @@ export function Home() {
   const [linkingCompletedWorkoutId, setLinkingCompletedWorkoutId] = useState<
     string | null
   >(null);
-  /** Notes field on "Add from activity" screen. */
-  const [retroActivityNotes, setRetroActivityNotes] = useState("");
   /** Set from weight / session chart: which calendar day is emphasized (modal not opened). */
   const [highlightedDayKey, setHighlightedDayKey] = useState<string | null>(
     null,
@@ -1145,11 +1162,7 @@ export function Home() {
       if (e.key !== "Escape") {
         return;
       }
-      if (
-        dayModalScreen === "addPlan" ||
-        dayModalScreen === "planLink" ||
-        dayModalScreen === "addFromActivity"
-      ) {
+      if (dayModalScreen === "addPlan" || dayModalScreen === "planLink") {
         setDayModalScreen("summary");
         setPlanErr(null);
         setLinkPlanId(null);
@@ -1264,7 +1277,6 @@ export function Home() {
   function closeWeightDialog() {
     setSelectedDay(null);
     setHighlightedDayKey(null);
-    setRetroActivityNotes("");
     setDayModalScreen("summary");
     setLinkPlanId(null);
     setPlanLinkRoutineDraftId(null);
@@ -1283,20 +1295,6 @@ export function Home() {
     setDayModalScreen("addPlan");
   }
 
-  function openAddFromActivityForKind(kind: "lift" | "run" | "bike" | "swim") {
-    if (selectedDay) {
-      const key = dayKeyFromParts(selectedDay.y, selectedDay.m, selectedDay.d);
-      if (isLocalDayKeyInFuture(key)) {
-        return;
-      }
-    }
-    setPlanKind(kind);
-    setLiftRoutineId(null);
-    setPlanErr(null);
-    setRetroActivityNotes("");
-    setDayModalScreen("addFromActivity");
-  }
-
   function backToDaySummary() {
     setDayModalScreen("summary");
     setPlanErr(null);
@@ -1306,13 +1304,12 @@ export function Home() {
     setLinkingCompletedWorkoutId(null);
     setPlanKind("");
     setLiftRoutineId(null);
-    setRetroActivityNotes("");
   }
 
   const createPlanMutation = useMutation({
     mutationFn: (data: {
       kind: string;
-      scheduledAt: string;
+      dayKey: string;
       notes?: string | null;
       routineId?: string | null;
       distance?: number | null;
@@ -1331,7 +1328,7 @@ export function Home() {
   const createPlanFromActivityMutation = useMutation({
     mutationFn: (data: {
       kind: string;
-      scheduledAt: string;
+      dayKey: string;
       stravaActivityId?: string | null;
       hevyWorkoutId?: string | null;
       linkedSession: LinkedSessionPayload;
@@ -1383,7 +1380,7 @@ export function Home() {
     mutationFn: (data: {
       id: string;
       notes?: string | null;
-      scheduledAt?: string;
+      dayKey?: string;
       status?: string;
       stravaActivityId?: string | null;
       hevyWorkoutId?: string | null;
@@ -1550,32 +1547,6 @@ export function Home() {
       !linkPlan?.completedWorkoutId,
   });
 
-  const addFromActivityCandidatesQuery = useQuery({
-    queryKey: [
-      "planLinkCandidatesForDay",
-      planKind,
-      dayLinkBounds?.dayStartMs,
-      dayLinkBounds?.dayEndMs,
-    ] as const,
-    queryFn: async () => {
-      if (!dayLinkBounds || !planKind) {
-        throw new Error("Missing bounds or kind");
-      }
-      return getPlanLinkCandidatesForDayFn({
-        data: {
-          kind: planKind,
-          dayStartMs: dayLinkBounds.dayStartMs,
-          dayEndMs: dayLinkBounds.dayEndMs,
-        },
-      });
-    },
-    enabled:
-      dayModalScreen === "addFromActivity" &&
-      Boolean(dayLinkBounds) &&
-      planKind !== "" &&
-      ["lift", "run", "bike", "swim"].includes(planKind),
-  });
-
   return (
     <div className="space-y-8">
       <section ref={calendarSectionRef} className="space-y-2 scroll-mt-4">
@@ -1731,8 +1702,11 @@ export function Home() {
         )}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium text-zinc-100">Session trends</h2>
+      <section className="flex flex-col gap-2">
+        <ChartRangeToolbar
+          range={sessionChartSettings.range}
+          onRangeChange={(r) => patchSessionChartMutation.mutate({ range: r })}
+        />
         <ActivityMetricsChart
           kind={activityPlotKind}
           onKindChange={setActivityPlotKind}
@@ -1745,14 +1719,9 @@ export function Home() {
           selectedDayKey={dialogDayKey ?? highlightedDayKey}
           isLoading={plansQuery.isLoading}
         />
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium text-zinc-100">Weight</h2>
         <WeightTrendChart
           entries={weightEntriesInRange}
           range={sessionChartSettings.range}
-          onRangeChange={(r) => patchSessionChartMutation.mutate({ range: r })}
           onSelectDayKey={openDayFromDayKey}
           selectedDayKey={dialogDayKey ?? highlightedDayKey}
           isLoading={weightQuery.isLoading}
@@ -1988,12 +1957,36 @@ export function Home() {
                                       !isLocalDayKeyInFuture(dialogDayKey) ? (
                                       <button
                                         type="button"
-                                        onClick={() =>
-                                          openAddFromActivityForKind(pk)
+                                        disabled={
+                                          createPlanFromActivityMutation.isPending &&
+                                          linkingCompletedWorkoutId === cw.id
                                         }
-                                        className="rounded border border-violet-500/60 bg-violet-950/40 px-2.5 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-950/70"
+                                        onClick={() => {
+                                          if (!dialogDayKey) {
+                                            return;
+                                          }
+                                          setPlanErr(null);
+                                          setLinkingCompletedWorkoutId(cw.id);
+                                          createPlanFromActivityMutation.mutate(
+                                            createPlanFromActivityPayloadForCompleted(
+                                              cw,
+                                              pk,
+                                              dialogDayKey,
+                                            ),
+                                            {
+                                              onSettled: () =>
+                                                setLinkingCompletedWorkoutId(
+                                                  null,
+                                                ),
+                                            },
+                                          );
+                                        }}
+                                        className="rounded border border-violet-500/60 bg-violet-950/40 px-2.5 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-950/70 disabled:cursor-not-allowed disabled:opacity-50"
                                       >
-                                        Link unplanned activity?
+                                        {createPlanFromActivityMutation.isPending &&
+                                        linkingCompletedWorkoutId === cw.id
+                                          ? "Linking…"
+                                          : "Link unplanned activity?"}
                                       </button>
                                     ) : (
                                       <p className="text-xs text-zinc-500">
@@ -2142,7 +2135,7 @@ export function Home() {
                         setPlanErr("Choose a type.");
                         return;
                       }
-                      const scheduledAt = scheduledAtIsoForDay(
+                      const dayKey = dayKeyFromParts(
                         selectedDay.y,
                         selectedDay.m,
                         selectedDay.d,
@@ -2173,7 +2166,7 @@ export function Home() {
                         : null;
                       createPlanMutation.mutate({
                         kind: planKind,
-                        scheduledAt,
+                        dayKey,
                         notes,
                         routineId,
                         distance,
@@ -2277,223 +2270,6 @@ export function Home() {
                         : "Create plan"}
                     </button>
                   </form>
-                ) : null}
-              </>
-            ) : dayModalScreen === "addFromActivity" ? (
-              <>
-                <div className="mb-4 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={backToDaySummary}
-                    className="shrink-0 rounded border border-zinc-600 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
-                  >
-                    Back
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <h2
-                      id="day-dialog-title"
-                      className="text-lg font-semibold text-zinc-100"
-                    >
-                      Add from activity
-                    </h2>
-                    <p className="truncate text-sm text-zinc-400">
-                      {dialogTitle}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={closeWeightDialog}
-                    className="shrink-0 rounded px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-                  >
-                    Close
-                  </button>
-                </div>
-
-                <p className="mb-3 text-sm leading-snug text-zinc-500">
-                  Creates a completed plan linked to a Strava or Hevy session
-                  for this day — for workouts you did without planning ahead.
-                </p>
-
-                {dialogDayKey !== null && selectedDay !== null ? (
-                  <div className="space-y-4">
-                    <label className="block space-y-1">
-                      <span className="text-sm text-zinc-400">Type</span>
-                      <select
-                        value={planKind}
-                        onChange={(ev) => setPlanKind(ev.target.value)}
-                        className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100"
-                      >
-                        <option value="">Select type</option>
-                        <option value="lift">Lift (Hevy)</option>
-                        <option value="run">Run (Strava)</option>
-                        <option value="bike">Bike (Strava)</option>
-                        <option value="swim">Swim (Strava)</option>
-                      </select>
-                    </label>
-                    <label className="block space-y-1">
-                      <span className="text-sm text-zinc-400">Notes</span>
-                      <textarea
-                        value={retroActivityNotes}
-                        onChange={(e) => setRetroActivityNotes(e.target.value)}
-                        rows={2}
-                        placeholder="Optional"
-                        className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600"
-                      />
-                    </label>
-                    {planErr ? (
-                      <p className="text-sm text-red-400">{planErr}</p>
-                    ) : null}
-
-                    {planKind === "" ? (
-                      <p className="text-xs text-zinc-600">
-                        Choose a type to load sessions for this day.
-                      </p>
-                    ) : addFromActivityCandidatesQuery.isLoading ? (
-                      <p className="text-xs text-zinc-500">Loading sessions…</p>
-                    ) : addFromActivityCandidatesQuery.isError ? (
-                      <p className="text-xs text-red-400">
-                        Could not load sessions.
-                      </p>
-                    ) : planKind === "lift" ? (
-                      <div className="space-y-2">
-                        {addFromActivityCandidatesQuery.data?.hevyError ? (
-                          <p className="text-[11px] text-amber-400/90">
-                            Hevy:{" "}
-                            {addFromActivityCandidatesQuery.data.hevyError}
-                          </p>
-                        ) : null}
-                        {(addFromActivityCandidatesQuery.data?.hevy ?? [])
-                          .length === 0 ? (
-                          <p className="text-xs text-zinc-600">
-                            No Hevy workouts for this day, or all are linked
-                            already.
-                          </p>
-                        ) : (
-                          <ul className="max-h-44 space-y-1 overflow-y-auto pr-0.5">
-                            {[
-                              ...(addFromActivityCandidatesQuery.data?.hevy ??
-                                []),
-                            ]
-                              .sort(
-                                (a, b) =>
-                                  new Date(b.start_time ?? 0).getTime() -
-                                  new Date(a.start_time ?? 0).getTime(),
-                              )
-                              .map((w) => (
-                                <li key={w.id ?? ""}>
-                                  <button
-                                    type="button"
-                                    disabled={
-                                      !w.id ||
-                                      createPlanFromActivityMutation.isPending
-                                    }
-                                    onClick={() => {
-                                      if (!w.id || !selectedDay) {
-                                        return;
-                                      }
-                                      setPlanErr(null);
-                                      const scheduledAt = scheduledAtIsoForDay(
-                                        selectedDay.y,
-                                        selectedDay.m,
-                                        selectedDay.d,
-                                      );
-                                      createPlanFromActivityMutation.mutate({
-                                        kind: "lift",
-                                        scheduledAt,
-                                        stravaActivityId: "",
-                                        hevyWorkoutId: w.id,
-                                        linkedSession:
-                                          linkedSessionFromHevyWorkout(w),
-                                        notes:
-                                          retroActivityNotes.trim() || null,
-                                        routineId: null,
-                                      });
-                                    }}
-                                    className="w-full rounded border border-zinc-800/90 bg-zinc-950/80 px-2 py-1 text-left text-[11px] leading-snug text-zinc-200 hover:border-zinc-600 disabled:opacity-50"
-                                  >
-                                    <div className="font-medium text-zinc-100">
-                                      {w.title ?? "Workout"}
-                                    </div>
-                                    <div className="text-[10px] text-zinc-500">
-                                      {formatSessionTime(w.start_time)}
-                                    </div>
-                                  </button>
-                                </li>
-                              ))}
-                          </ul>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {addFromActivityCandidatesQuery.data?.stravaError ? (
-                          <p className="text-[11px] text-amber-400/90">
-                            Strava:{" "}
-                            {addFromActivityCandidatesQuery.data.stravaError}
-                          </p>
-                        ) : null}
-                        {(addFromActivityCandidatesQuery.data?.strava ?? [])
-                          .length === 0 ? (
-                          <p className="text-xs text-zinc-600">
-                            No Strava activities for this day, or all are linked
-                            already.
-                          </p>
-                        ) : (
-                          <ul className="max-h-44 space-y-1 overflow-y-auto pr-0.5">
-                            {[
-                              ...(addFromActivityCandidatesQuery.data?.strava ??
-                                []),
-                            ]
-                              .sort(
-                                (a, b) =>
-                                  new Date(b.start_date).getTime() -
-                                  new Date(a.start_date).getTime(),
-                              )
-                              .map((a) => (
-                                <li key={a.id}>
-                                  <button
-                                    type="button"
-                                    disabled={
-                                      createPlanFromActivityMutation.isPending
-                                    }
-                                    onClick={() => {
-                                      if (!selectedDay) {
-                                        return;
-                                      }
-                                      setPlanErr(null);
-                                      const scheduledAt = scheduledAtIsoForDay(
-                                        selectedDay.y,
-                                        selectedDay.m,
-                                        selectedDay.d,
-                                      );
-                                      createPlanFromActivityMutation.mutate({
-                                        kind: planKind,
-                                        scheduledAt,
-                                        stravaActivityId: String(a.id),
-                                        hevyWorkoutId: "",
-                                        linkedSession:
-                                          linkedSessionFromStravaActivity(a),
-                                        notes:
-                                          retroActivityNotes.trim() || null,
-                                        routineId: null,
-                                      });
-                                    }}
-                                    className="w-full rounded border border-zinc-800/90 bg-zinc-950/80 px-2 py-1 text-left text-[11px] leading-snug text-zinc-200 hover:border-zinc-600 disabled:opacity-50"
-                                  >
-                                    <div className="font-medium text-zinc-100">
-                                      {a.name}
-                                    </div>
-                                    <div className="text-[10px] text-zinc-500">
-                                      {a.sport_type} ·{" "}
-                                      {formatSessionTime(a.start_date)}
-                                    </div>
-                                  </button>
-                                </li>
-                              ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
-                  </div>
                 ) : null}
               </>
             ) : (

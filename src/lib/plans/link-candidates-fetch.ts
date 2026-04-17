@@ -20,6 +20,8 @@ const LOG = "[backfill-links]";
 
 /** Hevy `GET /v1/workouts`: `pageSize` max 10 per [API docs](https://api.hevyapp.com/docs/#/Workouts/get_v1_workouts). */
 const HEVY_PAGE_SIZE = 10;
+/** Hevy `GET /v1/body_measurements` — same pagination shape as workouts. */
+const HEVY_BODY_MEASUREMENTS_PAGE_SIZE = 10;
 /** Strava allows up to 200 per page; paginate within the `after`/`before` window. */
 const STRAVA_PER_PAGE = 200;
 /** Safety cap if the API keeps returning full pages (should never hit in practice). */
@@ -76,6 +78,18 @@ export type PlanLinkCandidatesResult = {
 
 type HevyWorkoutsPageJson = {
   workouts?: HevyWorkoutSummary[];
+  page_count?: number;
+  pageCount?: number;
+};
+
+/** `GET /v1/body_measurements` row (only `weight_kg` used for backfill). */
+export type HevyBodyMeasurementRow = {
+  date: string;
+  weight_kg?: number | null;
+};
+
+type HevyBodyMeasurementsPageJson = {
+  body_measurements?: HevyBodyMeasurementRow[];
   page_count?: number;
   pageCount?: number;
 };
@@ -143,6 +157,70 @@ export async function fetchAllHevyWorkoutsForBackfill(): Promise<{
     const msg = e instanceof Error ? e.message : "Hevy request failed";
     console.warn(LOG, "Hevy full history load failed", msg);
     return { workouts: [], error: msg };
+  }
+}
+
+async function forEachHevyBodyMeasurementsPage(
+  onPage: (
+    batch: HevyBodyMeasurementRow[],
+    meta: { page: number; declaredPages: number },
+  ) => void,
+): Promise<{ pagesFetched: number }> {
+  let page = 1;
+  let pagesFetched = 0;
+  while (page <= HEVY_MAX_PAGES) {
+    let data: HevyBodyMeasurementsPageJson;
+    try {
+      data = await hevyFetch<HevyBodyMeasurementsPageJson>(
+        `/body_measurements?page=${page}&pageSize=${HEVY_BODY_MEASUREMENTS_PAGE_SIZE}`,
+      );
+    } catch {
+      break;
+    }
+    const batch = data.body_measurements ?? [];
+    const declaredPages = Math.max(1, data.page_count ?? data.pageCount ?? 1);
+    pagesFetched++;
+    onPage(batch, { page, declaredPages });
+    if (batch.length === 0) {
+      break;
+    }
+    if (page < declaredPages) {
+      page++;
+      continue;
+    }
+    if (batch.length < HEVY_BODY_MEASUREMENTS_PAGE_SIZE) {
+      break;
+    }
+    page++;
+  }
+  return { pagesFetched };
+}
+
+/**
+ * Full Hevy body-measurement history (all pages). Used to backfill `weight_entries` from `weight_kg`.
+ */
+export async function fetchAllHevyBodyMeasurementsForBackfill(): Promise<{
+  measurements: HevyBodyMeasurementRow[];
+  error?: string;
+}> {
+  const all: HevyBodyMeasurementRow[] = [];
+  try {
+    const { pagesFetched } = await forEachHevyBodyMeasurementsPage((batch) => {
+      for (const row of batch) {
+        all.push(row);
+      }
+    });
+    console.log(LOG, "Hevy body_measurements load (backfill)", {
+      totalRows: all.length,
+      pagesFetched,
+      pageSize: HEVY_BODY_MEASUREMENTS_PAGE_SIZE,
+    });
+    return { measurements: all };
+  } catch (e) {
+    const msg =
+      e instanceof Error ? e.message : "Hevy body_measurements failed";
+    console.warn(LOG, "Hevy body_measurements load failed", msg);
+    return { measurements: [], error: msg };
   }
 }
 

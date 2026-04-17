@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_authed/settings")({
 
 function SettingsPage() {
   const { strava } = Route.useLoaderData();
+  const queryClient = useQueryClient();
   const router = useRouter();
   const [stravaOAuthMsg, setStravaOAuthMsg] = useState<string | null>(null);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
@@ -29,12 +30,13 @@ function SettingsPage() {
     },
     onSuccess: (r) => {
       setBackfillMsg(
-        `Imported Strava ${r.importedStrava}, Hevy ${r.importedHevy}. Linked ${r.linked}, skipped ${r.skipped}.${r.errors.length > 0 ? ` ${r.errors.length} error(s) — see below.` : ""}`,
+        `Imported Strava ${r.importedStrava}, Hevy ${r.importedHevy}, Hevy weights ${r.importedHevyWeights}. Linked ${r.linked}, skipped ${r.skipped}.${r.errors.length > 0 ? ` ${r.errors.length} error(s) — see below.` : ""}`,
       );
       if (r.errors.length > 0) {
         setBackfillErr(r.errors.join("\n"));
       }
       router.invalidate();
+      queryClient.clear();
     },
     onError: (e) => {
       setBackfillErr(e instanceof Error ? e.message : String(e));

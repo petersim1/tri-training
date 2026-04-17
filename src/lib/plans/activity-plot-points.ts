@@ -16,14 +16,6 @@ export type ActivityPlotPoint = {
   timeMin: number | null;
 };
 
-function localDayKey(iso: string): string {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function metricsForPlan(
   p: PlannedWorkoutWithCompleted,
   kind: ActivityPlotKind,
@@ -129,7 +121,7 @@ export function buildActivityPlotPoints(
       if (p.kind !== kind) {
         return false;
       }
-      const dk = localDayKey(p.scheduledAt);
+      const dk = p.dayKey;
       if (from && dk < from) {
         return false;
       }
@@ -146,7 +138,7 @@ export function buildActivityPlotPoints(
         }
         return {
           id: p.id,
-          dayKey: localDayKey(p.scheduledAt),
+          dayKey: p.dayKey,
           distanceKm: null,
           timeMin,
         };
@@ -159,7 +151,7 @@ export function buildActivityPlotPoints(
       }
       return {
         id: p.id,
-        dayKey: localDayKey(p.scheduledAt),
+        dayKey: p.dayKey,
         distanceKm,
         timeMin,
       };

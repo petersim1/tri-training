@@ -10,7 +10,7 @@ const KINDS = new Set(["all", "lift", "run", "bike", "swim"]);
 const STATUSES = new Set(["all", "planned", "completed", "skipped"]);
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
-/** All planned workouts, newest scheduled first — home calendar and other full-list callers. */
+/** All planned workouts, newest `day_key` first — home calendar and other full-list callers. */
 export const listAllPlannedWorkoutsFn = createServerFn({
   method: "GET",
 }).handler(async (): Promise<PlannedWorkoutWithCompleted[]> => {
