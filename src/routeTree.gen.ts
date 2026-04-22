@@ -17,6 +17,7 @@ import { Route as AuthedActivitiesRouteImport } from './routes/_authed/activitie
 import { Route as ApiWebhooksStravaRouteImport } from './routes/api/webhooks/strava'
 import { Route as ApiWebhooksHevyRouteImport } from './routes/api/webhooks/hevy'
 import { Route as ApiStravaCallbackRouteImport } from './routes/api/strava/callback'
+import { Route as ApiPlannedWorkoutsBulkRouteImport } from './routes/api/planned-workouts/bulk'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -57,12 +58,18 @@ const ApiStravaCallbackRoute = ApiStravaCallbackRouteImport.update({
   path: '/api/strava/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPlannedWorkoutsBulkRoute = ApiPlannedWorkoutsBulkRouteImport.update({
+  id: '/api/planned-workouts/bulk',
+  path: '/api/planned-workouts/bulk',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/login': typeof LoginRoute
   '/activities': typeof AuthedActivitiesRoute
   '/settings': typeof AuthedSettingsRoute
+  '/api/planned-workouts/bulk': typeof ApiPlannedWorkoutsBulkRoute
   '/api/strava/callback': typeof ApiStravaCallbackRoute
   '/api/webhooks/hevy': typeof ApiWebhooksHevyRoute
   '/api/webhooks/strava': typeof ApiWebhooksStravaRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByTo {
   '/activities': typeof AuthedActivitiesRoute
   '/settings': typeof AuthedSettingsRoute
   '/': typeof AuthedIndexRoute
+  '/api/planned-workouts/bulk': typeof ApiPlannedWorkoutsBulkRoute
   '/api/strava/callback': typeof ApiStravaCallbackRoute
   '/api/webhooks/hevy': typeof ApiWebhooksHevyRoute
   '/api/webhooks/strava': typeof ApiWebhooksStravaRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   '/_authed/activities': typeof AuthedActivitiesRoute
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/': typeof AuthedIndexRoute
+  '/api/planned-workouts/bulk': typeof ApiPlannedWorkoutsBulkRoute
   '/api/strava/callback': typeof ApiStravaCallbackRoute
   '/api/webhooks/hevy': typeof ApiWebhooksHevyRoute
   '/api/webhooks/strava': typeof ApiWebhooksStravaRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/activities'
     | '/settings'
+    | '/api/planned-workouts/bulk'
     | '/api/strava/callback'
     | '/api/webhooks/hevy'
     | '/api/webhooks/strava'
@@ -103,6 +113,7 @@ export interface FileRouteTypes {
     | '/activities'
     | '/settings'
     | '/'
+    | '/api/planned-workouts/bulk'
     | '/api/strava/callback'
     | '/api/webhooks/hevy'
     | '/api/webhooks/strava'
@@ -113,6 +124,7 @@ export interface FileRouteTypes {
     | '/_authed/activities'
     | '/_authed/settings'
     | '/_authed/'
+    | '/api/planned-workouts/bulk'
     | '/api/strava/callback'
     | '/api/webhooks/hevy'
     | '/api/webhooks/strava'
@@ -121,6 +133,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ApiPlannedWorkoutsBulkRoute: typeof ApiPlannedWorkoutsBulkRoute
   ApiStravaCallbackRoute: typeof ApiStravaCallbackRoute
   ApiWebhooksHevyRoute: typeof ApiWebhooksHevyRoute
   ApiWebhooksStravaRoute: typeof ApiWebhooksStravaRoute
@@ -184,6 +197,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStravaCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/planned-workouts/bulk': {
+      id: '/api/planned-workouts/bulk'
+      path: '/api/planned-workouts/bulk'
+      fullPath: '/api/planned-workouts/bulk'
+      preLoaderRoute: typeof ApiPlannedWorkoutsBulkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -205,6 +225,7 @@ const AuthedRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
   LoginRoute: LoginRoute,
+  ApiPlannedWorkoutsBulkRoute: ApiPlannedWorkoutsBulkRoute,
   ApiStravaCallbackRoute: ApiStravaCallbackRoute,
   ApiWebhooksHevyRoute: ApiWebhooksHevyRoute,
   ApiWebhooksStravaRoute: ApiWebhooksStravaRoute,

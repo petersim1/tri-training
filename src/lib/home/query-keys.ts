@@ -14,3 +14,9 @@ export const homeUnresolvedCompletedDayKeysQueryKey = [
 /** Day modal: unlinked sessions for one `YYYY-MM-DD` local day. */
 export const homeUnresolvedCompletedForDayQueryKey = (dayKey: string) =>
   ["completedWorkouts", "unresolvedForDay", dayKey] as const;
+
+/** Activities page: list every unlinked completed session (bulk link). */
+export const activitiesUnresolvedCompletedQueryKey = [
+  "completedWorkouts",
+  "allUnresolved",
+] as const;

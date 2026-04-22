@@ -1,10 +1,10 @@
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
-import type { CompletedWorkoutRow } from "~/lib/db/schema";
+import type { CompletedWorkoutRow, WorkoutVendor } from "~/lib/db/schema";
 import type { StravaActivitySummary } from "~/lib/strava/types";
 
 /** Sent when linking — mirrors the candidate row; server attaches existing `completed_workouts` by vendor + id. */
 export type LinkedSessionPayload = {
-  vendor: "strava" | "hevy";
+  vendor: WorkoutVendor;
   externalId: string;
   title?: string | null;
   distanceM?: number | null;

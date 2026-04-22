@@ -38,6 +38,31 @@ export function localDayKeyFromIso(iso: string): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Calendar `YYYY-MM-DD` in an IANA timezone for an ISO 8601 instant.
+ * Used when the browser sends `Intl.DateTimeFormat().resolvedOptions().timeZone`
+ * so grouping matches the user’s calendar day, not the server’s.
+ */
+export function localDayKeyFromIsoInTimeZone(
+  iso: string,
+  timeZone: string,
+): string | null {
+  try {
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) {
+      return null;
+    }
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d);
+  } catch {
+    return null;
+  }
+}
+
 function inTimeRange(iso: string | undefined, startMs: number, endMs: number) {
   if (!iso) {
     return false;

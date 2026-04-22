@@ -1,6 +1,15 @@
+/**
+ * Vendor webhooks (Strava / Hevy). This module is the **only** place that may
+ * `delete()` `completed_workouts` rows. Server fns, APIs, and imports must only
+ * unlink plans or update rows — never remove completed sessions from the DB.
+ */
 import { and, eq } from "drizzle-orm";
 import { getDb } from "~/lib/db";
-import { completedWorkouts, webhookDeliveries } from "~/lib/db/schema";
+import {
+  completedWorkouts,
+  type WorkoutVendor,
+  webhookDeliveries,
+} from "~/lib/db/schema";
 import { hevyFetchWorkoutById } from "~/lib/hevy/client";
 import {
   upsertCalendarFromHevyWorkout,
@@ -25,7 +34,7 @@ export type StravaWebhookEvent = {
 };
 
 export async function logWebhookDelivery(args: {
-  source: "hevy" | "strava";
+  source: WorkoutVendor;
   idempotencyKey?: string | null;
   payloadJson: string;
   outcome: "ok" | "ignored" | "error";
@@ -57,9 +66,12 @@ async function isStravaDuplicate(idempotencyKey: string): Promise<boolean> {
   return row != null;
 }
 
-/** Deletes `completed_workouts` row; `planned_workouts.completed_workout_id` becomes null (FK). */
+/**
+ * Hard-delete by vendor id. Called only from this file (webhook handlers).
+ * Plans are unlinked via FK `onDelete: "set null"`.
+ */
 async function deleteCompletedByVendor(
-  vendor: "hevy" | "strava",
+  vendor: WorkoutVendor,
   vendorId: string,
 ): Promise<void> {
   const db = getDb();

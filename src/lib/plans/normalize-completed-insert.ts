@@ -1,5 +1,9 @@
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
-import type { JsonValue, NewCompletedWorkout } from "~/lib/db/schema";
+import type {
+  JsonValue,
+  NewCompletedWorkout,
+  WorkoutVendor,
+} from "~/lib/db/schema";
 import {
   hevyDataFromLinkedPayload,
   hevyDataFromWorkoutSummary,
@@ -15,7 +19,7 @@ import {
 import type { StravaActivitySummary } from "~/lib/strava/types";
 
 function activityKindForInsert(
-  link: { vendor: "strava" | "hevy"; externalId: string },
+  link: { vendor: WorkoutVendor; externalId: string },
   data: JsonValue,
   opts?: {
     stravaActivity?: StravaActivitySummary;
@@ -40,7 +44,7 @@ function activityKindForInsert(
 
 /** Builds a `completed_workouts` insert row from a linked session payload (and optional vendor payloads). */
 export function normalizeCompletedInsert(
-  link: { vendor: "strava" | "hevy"; externalId: string },
+  link: { vendor: WorkoutVendor; externalId: string },
   p: LinkedSessionPayload,
   now: Date,
   opts?: {

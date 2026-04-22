@@ -1,5 +1,6 @@
 import {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -145,6 +146,36 @@ export async function selectPlannedWorkoutsWithCompleted(): Promise<
     .orderBy(desc(plannedWorkouts.dayKey))
     .all();
 
+  return rows.map((r) => {
+    const { cw, ...plan } = r;
+    const completedWorkout: CompletedWorkoutRow | null =
+      cw?.id != null ? cw : null;
+    return { ...plan, completedWorkout };
+  });
+}
+
+/** All rows matching list filters (no pagination), oldest day first — export / LLM feeds. */
+export async function selectPlannedWorkoutsWithCompletedFiltered(
+  filters: PlannedWorkoutsListFilters,
+): Promise<PlannedWorkoutWithCompleted[]> {
+  const whereFiltered = plannedWorkoutsWhere(filters);
+  const db = getDb();
+  const base = db
+    .select({
+      ...getTableColumns(plannedWorkouts),
+      cw: completedWorkouts,
+    })
+    .from(plannedWorkouts)
+    .leftJoin(
+      completedWorkouts,
+      eq(plannedWorkouts.completedWorkoutId, completedWorkouts.id),
+    );
+  const rows = whereFiltered
+    ? await base
+        .where(whereFiltered)
+        .orderBy(asc(plannedWorkouts.dayKey), asc(plannedWorkouts.kind))
+        .all()
+    : await base.orderBy(asc(plannedWorkouts.dayKey), asc(plannedWorkouts.kind)).all();
   return rows.map((r) => {
     const { cw, ...plan } = r;
     const completedWorkout: CompletedWorkoutRow | null =

@@ -55,13 +55,14 @@ export function PlanListSkeleton({ count = 6 }: { count?: number }) {
 
 function ActivityRowSkeleton() {
   return (
-    <li className="min-w-0 rounded-lg border border-zinc-800/90 bg-zinc-950/50 px-3 py-3 shadow-sm shadow-black/30">
-      <div className="space-y-2">
+    <li className="min-w-0 rounded-md border border-zinc-800/80 bg-zinc-950/70 px-2 py-2">
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-3 w-24 shrink-0" />
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-3 w-3 shrink-0 rounded" />
         </div>
-        <Skeleton className="h-8 w-full max-w-full" />
+        <Skeleton className="h-2.5 w-24" />
+        <Skeleton className="h-10 w-full max-w-full" />
         <Skeleton className="h-6 w-full max-w-full" />
       </div>
     </li>
@@ -72,7 +73,7 @@ export function ActivityListSkeleton({ count = 6 }: { count?: number }) {
   const keys = ROW_KEYS.slice(0, count);
   return (
     <ul
-      className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-5 md:gap-y-5"
+      className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3"
       aria-busy
       aria-label="Loading activities"
     >

@@ -8,6 +8,7 @@ import {
   type PlannedWorkoutWithCompleted,
   type PlanStatus,
   plannedWorkouts,
+  type WorkoutVendor,
 } from "~/lib/db/schema";
 import {
   CARDIO_DISTANCE_UNITS,
@@ -22,7 +23,7 @@ const SESSION_NOT_IN_DB =
 
 async function completedWorkoutIdForVendorLink(
   db: ReturnType<typeof getDb>,
-  link: { vendor: "strava" | "hevy"; externalId: string },
+  link: { vendor: WorkoutVendor; externalId: string },
 ): Promise<string | null> {
   const vid = link.externalId.trim();
   if (!vid) {
@@ -44,7 +45,7 @@ async function completedWorkoutIdForVendorLink(
 function resolveWorkoutLink(
   stravaActivityId: string | null | undefined,
   hevyWorkoutId: string | null | undefined,
-): { vendor: "strava" | "hevy"; externalId: string } | null {
+): { vendor: WorkoutVendor; externalId: string } | null {
   const s =
     stravaActivityId === undefined || stravaActivityId === null
       ? ""
@@ -143,7 +144,7 @@ export const createPlanFn = createServerFn({ method: "POST" })
     }) => d,
   )
   .handler(async ({ data }) => {
-    const kinds = new Set(["lift", "run", "bike", "swim"]);
+    const kinds = new Set(["lift", "run", "bike", "swim", "recovery"]);
     if (!kinds.has(data.kind)) {
       throw new Error("Invalid kind");
     }
@@ -208,7 +209,7 @@ export const createPlanFromActivityFn = createServerFn({ method: "POST" })
     }) => d,
   )
   .handler(async ({ data }) => {
-    const kinds = new Set(["lift", "run", "bike", "swim"]);
+    const kinds = new Set(["lift", "run", "bike", "swim", "recovery"]);
     if (!kinds.has(data.kind)) {
       throw new Error("Invalid kind");
     }
@@ -217,6 +218,9 @@ export const createPlanFromActivityFn = createServerFn({ method: "POST" })
       throw new Error("Invalid day");
     }
     const planKind = data.kind as PlanKind;
+    if (planKind === "recovery") {
+      throw new Error("Recovery plans cannot be created from an external activity");
+    }
     const link = resolveWorkoutLink(data.stravaActivityId, data.hevyWorkoutId);
     if (!link) {
       throw new Error("Choose an activity");
@@ -276,6 +280,7 @@ export const updatePlanFn = createServerFn({ method: "POST" })
       id: string;
       notes?: string | null;
       dayKey?: string;
+      kind?: string;
       status?: string;
       stravaActivityId?: string | null;
       hevyWorkoutId?: string | null;
@@ -299,6 +304,9 @@ export const updatePlanFn = createServerFn({ method: "POST" })
       throw new Error("Not found");
     }
 
+    const canEditPlanSchedule =
+      row.status === "planned" && row.completedWorkoutId == null;
+
     const updates: Partial<typeof plannedWorkouts.$inferInsert> = {
       updatedAt: now,
     };
@@ -312,7 +320,44 @@ export const updatePlanFn = createServerFn({ method: "POST" })
         if (!isValidDayKey(dk)) {
           throw new Error("Invalid day");
         }
+        if (!canEditPlanSchedule) {
+          throw new Error(
+            "Date can only be changed for planned workouts without a linked session",
+          );
+        }
         updates.dayKey = dk;
+      }
+    }
+
+    if (data.kind !== undefined && data.kind !== null) {
+      const raw = String(data.kind).trim();
+      const kinds = new Set(["lift", "run", "bike", "swim", "recovery"]);
+      if (!kinds.has(raw)) {
+        throw new Error("Invalid kind");
+      }
+      if (!canEditPlanSchedule) {
+        throw new Error(
+          "Activity type can only be changed for planned workouts without a linked session",
+        );
+      }
+      const newKind = raw as PlanKind;
+      if (newKind !== row.kind) {
+        updates.kind = newKind;
+        if (newKind === "lift") {
+          updates.routineVendor = "hevy";
+          updates.routineId = null;
+          updates.distance = null;
+          updates.distanceUnits = null;
+          updates.timeSeconds = null;
+        } else {
+          updates.routineVendor = "strava";
+          updates.routineId = null;
+          if (row.kind === "lift") {
+            updates.distance = null;
+            updates.distanceUnits = null;
+            updates.timeSeconds = null;
+          }
+        }
       }
     }
 
@@ -329,6 +374,9 @@ export const updatePlanFn = createServerFn({ method: "POST" })
         data.stravaActivityId,
         data.hevyWorkoutId,
       );
+      if (link && row.kind === "recovery") {
+        throw new Error("Recovery plans cannot link external sessions");
+      }
       const previousCompletedId = row.completedWorkoutId;
 
       if (!link) {

@@ -22,6 +22,12 @@ function isPublicPath(pathname: string): boolean {
   return false;
 }
 
+/** API routes that return 401 JSON from the handler instead of a login redirect. */
+function isApiHandlerAuthedPath(pathname: string): boolean {
+  const p = normalizePathname(pathname);
+  return p === "/api/planned-workouts/bulk";
+}
+
 /**
  * `requestMiddleware` runs for both document requests and TanStack Start server-function HTTP
  * calls. Server functions use `TSS_SERVER_FN_BASE` + id in the URL — not `/login` — so treating
@@ -52,6 +58,9 @@ export const requireSessionFnMiddleware = createMiddleware().server(
       throw redirect({ to: "/" });
     }
     if (!isAuthed && !isPublicPath(pathname)) {
+      if (isApiHandlerAuthedPath(pathname)) {
+        return next();
+      }
       throw redirect({ to: "/login" });
     }
     return next();

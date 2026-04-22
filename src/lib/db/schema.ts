@@ -15,8 +15,12 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
-/** Planned workout `kind` — cardio + lift. */
-export type PlanKind = "lift" | "run" | "bike" | "swim";
+/** Planned workout `kind` — cardio, lift, and off-day recovery (no external link). */
+export type PlanKind = "lift" | "run" | "bike" | "swim" | "recovery";
+
+/** Strava vs Hevy — `completed_workouts.vendor`, `planned_workouts.routine_vendor`, webhooks. */
+export const WORKOUT_VENDORS = ["strava", "hevy"] as const;
+export type WorkoutVendor = (typeof WORKOUT_VENDORS)[number];
 
 /** Planned workout `status`. */
 export type PlanStatus = "planned" | "completed" | "skipped";
@@ -24,12 +28,16 @@ export type PlanStatus = "planned" | "completed" | "skipped";
 /**
  * Linked session: full Strava activity or Hevy workout JSON from vendor APIs.
  * @see `~/lib/plans/completed-workout-data.ts` for field accessors.
+ *
+ * **Deletion:** Rows may be removed only from vendor webhook handlers in
+ * `~/lib/webhooks/process-external-webhooks.ts`. Nothing user-facing should
+ * delete this table.
  */
 export const completedWorkouts = sqliteTable(
   "completed_workouts",
   {
     id: text("id").primaryKey(),
-    vendor: text("vendor").$type<"strava" | "hevy">().notNull(),
+    vendor: text("vendor").$type<WorkoutVendor>().notNull(),
     /** Strava activity id or Hevy workout id (string). */
     vendorId: text("vendor_id").notNull(),
     /**
@@ -62,7 +70,7 @@ export const plannedWorkouts = sqliteTable("planned_workouts", {
   dayKey: text("day_key").notNull(),
   notes: text("notes"),
   status: text("status").$type<PlanStatus>().notNull().default("planned"),
-  routineVendor: text("routine_vendor").$type<"strava" | "hevy">().notNull(),
+  routineVendor: text("routine_vendor").$type<WorkoutVendor>().notNull(),
   routineId: text("routine_id"),
   completedWorkoutId: text("completed_workout_id").references(
     () => completedWorkouts.id,
@@ -108,7 +116,7 @@ export type ServiceStravaTokensRow = typeof serviceStravaTokens.$inferSelect;
 
 export const webhookDeliveries = sqliteTable("webhook_deliveries", {
   id: text("id").primaryKey(),
-  source: text("source").$type<"hevy" | "strava">().notNull(),
+  source: text("source").$type<WorkoutVendor>().notNull(),
   idempotencyKey: text("idempotency_key").unique(),
   payloadJson: text("payload_json"),
   outcome: text("outcome").$type<"ok" | "ignored" | "error">().notNull(),

@@ -5,6 +5,7 @@ import {
   completedWorkouts,
   plannedWorkouts,
   weightEntries,
+  type WorkoutVendor,
 } from "~/lib/db/schema";
 import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
 import {
@@ -156,12 +157,12 @@ function pickClosestByStartTime<T>(
   return best ?? items[0] ?? null;
 }
 
-const KINDS = new Set(["lift", "run", "bike", "swim"]);
+const KINDS = new Set(["lift", "run", "bike", "swim", "recovery"]);
 
 /** Reuse an existing row or insert. */
 async function findOrCreateCompletedWorkoutId(
   db: ReturnType<typeof getDb>,
-  link: { vendor: "strava" | "hevy"; externalId: string },
+  link: { vendor: WorkoutVendor; externalId: string },
   payload: LinkedSessionPayload,
   now: Date,
   opts?: {

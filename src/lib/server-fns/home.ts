@@ -3,8 +3,16 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie } from "@tanstack/react-start/server";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "~/lib/db";
-import type { CompletedWorkoutRow } from "~/lib/db/schema";
-import { completedWorkouts, weightEntries } from "~/lib/db/schema";
+import type {
+  CompletedWorkoutRow,
+  PlanKind,
+  PlannedWorkoutRow,
+} from "~/lib/db/schema";
+import {
+  completedWorkouts,
+  plannedWorkouts,
+  weightEntries,
+} from "~/lib/db/schema";
 import {
   CALENDAR_SCOPE_COOKIE,
   type CalendarScope,
@@ -22,7 +30,13 @@ import {
   type SessionChartSettings,
   serializeSessionChartSettings,
 } from "~/lib/home/session-chart-settings";
-import { completedWorkoutLocalDayKey } from "~/lib/plans/completed-workout-data";
+import {
+  completedWorkoutLocalDayKey,
+  completedWorkoutLocalDayKeyInTimeZone,
+  completedWorkoutStartIso,
+  inferPlanKindFromCompletedRow,
+} from "~/lib/plans/completed-workout-data";
+import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
 import { listAllPlannedWorkoutsFn } from "~/lib/server-fns/planned-workouts-list";
 import { fetchHevyHomeBundleFn } from "~/lib/server-fns/vendors/hevy";
 
@@ -88,6 +102,212 @@ export const fetchUnresolvedCompletedForDayFn = createServerFn({
       .all();
     return rows.filter((r) => completedWorkoutLocalDayKey(r) === data.dayKey);
   });
+
+/** Every unlinked completed session (for bulk link UI). */
+export const fetchAllUnresolvedCompletedWorkoutsFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<CompletedWorkoutRow[]> => {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(completedWorkouts)
+    .where(eq(completedWorkouts.isResolved, false))
+    .all();
+  return [...rows].sort((a, b) => {
+    const ia = completedWorkoutStartIso(a);
+    const ib = completedWorkoutStartIso(b);
+    const ta = ia ? new Date(ia).getTime() : 0;
+    const tb = ib ? new Date(ib).getTime() : 0;
+    return ta - tb;
+  });
+});
+
+function isValidIanaTimeZone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export type LinkAllUnresolvedCompletedItem =
+  | { completedWorkoutId: string; outcome: "linked"; planId: string }
+  | { completedWorkoutId: string; outcome: "skipped"; reason: string };
+
+/**
+ * Link each unresolved session using calendar day in `timeZone` + inferred plan kind:
+ * 0 plans that day for that kind → insert a completed plan row and link;
+ * 1 plan, unlinked → link it;
+ * 1 plan, already linked → skip;
+ * 2+ plans that day for that kind → skip (ambiguous).
+ */
+export const linkAllUnresolvedCompletedWorkoutsFn = createServerFn({
+  method: "POST",
+})
+  .inputValidator((d: { timeZone: string }) => d)
+  .handler(
+    async ({
+      data,
+    }): Promise<{
+      linked: number;
+      skipped: number;
+      details: LinkAllUnresolvedCompletedItem[];
+    }> => {
+      const tz = String(data.timeZone ?? "").trim();
+      if (!tz || !isValidIanaTimeZone(tz)) {
+        throw new Error("Invalid or missing time zone");
+      }
+      const db = getDb();
+      const now = new Date();
+      const unresolved = await db
+        .select()
+        .from(completedWorkouts)
+        .where(eq(completedWorkouts.isResolved, false))
+        .all();
+      const allPlans: PlannedWorkoutRow[] = await db
+        .select()
+        .from(plannedWorkouts)
+        .all();
+
+      const sorted = [...unresolved].sort((a, b) => {
+        const ia = completedWorkoutStartIso(a);
+        const ib = completedWorkoutStartIso(b);
+        const ta = ia ? new Date(ia).getTime() : 0;
+        const tb = ib ? new Date(ib).getTime() : 0;
+        return ta - tb;
+      });
+
+      const details: LinkAllUnresolvedCompletedItem[] = [];
+      let linked = 0;
+
+      for (const cw of sorted) {
+        const dayKey = completedWorkoutLocalDayKeyInTimeZone(cw, tz);
+        if (!dayKey) {
+          details.push({
+            completedWorkoutId: cw.id,
+            outcome: "skipped",
+            reason: "missing start time",
+          });
+          continue;
+        }
+        const pk = inferPlanKindFromCompletedRow(cw);
+        if (!pk) {
+          details.push({
+            completedWorkoutId: cw.id,
+            outcome: "skipped",
+            reason: "unsupported activity kind",
+          });
+          continue;
+        }
+
+        const sameDayKind = allPlans.filter(
+          (p) => p.dayKey === dayKey && p.kind === pk,
+        );
+
+        if (sameDayKind.length > 1) {
+          details.push({
+            completedWorkoutId: cw.id,
+            outcome: "skipped",
+            reason:
+              "multiple plans that day for this activity type — link manually on Home",
+          });
+          continue;
+        }
+
+        if (sameDayKind.length === 1) {
+          const plan = sameDayKind[0];
+          if (plan.completedWorkoutId != null) {
+            details.push({
+              completedWorkoutId: cw.id,
+              outcome: "skipped",
+              reason:
+                "a plan already exists that day but is linked to another session",
+            });
+            continue;
+          }
+          if (plan.status !== "planned") {
+            details.push({
+              completedWorkoutId: cw.id,
+              outcome: "skipped",
+              reason:
+                "existing plan that day is not open for linking — adjust status on Home",
+            });
+            continue;
+          }
+          await db
+            .update(plannedWorkouts)
+            .set({
+              completedWorkoutId: cw.id,
+              status: "completed",
+              updatedAt: now,
+            })
+            .where(eq(plannedWorkouts.id, plan.id))
+            .run();
+          await syncCompletedResolvedForId(db, cw.id);
+          plan.completedWorkoutId = cw.id;
+          plan.status = "completed";
+          linked++;
+          details.push({
+            completedWorkoutId: cw.id,
+            outcome: "linked",
+            planId: plan.id,
+          });
+          continue;
+        }
+
+        const planKind = pk as PlanKind;
+        const isLift = planKind === "lift";
+        const newId = crypto.randomUUID();
+        await db
+          .insert(plannedWorkouts)
+          .values({
+            id: newId,
+            kind: planKind,
+            dayKey,
+            notes: null,
+            status: "completed",
+            routineVendor: isLift ? "hevy" : "strava",
+            routineId: null,
+            completedWorkoutId: cw.id,
+            distance: null,
+            distanceUnits: null,
+            timeSeconds: null,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .run();
+        await syncCompletedResolvedForId(db, cw.id);
+        allPlans.push({
+          id: newId,
+          kind: planKind,
+          dayKey,
+          notes: null,
+          status: "completed",
+          routineVendor: isLift ? "hevy" : "strava",
+          routineId: null,
+          completedWorkoutId: cw.id,
+          distance: null,
+          distanceUnits: null,
+          timeSeconds: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        linked++;
+        details.push({
+          completedWorkoutId: cw.id,
+          outcome: "linked",
+          planId: newId,
+        });
+      }
+
+      return {
+        linked,
+        skipped: details.filter((d) => d.outcome === "skipped").length,
+        details,
+      };
+    },
+  );
 
 /**
  * Home `/` loader: cookie-backed settings (defaults if missing) + dehydrated React Query state only.

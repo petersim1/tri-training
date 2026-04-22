@@ -29,6 +29,14 @@ export const getPlanLinkCandidatesFn = createServerFn({ method: "GET" })
     if (!plan) {
       throw new Error("Plan not found");
     }
+    if (plan.kind === "recovery") {
+      return {
+        hevy: [],
+        strava: [],
+        hevyError: undefined,
+        stravaError: undefined,
+      };
+    }
     const excludeKeys = await linkedSessionExcludeKeys(db);
     return candidatesForKindAndDay(
       db,

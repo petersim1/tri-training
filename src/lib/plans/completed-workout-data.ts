@@ -1,6 +1,9 @@
 import type { HevyWorkoutSummary } from "~/lib/activities/types";
 import type { CompletedWorkoutRow, JsonValue } from "~/lib/db/schema";
-import { localDayKeyFromIso } from "~/lib/plans/link-candidates-fetch";
+import {
+  localDayKeyFromIso,
+  localDayKeyFromIsoInTimeZone,
+} from "~/lib/plans/link-candidates-fetch";
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
 import { durationSecondsFromIsoRange } from "~/lib/plans/linked-session";
 import { inferPlanKindFromStravaSport } from "~/lib/plans/strava-kind-match";
@@ -88,18 +91,33 @@ function asHevyData(data: unknown): HevyWorkoutSummary | null {
  * Stored normalized sport (`activity_kind`): Strava `sport_type` lowercased, or `lift` for Hevy.
  * Falls back to JSON for legacy rows if needed.
  */
+/** ISO start instant from stored vendor JSON (UTC timestamps from APIs). */
+export function completedWorkoutStartIso(c: CompletedWorkoutRow): string | null {
+  if (c.vendor === "strava") {
+    const a = asStravaData(c.data);
+    const iso = a?.start_date;
+    return typeof iso === "string" && iso.trim() !== "" ? iso : null;
+  }
+  const w = asHevyData(c.data);
+  const iso = w?.start_time;
+  return typeof iso === "string" && iso.trim() !== "" ? iso : null;
+}
+
 /** Local calendar day (`YYYY-MM-DD`) for this session — for calendar dots / grouping. */
 export function completedWorkoutLocalDayKey(
   c: CompletedWorkoutRow,
 ): string | null {
-  if (c.vendor === "strava") {
-    const a = asStravaData(c.data);
-    const iso = a?.start_date;
-    return iso ? localDayKeyFromIso(iso) : null;
-  }
-  const w = asHevyData(c.data);
-  const iso = w?.start_time;
+  const iso = completedWorkoutStartIso(c);
   return iso ? localDayKeyFromIso(iso) : null;
+}
+
+/** Like `completedWorkoutLocalDayKey`, but for a specific IANA timezone (e.g. from the browser). */
+export function completedWorkoutLocalDayKeyInTimeZone(
+  c: CompletedWorkoutRow,
+  timeZone: string,
+): string | null {
+  const iso = completedWorkoutStartIso(c);
+  return iso ? localDayKeyFromIsoInTimeZone(iso, timeZone) : null;
 }
 
 export function completedWorkoutActivityKind(c: CompletedWorkoutRow): string {
@@ -121,7 +139,14 @@ export function inferPlanKindFromCompletedRow(
   if (c.vendor === "hevy") {
     return "lift";
   }
-  return inferPlanKindFromStravaSport(c.activityKind);
+  const fromColumn = inferPlanKindFromStravaSport(c.activityKind);
+  if (fromColumn) {
+    return fromColumn;
+  }
+  const a = asStravaData(c.data);
+  return inferPlanKindFromStravaSport(
+    normalizeStravaSportType(a?.sport_type),
+  );
 }
 
 export function completedWorkoutTitle(c: CompletedWorkoutRow): string | null {
@@ -172,4 +197,43 @@ export function completedWorkoutCalories(
   const a = asStravaData(c.data);
   const cal = a?.calories;
   return cal != null && Number.isFinite(cal) ? cal : null;
+}
+
+/** One-line distance · duration · kcal for list UI. */
+export function formatCompletedSessionBrief(
+  c: CompletedWorkoutRow,
+): string | null {
+  const dist = completedWorkoutDistanceM(c);
+  const distLabel =
+    dist != null && Number.isFinite(dist)
+      ? dist >= 1000
+        ? `${(dist / 1000).toFixed(2)} km`
+        : `${Math.round(dist)} m`
+      : null;
+  const durSec = completedWorkoutMovingSeconds(c);
+  let dur: string | null = null;
+  if (durSec != null && Number.isFinite(durSec)) {
+    const s = Math.floor(durSec);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    dur =
+      h > 0
+        ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
+        : `${m}:${String(sec).padStart(2, "0")}`;
+  }
+  const kcalRaw = completedWorkoutCalories(c);
+  const kcal =
+    kcalRaw != null && Number.isFinite(kcalRaw) ? Math.round(kcalRaw) : null;
+  const parts: string[] = [];
+  if (distLabel) {
+    parts.push(distLabel);
+  }
+  if (dur) {
+    parts.push(dur);
+  }
+  if (kcal != null) {
+    parts.push(`${kcal} kcal`);
+  }
+  return parts.length === 0 ? null : parts.join(" · ");
 }

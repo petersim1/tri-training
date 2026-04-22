@@ -7,6 +7,7 @@ import {
 import { getRouteApi } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
+  type SVGProps,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -47,10 +48,12 @@ import {
 } from "~/lib/plans/activity-plot-points";
 import {
   CARDIO_DISTANCE_UNITS,
+  formatPlannedCardioTargets,
   isCardioKind,
 } from "~/lib/plans/cardio-targets";
 import {
   completedWorkoutTitle,
+  formatCompletedSessionBrief,
   inferPlanKindFromCompletedRow,
 } from "~/lib/plans/completed-workout-data";
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
@@ -86,10 +89,9 @@ const homeRouteApi = getRouteApi("/_authed/");
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-/** Shared size for calendar weight / unlinked dots (month + week). */
+/** Shared size for calendar unlinked-session dot (month + week). */
 const CAL_DAY_DOT_BASE =
   "inline-flex size-2 shrink-0 rounded-full ring-1 ring-inset ring-black/25";
-const CAL_DAY_DOT_WEIGHT = `${CAL_DAY_DOT_BASE} bg-amber-400`;
 const CAL_DAY_DOT_UNLINKED = `${CAL_DAY_DOT_BASE} bg-violet-400`;
 
 /** Month grid: day + weight row + activity icons (desktop wide viewport). */
@@ -673,10 +675,16 @@ function buildCalendarGridCells(
 
 type HomeCalendarDayLayout = "monthGrid" | "weekList";
 
-type PlanActivityKind = "swim" | "lift" | "run" | "bike";
+type PlanActivityKind = "swim" | "lift" | "run" | "bike" | "recovery";
 
 function normalizePlanActivityKind(kind: string): PlanActivityKind | "other" {
-  if (kind === "swim" || kind === "lift" || kind === "run" || kind === "bike") {
+  if (
+    kind === "swim" ||
+    kind === "lift" ||
+    kind === "run" ||
+    kind === "bike" ||
+    kind === "recovery"
+  ) {
     return kind;
   }
   return "other";
@@ -740,9 +748,39 @@ function PlanActivityKindIcon({ kind }: { kind: string }) {
     );
   }
 
+  if (k === "recovery") {
+    return (
+      <svg {...activityIconSvgProps}>
+        <path d="M14.5714 15.0036L15.4286 16.8486C15.4286 16.8486 19.2857 17.6678 19.2857 19.6162C19.2857 21 17.5714 21 17.5714 21H13L10.75 19.75" />
+        <path d="M9.42864 15.0036L8.5715 16.8486C8.5715 16.8486 4.71436 17.6678 4.71436 19.6162C4.71436 21 6.42864 21 6.42864 21H8.50007L10.7501 19.75L13.5001 18" />
+        <path d="M3 15.9261C3 15.9261 5.14286 15.4649 6.42857 15.0036C7.71429 8.54595 11.5714 9.00721 12 9.00721C12.4286 9.00721 16.2857 8.54595 17.5714 15.0036C18.8571 15.4649 21 15.9261 21 15.9261" />
+        <path d="M12 7C13.1046 7 14 6.10457 14 5C14 3.89543 13.1046 3 12 3C10.8954 3 10 3.89543 10 5C10 6.10457 10.8954 7 12 7Z" />
+      </svg>
+    );
+  }
+
   return (
     <svg {...activityIconSvgProps}>
       <circle cx="12" cy="12" r="3.5" />
+    </svg>
+  );
+}
+
+type WeightIconProps = SVGProps<SVGSVGElement> & { title?: string };
+
+function WeightIcon({ className, title, ...rest }: WeightIconProps) {
+  const mergedClass = ["sm:size-3 size-2 shrink-0", className]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <svg
+      {...activityIconSvgProps}
+      {...rest}
+      className={mergedClass || undefined}
+    >
+      {title ? <title>{title}</title> : null}
+      <circle cx="12" cy="5" r="3" />
+      <path d="M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z" />
     </svg>
   );
 }
@@ -857,10 +895,9 @@ function HomeCalendarDayBlock({
               {day}
             </span>
             {dayWeight ? (
-              <span
-                className={`absolute left-0.5 top-0.5 z-[4] ${CAL_DAY_DOT_WEIGHT}`}
+              <WeightIcon
+                className="pointer-events-auto absolute right-0.5 top-0.5 z-[4] text-amber-400"
                 title={`${dayWeight.weightLb.toFixed(1)} lb`}
-                aria-hidden
               />
             ) : null}
             {dayHasUnlinkedSession ? (
@@ -914,10 +951,9 @@ function HomeCalendarDayBlock({
               />
             ) : null}
             {dayWeight ? (
-              <span
-                className={CAL_DAY_DOT_WEIGHT}
+              <WeightIcon
+                className="pointer-events-auto absolute right-0.5 top-1 z-[4] text-amber-400"
                 title={`${dayWeight.weightLb.toFixed(1)} lb`}
-                aria-hidden
               />
             ) : null}
           </div>
@@ -1478,10 +1514,7 @@ export function Home() {
   );
 
   const completedPlansForDay = useMemo(
-    () =>
-      dialogPlans.filter(
-        (p) => p.status === "completed" && Boolean(p.completedWorkoutId),
-      ),
+    () => dialogPlans.filter((p) => p.status === "completed"),
     [dialogPlans],
   );
 
@@ -1544,6 +1577,7 @@ export function Home() {
       dayModalScreen === "planLink" &&
       Boolean(linkPlanId && linkPlan && dayLinkBounds) &&
       linkPlan?.status !== "skipped" &&
+      linkPlan?.kind !== "recovery" &&
       !linkPlan?.completedWorkoutId,
   });
 
@@ -1774,29 +1808,37 @@ export function Home() {
                       </p>
                     ) : (
                       <ul className="space-y-2">
-                        {plannedOrSkippedPlans.map((p) => (
-                          <li key={p.id}>
-                            <button
-                              type="button"
-                              onClick={() => openPlanLinkFromSummary(p.id)}
-                              className="block w-full rounded border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-left text-sm text-zinc-200 hover:border-zinc-600"
-                            >
-                              <span className="capitalize text-zinc-100">
-                                {p.kind}
-                              </span>
-                              <span className="text-zinc-500">
-                                {" "}
-                                · {p.status}
-                              </span>
-                              {p.status === "planned" &&
-                              (p.notes?.trim() ?? "") !== "" ? (
-                                <p className="mt-1.5 whitespace-pre-wrap text-left text-xs leading-snug text-zinc-500">
-                                  {p.notes?.trim()}
-                                </p>
-                              ) : null}
-                            </button>
-                          </li>
-                        ))}
+                        {plannedOrSkippedPlans.map((p) => {
+                          const cardioTargets = formatPlannedCardioTargets(p);
+                          return (
+                            <li key={p.id}>
+                              <button
+                                type="button"
+                                onClick={() => openPlanLinkFromSummary(p.id)}
+                                className="block w-full rounded border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-left text-sm text-zinc-200 hover:border-zinc-600"
+                              >
+                                <span className="capitalize text-zinc-100">
+                                  {p.kind}
+                                </span>
+                                <span className="text-zinc-500">
+                                  {" "}
+                                  · {p.status}
+                                </span>
+                                {cardioTargets ? (
+                                  <p className="mt-1 text-left text-xs text-zinc-500">
+                                    {cardioTargets}
+                                  </p>
+                                ) : null}
+                                {p.status === "planned" &&
+                                (p.notes?.trim() ?? "") !== "" ? (
+                                  <p className="mt-1.5 whitespace-pre-wrap text-left text-xs leading-snug text-zinc-500">
+                                    {p.notes?.trim()}
+                                  </p>
+                                ) : null}
+                              </button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </section>
@@ -1804,29 +1846,61 @@ export function Home() {
                   {completedPlansForDay.length > 0 ? (
                     <section>
                       <h3 className="mb-2 text-sm font-medium text-zinc-200">
-                        Completed (linked)
+                        Completed
                       </h3>
                       <ul className="space-y-2">
-                        {completedPlansForDay.map((p) => (
-                          <li key={p.id}>
-                            <button
-                              type="button"
-                              onClick={() => openPlanLinkFromSummary(p.id)}
-                              className="block w-full rounded border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-left text-sm text-zinc-200 hover:border-zinc-600"
-                            >
-                              <span className="capitalize text-zinc-100">
-                                {p.kind}
-                              </span>
-                              <span className="text-zinc-500">
-                                {" "}
-                                · {p.status}
-                                {p.completedWorkout
-                                  ? ` · ${completedWorkoutTitle(p.completedWorkout) ?? "session"}`
-                                  : " · linked"}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
+                        {completedPlansForDay.map((p) => {
+                          const linked = Boolean(p.completedWorkoutId);
+                          const sessionTitle = p.completedWorkout
+                            ? completedWorkoutTitle(p.completedWorkout)
+                            : null;
+                          const sessionBrief = p.completedWorkout
+                            ? formatCompletedSessionBrief(p.completedWorkout)
+                            : null;
+                          const planTargets = formatPlannedCardioTargets(p);
+                          return (
+                            <li key={p.id}>
+                              <button
+                                type="button"
+                                onClick={() => openPlanLinkFromSummary(p.id)}
+                                className="block w-full rounded border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-left text-sm text-zinc-200 hover:border-zinc-600"
+                              >
+                                <div className="flex flex-wrap items-baseline gap-x-1 gap-y-0.5">
+                                  <span className="capitalize text-zinc-100">
+                                    {p.kind}
+                                  </span>
+                                  <span className="text-zinc-500">
+                                    · {p.status}
+                                  </span>
+                                  <span
+                                    className={
+                                      linked
+                                        ? "text-emerald-500/90"
+                                        : "text-amber-400/90"
+                                    }
+                                  >
+                                    · {linked ? "Linked" : "Not linked"}
+                                  </span>
+                                  {linked && sessionTitle ? (
+                                    <span className="text-zinc-500">
+                                      · {sessionTitle}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {sessionBrief ? (
+                                  <p className="mt-1 text-left text-xs text-zinc-500">
+                                    {sessionBrief}
+                                  </p>
+                                ) : null}
+                                {planTargets ? (
+                                  <p className="mt-0.5 text-left text-xs text-zinc-600">
+                                    Planned: {planTargets}
+                                  </p>
+                                ) : null}
+                              </button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </section>
                   ) : null}
@@ -1852,6 +1926,8 @@ export function Home() {
                               const kindLabel =
                                 inferPlanKindFromCompletedRow(cw) ??
                                 cw.activityKind;
+                              const sessionBrief =
+                                formatCompletedSessionBrief(cw);
                               const matchingPlans = dialogPlans.filter((p) =>
                                 planAcceptsLinkForCompleted(p, cw),
                               );
@@ -1868,6 +1944,11 @@ export function Home() {
                                     {cw.vendor === "hevy" ? "Hevy" : "Strava"} ·{" "}
                                     {kindLabel}
                                   </div>
+                                  {sessionBrief ? (
+                                    <div className="mt-1 text-xs text-zinc-500">
+                                      {sessionBrief}
+                                    </div>
+                                  ) : null}
                                   <div className="mt-2">
                                     {matchingPlans.length === 1 ? (
                                       <button
@@ -1905,51 +1986,60 @@ export function Home() {
                                           Choose a plan to link
                                         </p>
                                         <ul className="flex flex-col gap-1">
-                                          {matchingPlans.map((p) => (
-                                            <li key={p.id}>
-                                              <button
-                                                type="button"
-                                                disabled={
-                                                  updatePlanMutation.isPending &&
-                                                  linkingCompletedWorkoutId ===
-                                                    cw.id
-                                                }
-                                                onClick={() => {
-                                                  setPlanErr(null);
-                                                  setLinkingCompletedWorkoutId(
-                                                    cw.id,
-                                                  );
-                                                  updatePlanMutation.mutate(
-                                                    updatePlanPayloadForCompletedLink(
-                                                      cw,
-                                                      p.id,
-                                                    ),
-                                                    {
-                                                      onSettled: () =>
-                                                        setLinkingCompletedWorkoutId(
-                                                          null,
-                                                        ),
-                                                    },
-                                                  );
-                                                }}
-                                                className="w-full rounded border border-violet-500/50 bg-violet-950/30 px-2 py-1.5 text-left text-xs text-violet-200 hover:bg-violet-950/55 disabled:cursor-not-allowed disabled:opacity-50"
-                                              >
-                                                <span className="capitalize">
-                                                  {p.kind}
-                                                </span>
-                                                <span className="text-zinc-500">
-                                                  {" "}
-                                                  · {p.status}
-                                                </span>
-                                                {(p.notes?.trim() ?? "") !==
-                                                "" ? (
-                                                  <span className="mt-1 block whitespace-pre-wrap text-[11px] leading-snug text-zinc-500">
-                                                    {p.notes?.trim()}
+                                          {matchingPlans.map((p) => {
+                                            const matchTargets =
+                                              formatPlannedCardioTargets(p);
+                                            return (
+                                              <li key={p.id}>
+                                                <button
+                                                  type="button"
+                                                  disabled={
+                                                    updatePlanMutation.isPending &&
+                                                    linkingCompletedWorkoutId ===
+                                                      cw.id
+                                                  }
+                                                  onClick={() => {
+                                                    setPlanErr(null);
+                                                    setLinkingCompletedWorkoutId(
+                                                      cw.id,
+                                                    );
+                                                    updatePlanMutation.mutate(
+                                                      updatePlanPayloadForCompletedLink(
+                                                        cw,
+                                                        p.id,
+                                                      ),
+                                                      {
+                                                        onSettled: () =>
+                                                          setLinkingCompletedWorkoutId(
+                                                            null,
+                                                          ),
+                                                      },
+                                                    );
+                                                  }}
+                                                  className="w-full rounded border border-violet-500/50 bg-violet-950/30 px-2 py-1.5 text-left text-xs text-violet-200 hover:bg-violet-950/55 disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                  <span className="capitalize">
+                                                    {p.kind}
                                                   </span>
-                                                ) : null}
-                                              </button>
-                                            </li>
-                                          ))}
+                                                  <span className="text-zinc-500">
+                                                    {" "}
+                                                    · {p.status}
+                                                  </span>
+                                                  {matchTargets ? (
+                                                    <span className="mt-0.5 block text-[11px] text-zinc-500">
+                                                      {matchTargets}
+                                                    </span>
+                                                  ) : null}
+                                                  {(p.notes?.trim() ?? "") !==
+                                                  "" ? (
+                                                    <span className="mt-1 block whitespace-pre-wrap text-[11px] leading-snug text-zinc-500">
+                                                      {p.notes?.trim()}
+                                                    </span>
+                                                  ) : null}
+                                                </button>
+                                              </li>
+                                            );
+                                          })}
                                         </ul>
                                       </div>
                                     ) : pk &&
@@ -2130,7 +2220,13 @@ export function Home() {
                       e.preventDefault();
                       const fd = new FormData(e.currentTarget);
                       setPlanErr(null);
-                      const kinds = new Set(["lift", "run", "bike", "swim"]);
+                      const kinds = new Set([
+                        "lift",
+                        "run",
+                        "bike",
+                        "swim",
+                        "recovery",
+                      ]);
                       if (!kinds.has(planKind)) {
                         setPlanErr("Choose a type.");
                         return;
@@ -2191,6 +2287,7 @@ export function Home() {
                         <option value="run">Run</option>
                         <option value="bike">Bike</option>
                         <option value="swim">Swim</option>
+                        <option value="recovery">Recovery</option>
                       </select>
                     </label>
                     {planKind === "lift" ? (
@@ -2467,6 +2564,26 @@ export function Home() {
                             : "Delete plan"}
                         </button>
                       </div>
+                    ) : linkPlan.kind === "recovery" ? (
+                      <>
+                        <p className="mb-3 text-[11px] leading-snug text-zinc-500">
+                          Recovery is not linked to Strava or Hevy.
+                        </p>
+                        <div className="mt-4 border-t border-zinc-800 pt-2.5">
+                          <button
+                            type="button"
+                            disabled={deletePlanMutation.isPending}
+                            className="text-[11px] text-red-400/90 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() =>
+                              deletePlanMutation.mutate(linkPlan.id)
+                            }
+                          >
+                            {deletePlanMutation.isPending
+                              ? "Deleting…"
+                              : "Delete plan"}
+                          </button>
+                        </div>
+                      </>
                     ) : linkCandidatesQuery.isLoading ? (
                       <p className="text-xs text-zinc-500">
                         Loading sessions for this day…
