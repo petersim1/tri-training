@@ -175,7 +175,9 @@ export async function selectPlannedWorkoutsWithCompletedFiltered(
         .where(whereFiltered)
         .orderBy(asc(plannedWorkouts.dayKey), asc(plannedWorkouts.kind))
         .all()
-    : await base.orderBy(asc(plannedWorkouts.dayKey), asc(plannedWorkouts.kind)).all();
+    : await base
+        .orderBy(asc(plannedWorkouts.dayKey), asc(plannedWorkouts.kind))
+        .all();
   return rows.map((r) => {
     const { cw, ...plan } = r;
     const completedWorkout: CompletedWorkoutRow | null =

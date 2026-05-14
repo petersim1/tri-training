@@ -1,10 +1,15 @@
 export const SESSION_CHART_COOKIE = "wt_session_chart" as const;
 
-/** Preset ranges; `all` uses full history from loaded plans. */
+/** Preset ranges; `all` uses min→max calendar days from plotted data only. */
 export type SessionChartRange = "3m" | "6m" | "12m" | "ytd" | "all";
 
-/** Cardio: distance, time, or pace (min/km). Lift uses time only. */
-export type SessionChartMetric = "distance" | "time" | "pace";
+/** Cardio modes + Strava efficiency; lift-only volume (kg × reps tonnage). */
+export type SessionChartMetric =
+  | "distance"
+  | "time"
+  | "pace"
+  | "efficiency"
+  | "volume";
 
 export type SessionChartSettings = {
   range: SessionChartRange;
@@ -23,7 +28,13 @@ function isRange(x: unknown): x is SessionChartRange {
 }
 
 function isMetric(x: unknown): x is SessionChartMetric {
-  return x === "distance" || x === "time" || x === "pace";
+  return (
+    x === "distance" ||
+    x === "time" ||
+    x === "pace" ||
+    x === "efficiency" ||
+    x === "volume"
+  );
 }
 
 export function parseSessionChartSettings(
@@ -87,6 +98,44 @@ export function sessionChartDayRange(range: SessionChartRange): {
     default:
       return { from: dayKeyMonthsAgoLocal(12), to };
   }
+}
+
+/**
+ * Every calendar `YYYY-MM-DD` from `from` through `to` inclusive (local dates, noon parsing).
+ */
+export function enumerateLocalDayKeysInclusive(from: string, to: string): string[] {
+  const start = new Date(`${from}T12:00:00`);
+  const end = new Date(`${to}T12:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return [from];
+  }
+  if (start > end) {
+    return [from];
+  }
+  const out: string[] = [];
+  const cur = new Date(start);
+  while (cur <= end) {
+    const y = cur.getFullYear();
+    const m = String(cur.getMonth() + 1).padStart(2, "0");
+    const d = String(cur.getDate()).padStart(2, "0");
+    out.push(`${y}-${m}-${d}`);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
+
+/**
+ * When set, charts use exactly this `[from,to]` on the X axis (preset ranges).
+ * `null` ⇒ span by first/last data day (`all`).
+ */
+export function sessionChartDenseAxisBounds(
+  range: SessionChartRange,
+): { from: string; to: string } | null {
+  const { from, to } = sessionChartDayRange(range);
+  if (from !== undefined && to !== undefined) {
+    return { from, to };
+  }
+  return null;
 }
 
 export function sessionChartRangeLabel(range: SessionChartRange): string {

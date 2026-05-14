@@ -9,4 +9,8 @@ export type StravaActivitySummary = {
   moving_time?: number;
   elapsed_time?: number;
   calories?: number;
+  /** Strava marks whether streams include heart rate — false ⇒ no HR for this activity. */
+  has_heartrate?: boolean;
+  /** BPM when activity has HR data */
+  average_heartrate?: number;
 };

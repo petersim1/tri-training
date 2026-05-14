@@ -4,8 +4,8 @@ import { getDb } from "~/lib/db";
 import {
   completedWorkouts,
   plannedWorkouts,
-  weightEntries,
   type WorkoutVendor,
+  weightEntries,
 } from "~/lib/db/schema";
 import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
 import {

@@ -39,11 +39,9 @@ export type MarkdownImportIssue = { line: number; message: string };
 const DAY_HEAD = /^\[(\d{4}-\d{2}-\d{2})\](?:\s*\([^)]*\))?\s*$/;
 /** Top-level activity: - run / - lift / - bike / - swim / - recovery (planned is implied). */
 const ACTIVITY_LINE = /^(\s*)-\s*(lift|run|bike|swim|recovery)\s*$/i;
-const SUB_LINE =
-  /^(\s*)[-–]\s*(distance|time|note)\s*:\s*(.*)$/i;
+const SUB_LINE = /^(\s*)[-–]\s*(distance|time|note)\s*:\s*(.*)$/i;
 
-const DIST_VALUE =
-  /^(\d+(?:\.\d+)?)\s+(km|mi|yd|m)\b/i;
+const DIST_VALUE = /^(\d+(?:\.\d+)?)\s+(km|mi|yd|m)\b/i;
 
 function parseDistanceValue(
   raw: string,
@@ -75,7 +73,10 @@ function parseDistanceValue(
   return { num: parseFloat(m[1]), unit: u };
 }
 
-function parseTimeValue(raw: string, line: number): number | MarkdownImportIssue {
+function parseTimeValue(
+  raw: string,
+  line: number,
+): number | MarkdownImportIssue {
   const v = raw.trim();
   if (v === "") {
     return { line, message: "time: needs a value" };
@@ -189,7 +190,9 @@ function draftToItem(d: Draft): PlannedWorkoutBulkItem {
  * Parse nested markdown into bulk insert rows. Validates structure only;
  * business rules run in `bulkInsertPlannedWorkoutsFromItems`.
  */
-export function parseActivitiesMarkdownForBulkImport(markdown: string):
+export function parseActivitiesMarkdownForBulkImport(
+  markdown: string,
+):
   | { ok: true; items: PlannedWorkoutBulkItem[] }
   | { ok: false; issues: MarkdownImportIssue[] } {
   const issues: MarkdownImportIssue[] = [];
@@ -252,7 +255,10 @@ export function parseActivitiesMarkdownForBulkImport(markdown: string):
 
       if (key === "distance") {
         if (draft.distanceLine !== null) {
-          issues.push({ line: lineNum, message: "Only one distance: per activity" });
+          issues.push({
+            line: lineNum,
+            message: "Only one distance: per activity",
+          });
           continue;
         }
         const d = parseDistanceValue(value, lineNum);
@@ -268,7 +274,10 @@ export function parseActivitiesMarkdownForBulkImport(markdown: string):
 
       if (key === "time") {
         if (draft.timeLine !== null) {
-          issues.push({ line: lineNum, message: "Only one time: per activity" });
+          issues.push({
+            line: lineNum,
+            message: "Only one time: per activity",
+          });
           continue;
         }
         const t = parseTimeValue(value, lineNum);
@@ -283,7 +292,10 @@ export function parseActivitiesMarkdownForBulkImport(markdown: string):
 
       if (key === "note") {
         if (draft.noteLine !== null) {
-          issues.push({ line: lineNum, message: "Only one note: per activity" });
+          issues.push({
+            line: lineNum,
+            message: "Only one note: per activity",
+          });
           continue;
         }
         const n = value.trim();

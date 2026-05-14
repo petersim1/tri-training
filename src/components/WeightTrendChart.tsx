@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  nearestSessionIndexFromSvgX,
+  nearestIndexFromSvgX,
   svgLocalXFromMouse,
 } from "~/lib/chart-svg-interaction";
 import type { WeightEntryRow } from "~/lib/db/schema";
 import type { SessionChartRange } from "~/lib/home/session-chart-settings";
-import { sessionChartRangeLabel } from "~/lib/home/session-chart-settings";
+import {
+  enumerateLocalDayKeysInclusive,
+  sessionChartDenseAxisBounds,
+  sessionChartRangeLabel,
+} from "~/lib/home/session-chart-settings";
 
 const VIEW_W = 800;
 const VIEW_H = 240;
@@ -79,42 +83,32 @@ export function WeightTrendChart({
 }: Props) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  const series = useMemo(() => {
-    return [...entries].sort((a, b) => a.dayKey.localeCompare(b.dayKey));
-  }, [entries]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: clear hover when series / range changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: clear hover when filtered entries or range preset changes.
   useEffect(() => {
     setHoverIdx(null);
   }, [entries, range]);
 
-  const hoverTooltipRows = useMemo(():
-    | { text: string; className: string }[]
-    | null => {
-    if (series.length === 0) {
-      return null;
-    }
-    if (hoverIdx == null || hoverIdx < 0 || hoverIdx >= series.length) {
-      return null;
-    }
-    const e = series[hoverIdx];
-    if (!e) {
-      return null;
-    }
-    return [
-      { text: shortDateLabel(e.dayKey), className: "fill-zinc-300" },
-      {
-        text: `${e.weightLb.toFixed(1)} lb`,
-        className: "fill-emerald-400",
-      },
-    ];
-  }, [hoverIdx, series]);
-
   const geometry = useMemo(() => {
-    if (series.length === 0) {
+    const sorted = [...entries].sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+    if (sorted.length === 0) {
       return null;
     }
-    const weights = series.map((e) => e.weightLb);
+
+    const axis = sessionChartDenseAxisBounds(range);
+    const minKey = sorted[0]?.dayKey ?? "";
+    const maxKey = sorted[sorted.length - 1]?.dayKey ?? minKey;
+    const spanFrom = axis?.from ?? minKey;
+    const spanTo = axis?.to ?? maxKey;
+
+    const byDayKey = new Map<string, WeightEntryRow>();
+    for (const e of sorted) {
+      byDayKey.set(e.dayKey, e);
+    }
+
+    const denseDayKeys = enumerateLocalDayKeysInclusive(spanFrom, spanTo);
+    const n = denseDayKeys.length;
+
+    const weights = sorted.map((e) => e.weightLb);
     const minW = Math.min(...weights);
     const maxW = Math.max(...weights);
     const padLb = Math.max(0.5, (maxW - minW) * 0.12 || 2);
@@ -122,45 +116,90 @@ export function WeightTrendChart({
     const yMax = maxW + padLb;
     const innerW = VIEW_W - PAD_L - PAD_R;
     const innerH = VIEW_H - PAD_T - PAD_B;
-    const n = series.length;
 
     const xAt = (i: number) =>
       PAD_L + (n <= 1 ? innerW / 2 : (i / Math.max(1, n - 1)) * innerW);
     const yAt = (lb: number) =>
       PAD_T + innerH - ((lb - yMin) / (yMax - yMin)) * innerH;
 
-    const lineD = series
-      .map((e, i) => `${i === 0 ? "M" : "L"} ${xAt(i)} ${yAt(e.weightLb)}`)
-      .join(" ");
+    type Mark = { i: number; e: WeightEntryRow };
+    const marks: Mark[] = [];
+    for (let i = 0; i < denseDayKeys.length; i++) {
+      const dk = denseDayKeys[i];
+      if (!dk) {
+        continue;
+      }
+      const e = byDayKey.get(dk);
+      if (e) {
+        marks.push({ i, e });
+      }
+    }
 
-    const areaD =
-      n >= 2
-        ? `${series
-            .map(
-              (e, i) => `${i === 0 ? "M" : "L"} ${xAt(i)} ${yAt(e.weightLb)}`,
-            )
-            .join(
-              " ",
-            )} L ${xAt(n - 1)} ${PAD_T + innerH} L ${xAt(0)} ${PAD_T + innerH} Z`
-        : null;
+    let lineD = "";
+    for (let j = 0; j < marks.length; j++) {
+      const m = marks[j];
+      if (!m) {
+        continue;
+      }
+      const x = xAt(m.i);
+      const y = yAt(m.e.weightLb);
+      lineD += `${j === 0 ? "M" : "L"} ${x} ${y} `;
+    }
+
+    let areaD: string | null = null;
+    if (marks.length >= 2) {
+      areaD =
+        `${lineD.trim()} L ${xAt(marks[marks.length - 1]?.i ?? 0)} ${PAD_T + innerH} L ${xAt(marks[0]?.i ?? 0)} ${PAD_T + innerH} Z`;
+    }
 
     const yTicks = pickYTicks(yMin, yMax);
     const xTicks = pickXTickIndices(n);
 
     return {
-      series,
+      denseDayKeys,
+      byDayKey,
+      marks,
       yMin,
       yMax,
       innerW,
       innerH,
       xAt,
       yAt,
-      lineD,
+      lineD: lineD.trim(),
       areaD,
       yTicks,
       xTicks,
     };
-  }, [series]);
+  }, [entries, range]);
+
+  const hoverTooltipRows = useMemo(():
+    | { text: string; className: string }[]
+    | null => {
+    if (!geometry?.denseDayKeys.length) {
+      return null;
+    }
+    const { denseDayKeys, byDayKey } = geometry;
+    if (hoverIdx == null || hoverIdx < 0 || hoverIdx >= denseDayKeys.length) {
+      return null;
+    }
+    const dk = denseDayKeys[hoverIdx];
+    if (!dk) {
+      return null;
+    }
+    const e = byDayKey.get(dk);
+    const rows = [
+      { text: shortDateLabel(dk), className: "fill-zinc-300" },
+    ];
+    rows.push(
+      e
+        ? {
+            text: `${e.weightLb.toFixed(1)} lb`,
+            className: "fill-emerald-400",
+          }
+        : { text: "No entry", className: "fill-zinc-500" },
+    );
+    return rows;
+  }, [hoverIdx, geometry]);
 
   if (isLoading) {
     return (
@@ -178,7 +217,7 @@ export function WeightTrendChart({
     );
   }
 
-  if (series.length === 0) {
+  if (entries.length === 0) {
     return (
       <section
         aria-label="Weight trend chart"
@@ -196,10 +235,10 @@ export function WeightTrendChart({
     return null;
   }
 
-  const { lineD, areaD, yTicks, xTicks, xAt, yAt, yMin, yMax, innerW } =
+  const { lineD, areaD, yTicks, xTicks, xAt, yAt, yMin, yMax, innerW, denseDayKeys, marks } =
     geometry;
   const innerH = VIEW_H - PAD_T - PAD_B;
-  const n = series.length;
+  const n = denseDayKeys.length;
 
   const interactive = Boolean(onSelectDayKey);
 
@@ -269,25 +308,27 @@ export function WeightTrendChart({
             <path d={areaD} fill="url(#weight-area-fill)" stroke="none" />
           ) : null}
 
-          <path
-            d={lineD}
-            fill="none"
-            stroke="rgb(52 211 153)"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity={0.95}
-          />
+          {lineD !== "" ? (
+            <path
+              d={lineD}
+              fill="none"
+              stroke="rgb(52 211 153)"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={0.95}
+            />
+          ) : null}
 
           {xTicks.map((i) => {
-            const e = series[i];
-            if (!e) {
+            const dk = denseDayKeys[i];
+            if (!dk) {
               return null;
             }
             return (
               // biome-ignore lint/a11y/noStaticElementInteractions: SVG axis label (same pattern as activity chart)
               <text
-                key={`x-${e.id}`}
+                key={`x-${dk}-${i}`}
                 x={xAt(i)}
                 y={VIEW_H - 12}
                 textAnchor="middle"
@@ -307,7 +348,7 @@ export function WeightTrendChart({
                     : undefined
                 }
                 onClick={
-                  interactive ? () => onSelectDayKey?.(e.dayKey) : undefined
+                  interactive ? () => onSelectDayKey?.(dk) : undefined
                 }
                 onKeyDown={
                   interactive
@@ -316,15 +357,15 @@ export function WeightTrendChart({
                           return;
                         }
                         ev.preventDefault();
-                        onSelectDayKey?.(e.dayKey);
+                        onSelectDayKey?.(dk);
                       }
                     : undefined
                 }
                 role={interactive ? "button" : undefined}
                 tabIndex={interactive ? 0 : undefined}
-                aria-label={`Go to ${shortDateLabel(e.dayKey)} on the calendar`}
+                aria-label={`Go to ${shortDateLabel(dk)} on the calendar`}
               >
-                {shortDateLabel(e.dayKey)}
+                {shortDateLabel(dk)}
               </text>
             );
           })}
@@ -342,7 +383,7 @@ export function WeightTrendChart({
             />
           ) : null}
 
-          {series.map((e, i) => {
+          {marks.map(({ i, e }) => {
             const cx = xAt(i);
             const cy = yAt(e.weightLb);
             const isSelected =
@@ -418,14 +459,7 @@ export function WeightTrendChart({
                 if (x == null) {
                   return;
                 }
-                setHoverIdx(
-                  nearestSessionIndexFromSvgX(
-                    x,
-                    n,
-                    xAt,
-                    (i) => series[i] != null,
-                  ),
-                );
+                setHoverIdx(nearestIndexFromSvgX(x, n, xAt));
               }}
               onMouseLeave={() => setHoverIdx(null)}
               onClick={(e) => {
@@ -434,17 +468,10 @@ export function WeightTrendChart({
                 if (x == null) {
                   return;
                 }
-                const idx = nearestSessionIndexFromSvgX(
-                  x,
-                  n,
-                  xAt,
-                  (i) => series[i] != null,
-                );
-                if (idx != null) {
-                  const row = series[idx];
-                  if (row) {
-                    onSelectDayKey(row.dayKey);
-                  }
+                const idx = nearestIndexFromSvgX(x, n, xAt);
+                const dk = denseDayKeys[idx];
+                if (dk) {
+                  onSelectDayKey(dk);
                 }
               }}
             />

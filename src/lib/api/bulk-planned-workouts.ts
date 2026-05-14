@@ -7,8 +7,8 @@ import {
 } from "~/lib/db/schema";
 import {
   CARDIO_DISTANCE_UNITS,
-  isCardioKind,
   type CardioDistanceUnit,
+  isCardioKind,
 } from "~/lib/plans/cardio-targets";
 import { isValidDayKey } from "~/lib/plans/day-key";
 
@@ -42,16 +42,12 @@ export type BulkPlannedWorkoutsBody = {
 export type BulkValidationIssue = { index: number; message: string };
 
 function isPlanKind(v: unknown): v is PlanKind {
-  return (
-    typeof v === "string" &&
-    (PLAN_KINDS as readonly string[]).includes(v)
-  );
+  return typeof v === "string" && (PLAN_KINDS as readonly string[]).includes(v);
 }
 
 function isWorkoutVendor(v: unknown): v is WorkoutVendor {
   return (
-    typeof v === "string" &&
-    (WORKOUT_VENDORS as readonly string[]).includes(v)
+    typeof v === "string" && (WORKOUT_VENDORS as readonly string[]).includes(v)
   );
 }
 
@@ -63,7 +59,9 @@ function parseOptionalNullableString(
   v: unknown,
   index: number,
   field: string,
-): { ok: true; value: string | null } | { ok: false; issue: BulkValidationIssue } {
+):
+  | { ok: true; value: string | null }
+  | { ok: false; issue: BulkValidationIssue } {
   if (v === undefined || v === null) {
     return { ok: true, value: null };
   }
@@ -81,7 +79,9 @@ function parseOptionalNullableNumber(
   v: unknown,
   index: number,
   field: string,
-): { ok: true; value: number | null } | { ok: false; issue: BulkValidationIssue } {
+):
+  | { ok: true; value: number | null }
+  | { ok: false; issue: BulkValidationIssue } {
   if (v === undefined || v === null) {
     return { ok: true, value: null };
   }
@@ -97,7 +97,9 @@ function parseOptionalNullableNumber(
 /**
  * Parse and narrow `unknown` JSON to a typed body. All field shapes are validated before insert logic runs.
  */
-export function parseBulkPlannedWorkoutsBody(body: unknown):
+export function parseBulkPlannedWorkoutsBody(
+  body: unknown,
+):
   | { ok: true; data: BulkPlannedWorkoutsBody }
   | { ok: false; error: string; issues: BulkValidationIssue[] } {
   if (!isPlainObject(body)) {
@@ -145,7 +147,7 @@ export function parseBulkPlannedWorkoutsBody(body: unknown):
 
     const kindRaw = el.kind;
     if (kindRaw === undefined) {
-      issues.push({ index: i, message: "Missing required field \"kind\"" });
+      issues.push({ index: i, message: 'Missing required field "kind"' });
       continue;
     }
     if (!isPlanKind(kindRaw)) {
@@ -159,7 +161,7 @@ export function parseBulkPlannedWorkoutsBody(body: unknown):
 
     const dayKeyRaw = el.dayKey;
     if (dayKeyRaw === undefined) {
-      issues.push({ index: i, message: "Missing required field \"dayKey\"" });
+      issues.push({ index: i, message: 'Missing required field "dayKey"' });
       continue;
     }
     if (typeof dayKeyRaw !== "string") {
@@ -230,9 +232,7 @@ export function parseBulkPlannedWorkoutsBody(body: unknown):
     let distanceUnits: string | null = duP.value;
     if (distanceUnits !== null) {
       const u = distanceUnits.trim().toLowerCase();
-      if (
-        !CARDIO_DISTANCE_UNITS.includes(u as CardioDistanceUnit)
-      ) {
+      if (!CARDIO_DISTANCE_UNITS.includes(u as CardioDistanceUnit)) {
         issues.push({
           index: i,
           message: `distanceUnits must be one of: ${CARDIO_DISTANCE_UNITS.join(", ")}`,
@@ -242,11 +242,7 @@ export function parseBulkPlannedWorkoutsBody(body: unknown):
       distanceUnits = u;
     }
 
-    const timeP = parseOptionalNullableNumber(
-      el.timeSeconds,
-      i,
-      "timeSeconds",
-    );
+    const timeP = parseOptionalNullableNumber(el.timeSeconds, i, "timeSeconds");
     if (!timeP.ok) {
       issues.push(timeP.issue);
       continue;
@@ -260,8 +256,7 @@ export function parseBulkPlannedWorkoutsBody(body: unknown):
       routineId: routineIdP.value,
       distance: distanceP.value,
       distanceUnits,
-      timeSeconds:
-        timeP.value === null ? null : Math.floor(timeP.value),
+      timeSeconds: timeP.value === null ? null : Math.floor(timeP.value),
     });
   }
 
@@ -284,9 +279,7 @@ function normalizeDistanceUnit(raw: string | null): string | null {
   if (s === "") {
     return null;
   }
-  if (
-    !CARDIO_DISTANCE_UNITS.includes(s as CardioDistanceUnit)
-  ) {
+  if (!CARDIO_DISTANCE_UNITS.includes(s as CardioDistanceUnit)) {
     throw new Error(
       `Invalid distance unit (use ${CARDIO_DISTANCE_UNITS.join(", ")})`,
     );
@@ -322,17 +315,15 @@ function validateAndBuildRow(
 ): { row: typeof plannedWorkouts.$inferInsert } | BulkValidationIssue {
   try {
     const { kind, dayKey } = raw;
-    const rv =
-      raw.routineVendor ??
-      (raw.kind === "lift" ? "hevy" : "strava");
+    const rv = raw.routineVendor ?? (raw.kind === "lift" ? "hevy" : "strava");
 
     if (kind === "lift" && rv !== "hevy") {
-      return { index, message: "lift plans must use routineVendor \"hevy\"" };
+      return { index, message: 'lift plans must use routineVendor "hevy"' };
     }
     if (kind !== "lift" && rv !== "strava") {
       return {
         index,
-        message: "non-lift plans must use routineVendor \"strava\"",
+        message: 'non-lift plans must use routineVendor "strava"',
       };
     }
     const isLift = kind === "lift";
@@ -346,12 +337,8 @@ function validateAndBuildRow(
     let distanceUnits: string | null = null;
     let timeSeconds: number | null = null;
     try {
-      distance = cardio
-        ? normalizeOptionalDistance(raw.distance)
-        : null;
-      distanceUnits = cardio
-        ? normalizeDistanceUnit(raw.distanceUnits)
-        : null;
+      distance = cardio ? normalizeOptionalDistance(raw.distance) : null;
+      distanceUnits = cardio ? normalizeDistanceUnit(raw.distanceUnits) : null;
       timeSeconds = cardio
         ? normalizeOptionalTimeSeconds(raw.timeSeconds)
         : null;

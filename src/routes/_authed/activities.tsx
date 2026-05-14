@@ -7,7 +7,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { LinkedSessionPanel } from "~/components/LinkedSessionPanel";
 import { PlanCardioTargetsField } from "~/components/PlanCardioTargetsField";
 import { PlanDayKeyField } from "~/components/PlanDayKeyField";
@@ -25,7 +25,10 @@ import {
   hevyWorkoutWebUrl,
   stravaActivityWebUrl,
 } from "~/lib/hevy/links";
-import { activitiesUnresolvedCompletedQueryKey } from "~/lib/home/query-keys";
+import {
+  activitiesUnresolvedCompletedQueryKey,
+  homeWeightQueryKey,
+} from "~/lib/home/query-keys";
 import {
   formatPlannedCardioTargets,
   isCardioKind,
@@ -35,9 +38,11 @@ import {
   completedWorkoutTitle,
   formatCompletedSessionBrief,
   inferPlanKindFromCompletedRow,
+  maxSelfRecordedWeightKgFromLbEntries,
 } from "~/lib/plans/completed-workout-data";
 import {
   fetchAllUnresolvedCompletedWorkoutsFn,
+  fetchWeightEntriesForHomeFn,
   linkAllUnresolvedCompletedWorkoutsFn,
 } from "~/lib/server-fns/home";
 import {
@@ -298,6 +303,16 @@ function ActivitiesContent() {
     queryKey: activitiesUnresolvedCompletedQueryKey,
     queryFn: () => fetchAllUnresolvedCompletedWorkoutsFn(),
   });
+
+  const weightQuery = useQuery({
+    queryKey: homeWeightQueryKey,
+    queryFn: () => fetchWeightEntriesForHomeFn(),
+  });
+  const weightEntries = weightQuery.data ?? [];
+  const surrogateBwKgForLiftVolume = useMemo(
+    () => maxSelfRecordedWeightKgFromLbEntries(weightEntries),
+    [weightEntries],
+  );
 
   const linkAllMutation = useMutation({
     mutationFn: () =>
@@ -999,6 +1014,7 @@ function ActivitiesContent() {
                   <LinkedSessionPanel
                     planId={editingPlan.id}
                     completed={editingPlan.completedWorkout}
+                    surrogateBodyWeightKg={surrogateBwKgForLiftVolume}
                     onUnlinked={refreshAfterPlanChange}
                   />
                 ) : !isCardioKind(editingPlan.kind) ? (
@@ -1155,7 +1171,9 @@ function ActivitiesContent() {
                 : null;
             const brief =
               linked && p.completedWorkout
-                ? formatCompletedSessionBrief(p.completedWorkout)
+                ? formatCompletedSessionBrief(p.completedWorkout, {
+                    surrogateBodyWeightKg: surrogateBwKgForLiftVolume,
+                  })
                 : null;
             const planTargets = isCardioKind(p.kind)
               ? formatPlannedCardioTargets(p)

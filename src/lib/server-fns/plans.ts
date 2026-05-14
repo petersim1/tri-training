@@ -219,7 +219,9 @@ export const createPlanFromActivityFn = createServerFn({ method: "POST" })
     }
     const planKind = data.kind as PlanKind;
     if (planKind === "recovery") {
-      throw new Error("Recovery plans cannot be created from an external activity");
+      throw new Error(
+        "Recovery plans cannot be created from an external activity",
+      );
     }
     const link = resolveWorkoutLink(data.stravaActivityId, data.hevyWorkoutId);
     if (!link) {

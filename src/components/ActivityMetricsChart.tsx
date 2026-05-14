@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  nearestSessionIndexFromSvgX,
+  nearestIndexFromSvgX,
   svgLocalXFromMouse,
 } from "~/lib/chart-svg-interaction";
 import type {
   SessionChartMetric,
   SessionChartSettings,
+} from "~/lib/home/session-chart-settings";
+import {
+  enumerateLocalDayKeysInclusive,
+  sessionChartDenseAxisBounds,
 } from "~/lib/home/session-chart-settings";
 import type {
   ActivityPlotKind,
@@ -35,27 +39,6 @@ function shortDateLabel(dayKey: string): string {
   });
 }
 
-function enumerateDayKeysInclusive(from: string, to: string): string[] {
-  const start = new Date(`${from}T12:00:00`);
-  const end = new Date(`${to}T12:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return [from];
-  }
-  if (start > end) {
-    return [from];
-  }
-  const out: string[] = [];
-  const cur = new Date(start);
-  while (cur <= end) {
-    const y = cur.getFullYear();
-    const m = String(cur.getMonth() + 1).padStart(2, "0");
-    const d = String(cur.getDate()).padStart(2, "0");
-    out.push(`${y}-${m}-${d}`);
-    cur.setDate(cur.getDate() + 1);
-  }
-  return out;
-}
-
 type PlotDay = {
   dayKey: string;
   point: ActivityPlotPoint | null;
@@ -79,16 +62,28 @@ function pickYTicks(yMin: number, yMax: number): number[] {
   if (span <= 0 || !Number.isFinite(span)) {
     return [yMin];
   }
-  const rawStep =
-    span <= 5 ? 1 : span <= 20 ? 2 : span <= 50 ? 5 : Math.ceil(span / 4);
-  const step = rawStep <= 0 ? 1 : rawStep;
+  if (span <= 1e-12) {
+    return [yMin, yMax];
+  }
+
+  /** ~5 labels across full [yMin, yMax]; old code capped at five labels from the origin and broke cumulative axes. */
+  const roughStep = span / 4;
+  const exponent = Math.floor(Math.log10(Math.max(roughStep, Number.EPSILON)));
+  const mantissa = roughStep / 10 ** exponent;
+  const niceMul =
+    mantissa <= 1 ? 1 : mantissa <= 2 ? 2 : mantissa <= 5 ? 5 : 10;
+  const step = niceMul * 10 ** exponent;
+
   const start = Math.floor(yMin / step) * step;
   const out: number[] = [];
-  for (let v = start; v <= yMax + step * 0.01; v += step) {
-    if (v >= yMin - 1e-6 && v <= yMax + 1e-6) {
-      out.push(Math.round(v * 100) / 100);
+  const maxPass = Math.min(96, Math.ceil(span / step) + 12);
+  for (let pass = 0, v = start; pass <= maxPass; pass++, v += step) {
+    if (v >= yMin - span * 1e-12 && v <= yMax + span * 1e-12) {
+      const rounded =
+        span >= 1e3 ? Math.round(v * 100) / 100 : Math.round(v * 1e6) / 1e6;
+      out.push(rounded);
     }
-    if (out.length >= 5) {
+    if (v > yMax + step + span * 1e-12) {
       break;
     }
   }
@@ -101,22 +96,37 @@ function pickYTicks(yMin: number, yMax: number): number[] {
 function rawMetricValue(
   point: ActivityPlotPoint | null,
   metric: SessionChartMetric,
-  isLift: boolean,
 ): number {
   if (!point) {
     return 0;
   }
-  if (isLift || metric === "time") {
-    const t = point.timeMin;
-    return t != null && Number.isFinite(t) ? t : 0;
+  if (metric === "volume") {
+    const v = point.liftVolumeKgReps;
+    return v != null && Number.isFinite(v) ? v : 0;
   }
   if (metric === "distance") {
     const d = point.distanceKm;
     return d != null && Number.isFinite(d) ? d : 0;
   }
+  if (metric === "efficiency") {
+    const d = point.distanceKm;
+    const w = point.hrBpmMinProduct;
+    const dm =
+      d != null && Number.isFinite(d) && d > 0 ? d * 1000 : null;
+    if (
+      dm != null &&
+      w != null &&
+      w > 0 &&
+      Number.isFinite(w)
+    ) {
+      return dm / w;
+    }
+    return 0;
+  }
   const d = point.distanceKm;
   const t = point.timeMin;
   if (
+    metric === "pace" &&
     d != null &&
     t != null &&
     d > 0 &&
@@ -125,15 +135,40 @@ function rawMetricValue(
   ) {
     return t / d;
   }
+  if (metric === "time") {
+    const tm = point.timeMin;
+    return tm != null && Number.isFinite(tm) ? tm : 0;
+  }
   return 0;
 }
 
 function formatYTick(
   v: number,
   metric: SessionChartMetric,
-  isLift: boolean,
+  _isLift: boolean,
 ): string {
-  if (isLift || metric === "time") {
+  if (metric === "efficiency") {
+    if (v === 0 || !Number.isFinite(v)) {
+      return "0";
+    }
+    if (Math.abs(v) < 1e-4) {
+      return v.toExponential(1);
+    }
+    if (Math.abs(v) < 0.01) {
+      return v.toFixed(5);
+    }
+    if (Math.abs(v) < 1) {
+      return v.toFixed(4);
+    }
+    return v.toFixed(3);
+  }
+  if (metric === "volume") {
+    if (v === 0 || !Number.isFinite(v)) {
+      return "0";
+    }
+    return v >= 1000 ? Math.round(v).toLocaleString() : v.toFixed(0);
+  }
+  if (_isLift || metric === "time") {
     return v < 10 ? v.toFixed(1) : Math.round(v).toString();
   }
   if (metric === "distance") {
@@ -143,6 +178,12 @@ function formatYTick(
 }
 
 function yAxisLabel(metric: SessionChartMetric, isLift: boolean): string {
+  if (metric === "efficiency") {
+    return "m/beat";
+  }
+  if (metric === "volume") {
+    return "kg×reps";
+  }
   if (isLift || metric === "time") {
     return "min";
   }
@@ -172,6 +213,83 @@ const KIND_LABEL: Record<ActivityPlotKind, string> = {
   lift: "Lift",
 };
 
+/** Whether each metric tab is selectable for this activity kind (chart semantics). */
+const transitionStates: Record<
+  ActivityPlotKind,
+  Record<SessionChartMetric, boolean>
+> = {
+  run: {
+    distance: true,
+    time: true,
+    pace: true,
+    efficiency: true,
+    volume: false,
+  },
+  bike: {
+    distance: true,
+    time: true,
+    pace: true,
+    efficiency: true,
+    volume: false,
+  },
+  swim: {
+    distance: true,
+    time: true,
+    pace: true,
+    efficiency: true,
+    volume: false,
+  },
+  lift: {
+    distance: false,
+    time: true,
+    pace: false,
+    efficiency: false,
+    volume: true,
+  },
+};
+
+/** When the saved metric is invalid for the current kind, coerce to this. */
+const FALLBACK_METRIC_BY_KIND: Record<ActivityPlotKind, SessionChartMetric> = {
+  run: "time",
+  bike: "time",
+  swim: "time",
+  lift: "time",
+};
+
+const METRIC_DISABLED_TITLE: Partial<
+  Record<ActivityPlotKind, Partial<Record<SessionChartMetric, string>>>
+> = {
+  run: {
+    volume: "Volume uses Hevy lift sets (kg × reps).",
+  },
+  bike: {
+    volume: "Volume uses Hevy lift sets (kg × reps).",
+  },
+  swim: {
+    volume: "Volume uses Hevy lift sets (kg × reps).",
+  },
+  lift: {
+    distance: "Lift chart uses session time only — no distance series.",
+    pace: "Pace applies to Run, Bike, or Swim.",
+    efficiency: "Efficiency applies to Strava-linked Run, Bike, or Swim only.",
+  },
+};
+
+function isMetricEnabledForKind(
+  k: ActivityPlotKind,
+  m: SessionChartMetric,
+): boolean {
+  return transitionStates[k][m];
+}
+
+const METRIC_TABS = [
+  ["distance", "Distance"],
+  ["time", "Time"],
+  ["pace", "Pace"],
+  ["efficiency", "Efficiency"],
+  ["volume", "Volume"],
+] as const satisfies readonly (readonly [SessionChartMetric, string])[];
+
 export function ActivityMetricsChart({
   kind,
   onKindChange,
@@ -187,10 +305,28 @@ export function ActivityMetricsChart({
   const isCardio = kind !== "lift";
   const effectiveMetric: SessionChartMetric = isCardio
     ? sessionChart.metric
-    : "time";
-  const cumulativeOk = isCardio && effectiveMetric !== "pace";
+    : isMetricEnabledForKind(kind, sessionChart.metric)
+      ? sessionChart.metric
+      : "time";
+  const cardioCumulativeOk =
+    isCardio &&
+    effectiveMetric !== "pace" &&
+    effectiveMetric !== "efficiency";
+  const cumulativeOk =
+    cardioCumulativeOk || effectiveMetric === "volume";
   const cumulative = cumulativeOk && sessionChart.cumulative;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onSessionChartPatch is often inline; patching only depends on kind + metric.
+  useEffect(() => {
+    if (!isMetricEnabledForKind(kind, sessionChart.metric)) {
+      const next = FALLBACK_METRIC_BY_KIND[kind];
+      const patch: Partial<SessionChartSettings> = { metric: next };
+      if (next === "pace" || next === "efficiency") {
+        patch.cumulative = false;
+      }
+      onSessionChartPatch(patch);
+    }
+  }, [kind, sessionChart.metric]);
   const sorted = useMemo(() => {
     return [...points].sort((a, b) => a.dayKey.localeCompare(b.dayKey));
   }, [points]);
@@ -204,13 +340,16 @@ export function ActivityMetricsChart({
     if (sorted.length === 0) {
       return null;
     }
+    const axis = sessionChartDenseAxisBounds(sessionChart.range);
     const minKey = sorted[0]?.dayKey ?? "";
     const maxKey = sorted[sorted.length - 1]?.dayKey ?? minKey;
+    const spanFrom = axis?.from ?? minKey;
+    const spanTo = axis?.to ?? maxKey;
     const byDay = new Map<string, ActivityPlotPoint>();
     for (const p of sorted) {
       byDay.set(p.dayKey, p);
     }
-    const dayKeysDense = enumerateDayKeysInclusive(minKey, maxKey);
+    const dayKeysDense = enumerateLocalDayKeysInclusive(spanFrom, spanTo);
     const plotDays: PlotDay[] = dayKeysDense.map((dayKey) => ({
       dayKey,
       point: byDay.get(dayKey) ?? null,
@@ -221,7 +360,7 @@ export function ActivityMetricsChart({
     }, 0);
 
     const rawPerDay = plotDays.map((pd) =>
-      rawMetricValue(pd.point, effectiveMetric, !isCardio),
+      rawMetricValue(pd.point, effectiveMetric),
     );
 
     let hasAny = false;
@@ -279,7 +418,7 @@ export function ActivityMetricsChart({
       innerW,
       innerH,
     };
-  }, [sorted, isCardio, effectiveMetric, cumulative]);
+  }, [sorted, effectiveMetric, cumulative, sessionChart.range]);
 
   const hoverTooltipRows = useMemo(():
     | { text: string; className: string }[]
@@ -303,14 +442,16 @@ export function ActivityMetricsChart({
     };
     let line2: string;
     if (cumulative) {
-      if (!isCardio || effectiveMetric === "time") {
+      if (effectiveMetric === "time") {
         line2 = `Cumulative: ${v.toFixed(1)} min`;
       } else if (effectiveMetric === "distance") {
         line2 = `Cumulative: ${v.toFixed(2)} km`;
+      } else if (effectiveMetric === "volume") {
+        line2 = `Cumulative: ${Math.round(v).toLocaleString()} kg×reps`;
       } else {
         line2 = "—";
       }
-    } else if (!isCardio || effectiveMetric === "time") {
+    } else if (effectiveMetric === "time") {
       line2 =
         p?.timeMin != null && Number.isFinite(p.timeMin)
           ? `${p.timeMin.toFixed(1)} min`
@@ -320,6 +461,14 @@ export function ActivityMetricsChart({
         p?.distanceKm != null && Number.isFinite(p.distanceKm)
           ? `${p.distanceKm.toFixed(2)} km`
           : "0 km";
+    } else if (effectiveMetric === "volume") {
+      const lv = p?.liftVolumeKgReps;
+      line2 =
+        lv != null && Number.isFinite(lv)
+          ? `${Math.round(lv).toLocaleString()} kg×reps`
+          : "—";
+    } else if (effectiveMetric === "efficiency") {
+      return [dateRow];
     } else {
       line2 =
         p?.distanceKm != null &&
@@ -330,7 +479,7 @@ export function ActivityMetricsChart({
           : "—";
     }
     return [dateRow, { text: line2, className: "fill-emerald-400" }];
-  }, [barGeometry, hoverIdx, isCardio, effectiveMetric, cumulative]);
+  }, [barGeometry, hoverIdx, effectiveMetric, cumulative]);
 
   const tabs = (
     <div
@@ -361,54 +510,71 @@ export function ActivityMetricsChart({
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-zinc-800/80 px-4 py-3">
       {tabs}
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-        {isCardio ? (
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ["distance", "Distance"],
-                ["time", "Time"],
-                ["pace", "Pace"],
-              ] as const
-            ).map(([value, label]) => (
+        <div className="flex flex-wrap gap-2">
+          {METRIC_TABS.map(([value, label]) => {
+            const enabled = isMetricEnabledForKind(kind, value);
+            const hint = METRIC_DISABLED_TITLE[kind]?.[value];
+            const selected = enabled && sessionChart.metric === value;
+            return (
               <button
                 key={value}
                 type="button"
+                disabled={!enabled}
+                title={hint ?? undefined}
                 onClick={() => {
+                  if (!enabled) {
+                    return;
+                  }
                   const patch: Partial<SessionChartSettings> = {
                     metric: value,
                   };
-                  if (value === "pace") {
+                  if (value === "pace" || value === "efficiency") {
                     patch.cumulative = false;
                   }
                   onSessionChartPatch(patch);
                 }}
                 className={
-                  sessionChart.metric === value
+                  selected
                     ? "rounded-md bg-sky-600/20 px-2 py-1 text-[11px] font-medium text-sky-200 ring-1 ring-sky-500/35"
-                    : "rounded-md px-2 py-1 text-[11px] font-medium text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                    : enabled
+                      ? "rounded-md px-2 py-1 text-[11px] font-medium text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                      : "cursor-not-allowed rounded-md border border-transparent px-2 py-1 text-[11px] font-medium text-zinc-600 opacity-60"
                 }
               >
                 {label}
               </button>
-            ))}
-          </div>
-        ) : null}
-        <label
-          className={`flex cursor-pointer items-center gap-2 text-[11px] ${
-            cumulativeOk ? "text-zinc-400" : "cursor-not-allowed text-zinc-600"
-          }`}
-        >
-          <input
-            type="checkbox"
-            className="rounded border-zinc-600 bg-zinc-900"
-            checked={cumulativeOk && sessionChart.cumulative}
-            disabled={!cumulativeOk}
-            onChange={(e) =>
-              onSessionChartPatch({ cumulative: e.target.checked })
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          aria-pressed={Boolean(cumulativeOk && sessionChart.cumulative)}
+          disabled={!cumulativeOk}
+          title={
+            cumulativeOk
+              ? undefined
+              : !isCardio
+                ? "Switch to Volume for cumulative totals."
+                : "Not available for pace or efficiency."
+          }
+          onClick={() => {
+            if (!cumulativeOk) {
+              return;
             }
-          />
+            onSessionChartPatch({
+              cumulative: !sessionChart.cumulative,
+            });
+          }}
+          className={
+            !cumulativeOk
+              ? "cursor-not-allowed rounded-md border border-zinc-800/70 px-2 py-0.5 text-[11px] font-medium leading-tight text-zinc-600 opacity-60"
+              : sessionChart.cumulative
+                ? "rounded-md border border-emerald-500/45 bg-emerald-600/15 px-2 py-0.5 text-[11px] font-medium leading-tight text-emerald-200"
+                : "rounded-md border border-zinc-600/80 bg-zinc-900/35 px-2 py-0.5 text-[11px] font-medium leading-tight text-zinc-400 hover:border-zinc-500 hover:bg-zinc-800/45 hover:text-zinc-200"
+          }
+        >
           Cumulative
-        </label>
+        </button>
       </div>
     </div>
   );
@@ -498,11 +664,15 @@ export function ActivityMetricsChart({
   const interactive = Boolean(onSelectDayKey);
 
   const barFill =
-    effectiveMetric === "time" || !isCardio
-      ? "rgb(52 211 153)"
-      : effectiveMetric === "distance"
-        ? "rgb(16 185 129)"
-        : "rgb(251 191 36)";
+    effectiveMetric === "volume"
+      ? "rgb(167 139 250)"
+      : effectiveMetric === "time"
+        ? "rgb(52 211 153)"
+        : effectiveMetric === "distance"
+          ? "rgb(16 185 129)"
+          : effectiveMetric === "efficiency"
+            ? "rgb(56 189 248)"
+            : "rgb(251 191 36)";
 
   return (
     <section
@@ -726,14 +896,7 @@ export function ActivityMetricsChart({
               if (x == null) {
                 return;
               }
-              setHoverIdx(
-                nearestSessionIndexFromSvgX(
-                  x,
-                  n,
-                  xAt,
-                  (i) => plotDays[i]?.point != null,
-                ),
-              );
+              setHoverIdx(nearestIndexFromSvgX(x, n, xAt));
             }}
             onMouseLeave={() => setHoverIdx(null)}
             onClick={(e) => {
@@ -742,17 +905,10 @@ export function ActivityMetricsChart({
               if (x == null) {
                 return;
               }
-              const idx = nearestSessionIndexFromSvgX(
-                x,
-                n,
-                xAt,
-                (i) => plotDays[i]?.point != null,
-              );
-              if (idx != null) {
-                const row = plotDays[idx];
-                if (row?.point) {
-                  onSelectDayKey(row.point.dayKey);
-                }
+              const idx = nearestIndexFromSvgX(x, n, xAt);
+              const row = plotDays[idx];
+              if (row) {
+                onSelectDayKey(row.dayKey);
               }
             }}
           />

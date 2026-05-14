@@ -2,59 +2,22 @@ import { useMutation } from "@tanstack/react-query";
 import type { CompletedWorkoutRow } from "~/lib/db/schema";
 import { hevyWorkoutWebUrl, stravaActivityWebUrl } from "~/lib/hevy/links";
 import {
-  completedWorkoutCalories,
-  completedWorkoutDistanceM,
-  completedWorkoutMovingSeconds,
   completedWorkoutTitle,
+  formatCompletedSessionBrief,
 } from "~/lib/plans/completed-workout-data";
 import { updatePlanFn } from "~/lib/server-fns/plans";
-
-function formatActualDurationSec(s: number | null | undefined): string | null {
-  if (s == null || !Number.isFinite(s)) {
-    return null;
-  }
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = Math.floor(s % 60);
-  if (h > 0) {
-    return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-  }
-  return `${m}:${String(sec).padStart(2, "0")}`;
-}
-
-function linkedSessionStatsLine(c: CompletedWorkoutRow): string | null {
-  const dist = completedWorkoutDistanceM(c);
-  const distLabel =
-    dist != null && Number.isFinite(dist)
-      ? dist >= 1000
-        ? `${(dist / 1000).toFixed(2)} km`
-        : `${Math.round(dist)} m`
-      : null;
-  const dur = formatActualDurationSec(completedWorkoutMovingSeconds(c));
-  const kcalRaw = completedWorkoutCalories(c);
-  const kcal =
-    kcalRaw != null && Number.isFinite(kcalRaw) ? Math.round(kcalRaw) : null;
-  const parts: string[] = [];
-  if (distLabel) {
-    parts.push(distLabel);
-  }
-  if (dur) {
-    parts.push(dur);
-  }
-  if (kcal != null) {
-    parts.push(`${kcal} kcal`);
-  }
-  return parts.length === 0 ? null : parts.join(" · ");
-}
 
 export function LinkedSessionPanel({
   planId,
   completed,
   onUnlinked,
+  surrogateBodyWeightKg,
 }: {
   planId: string;
   completed: CompletedWorkoutRow;
   onUnlinked: () => Promise<void>;
+  /** Diary max weight (lb → kg) for Hevy bodyweight set volume when `weight_kg` is absent. */
+  surrogateBodyWeightKg?: number | null;
 }) {
   const unlinkMutation = useMutation({
     mutationFn: () =>
@@ -70,7 +33,9 @@ export function LinkedSessionPanel({
     },
   });
 
-  const statsLine = linkedSessionStatsLine(completed);
+  const statsLine = formatCompletedSessionBrief(completed, {
+    surrogateBodyWeightKg,
+  });
   const sessionTitle = completedWorkoutTitle(completed);
   const isStrava = completed.vendor === "strava";
   const href = isStrava

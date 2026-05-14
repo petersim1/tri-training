@@ -92,9 +92,7 @@ export const exportActivitiesMarkdownFn = createServerFn({
     }) => d,
   )
   .handler(
-    async ({
-      data,
-    }): Promise<{ markdown: string; rowCount: number }> => {
+    async ({ data }): Promise<{ markdown: string; rowCount: number }> => {
       if (!KINDS.has(data.kind)) {
         throw new Error("Invalid kind filter");
       }

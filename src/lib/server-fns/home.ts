@@ -30,13 +30,13 @@ import {
   type SessionChartSettings,
   serializeSessionChartSettings,
 } from "~/lib/home/session-chart-settings";
+import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
 import {
   completedWorkoutLocalDayKey,
   completedWorkoutLocalDayKeyInTimeZone,
   completedWorkoutStartIso,
   inferPlanKindFromCompletedRow,
 } from "~/lib/plans/completed-workout-data";
-import { syncCompletedResolvedForId } from "~/lib/plans/completed-resolved";
 import { listAllPlannedWorkoutsFn } from "~/lib/server-fns/planned-workouts-list";
 import { fetchHevyHomeBundleFn } from "~/lib/server-fns/vendors/hevy";
 
@@ -46,7 +46,7 @@ export { fetchHevyHomeBundleFn };
 function validateSessionChartSettings(d: SessionChartSettings): void {
   const ok =
     ["3m", "6m", "12m", "ytd", "all"].includes(d.range) &&
-    ["distance", "time", "pace"].includes(d.metric) &&
+    ["distance", "time", "pace", "efficiency", "volume"].includes(d.metric) &&
     typeof d.cumulative === "boolean";
   if (!ok) {
     throw new Error("Invalid session chart settings");

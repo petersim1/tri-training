@@ -92,7 +92,9 @@ function asHevyData(data: unknown): HevyWorkoutSummary | null {
  * Falls back to JSON for legacy rows if needed.
  */
 /** ISO start instant from stored vendor JSON (UTC timestamps from APIs). */
-export function completedWorkoutStartIso(c: CompletedWorkoutRow): string | null {
+export function completedWorkoutStartIso(
+  c: CompletedWorkoutRow,
+): string | null {
   if (c.vendor === "strava") {
     const a = asStravaData(c.data);
     const iso = a?.start_date;
@@ -144,9 +146,7 @@ export function inferPlanKindFromCompletedRow(
     return fromColumn;
   }
   const a = asStravaData(c.data);
-  return inferPlanKindFromStravaSport(
-    normalizeStravaSportType(a?.sport_type),
-  );
+  return inferPlanKindFromStravaSport(normalizeStravaSportType(a?.sport_type));
 }
 
 export function completedWorkoutTitle(c: CompletedWorkoutRow): string | null {
@@ -199,9 +199,101 @@ export function completedWorkoutCalories(
   return cal != null && Number.isFinite(cal) ? cal : null;
 }
 
-/** One-line distance · duration · kcal for list UI. */
+/** Strava-only; BPM when the activity JSON includes HR. */
+export function completedWorkoutAverageHeartrateBpm(
+  c: CompletedWorkoutRow,
+): number | null {
+  if (c.vendor !== "strava") {
+    return null;
+  }
+  const a = asStravaData(c.data);
+  const hr = a?.average_heartrate;
+  return hr != null && Number.isFinite(hr) && Number(hr) > 0
+    ? Number(hr)
+    : null;
+}
+
+const LB_TO_KG = 0.45359237;
+
+/** Strongest scale reading in the diary (lb → kg) — used as load for Hevy bodyweight sets. */
+export function maxSelfRecordedWeightKgFromLbEntries(
+  entries: readonly { weightLb: number }[],
+): number | null {
+  if (entries.length === 0) {
+    return null;
+  }
+  const m = Math.max(...entries.map((e) => e.weightLb));
+  if (!Number.isFinite(m) || m <= 0) {
+    return null;
+  }
+  return m * LB_TO_KG;
+}
+
+/**
+ * Hevy `data.exercises[].sets[]`: each set has `reps` and optional `weight_kg`.
+ * Bodyweight sets (`weight_kg` null) use `surrogateBodyWeightKg` when provided; otherwise skipped.
+ * Returns Σ (effective kg × reps), or null if nothing countable.
+ */
+export function completedWorkoutHevyLiftVolumeKgReps(
+  c: CompletedWorkoutRow,
+  surrogateBodyWeightKg: number | null,
+): number | null {
+  if (c.vendor !== "hevy") {
+    return null;
+  }
+  const w = asHevyData(c.data);
+  const exercises = w?.exercises;
+  if (!Array.isArray(exercises)) {
+    return null;
+  }
+  let total = 0;
+  let any = false;
+  for (const ex of exercises) {
+    if (!ex || typeof ex !== "object") {
+      continue;
+    }
+    const sets = ex.sets;
+    if (!Array.isArray(sets)) {
+      continue;
+    }
+    for (const s of sets) {
+      if (!s || typeof s !== "object") {
+        continue;
+      }
+      const repsRaw = s.reps;
+      const reps =
+        typeof repsRaw === "number"
+          ? repsRaw
+          : typeof repsRaw === "string"
+            ? Number.parseInt(repsRaw, 10)
+            : Number.NaN;
+      if (!Number.isFinite(reps) || reps <= 0) {
+        continue;
+      }
+      const wRaw = s.weight_kg;
+      let kg: number | null = null;
+      if (wRaw == null) {
+        kg = surrogateBodyWeightKg;
+      } else if (typeof wRaw === "number" && Number.isFinite(wRaw)) {
+        kg = wRaw;
+      } else if (typeof wRaw === "string") {
+        const p = Number.parseFloat(wRaw);
+        kg = Number.isFinite(p) ? p : null;
+      }
+      if (kg == null || !Number.isFinite(kg) || kg < 0) {
+        continue;
+      }
+      any = true;
+      total += kg * reps;
+    }
+  }
+  return any ? total : null;
+}
+
+/** One-line distance · duration · kcal · (Strava avg HR | Hevy volume) for list UI. */
 export function formatCompletedSessionBrief(
   c: CompletedWorkoutRow,
+  opts?: { surrogateBodyWeightKg?: number | null },
 ): string | null {
   const dist = completedWorkoutDistanceM(c);
   const distLabel =
@@ -234,6 +326,20 @@ export function formatCompletedSessionBrief(
   }
   if (kcal != null) {
     parts.push(`${kcal} kcal`);
+  }
+  if (c.vendor === "strava") {
+    const hr = completedWorkoutAverageHeartrateBpm(c);
+    if (hr != null && Number.isFinite(hr)) {
+      parts.push(`${Math.round(hr)} bpm avg`);
+    }
+  } else if (c.vendor === "hevy") {
+    const vol = completedWorkoutHevyLiftVolumeKgReps(
+      c,
+      opts?.surrogateBodyWeightKg ?? null,
+    );
+    if (vol != null && Number.isFinite(vol) && vol > 0) {
+      parts.push(`${Math.round(vol).toLocaleString()} kg×reps`);
+    }
   }
   return parts.length === 0 ? null : parts.join(" · ");
 }

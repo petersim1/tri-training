@@ -61,9 +61,7 @@ export function PlanDayKeyField({ planId, dayKey, onUpdated }: Props) {
         >
           {saving ? "Saving…" : "Save date"}
         </button>
-        {err ? (
-          <span className="text-[11px] text-red-400">{err}</span>
-        ) : null}
+        {err ? <span className="text-[11px] text-red-400">{err}</span> : null}
       </div>
     </div>
   );

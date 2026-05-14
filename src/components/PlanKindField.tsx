@@ -41,9 +41,7 @@ export function PlanKindField({ planId, kind, onUpdated }: Props) {
   return (
     <div className="space-y-1">
       <label className="block">
-        <span className="text-[11px] font-medium text-zinc-500">
-          Activity
-        </span>
+        <span className="text-[11px] font-medium text-zinc-500">Activity</span>
         <select
           value={draft}
           onChange={(e) => setDraft(e.target.value as PlanKind)}
@@ -65,9 +63,7 @@ export function PlanKindField({ planId, kind, onUpdated }: Props) {
         >
           {saving ? "Saving…" : "Save activity"}
         </button>
-        {err ? (
-          <span className="text-[11px] text-red-400">{err}</span>
-        ) : null}
+        {err ? <span className="text-[11px] text-red-400">{err}</span> : null}
       </div>
     </div>
   );

@@ -45,6 +45,7 @@ import { sessionChartDayRange } from "~/lib/home/session-chart-settings";
 import {
   type ActivityPlotKind,
   buildActivityPlotPoints,
+  buildStravaEfficiencyPlotPoints,
 } from "~/lib/plans/activity-plot-points";
 import {
   CARDIO_DISTANCE_UNITS,
@@ -55,6 +56,7 @@ import {
   completedWorkoutTitle,
   formatCompletedSessionBrief,
   inferPlanKindFromCompletedRow,
+  maxSelfRecordedWeightKgFromLbEntries,
 } from "~/lib/plans/completed-workout-data";
 import type { LinkedSessionPayload } from "~/lib/plans/linked-session";
 import {
@@ -1060,6 +1062,7 @@ export function Home() {
     queryKey: homePlansQueryKey,
     queryFn: () => listAllPlannedWorkoutsFn(),
   });
+
   const plans = plansQuery.data ?? [];
 
   const weightQuery = useQuery({
@@ -1152,10 +1155,30 @@ export function Home() {
     () => weightsByDayKey(weightEntries),
     [weightEntries],
   );
+  const surrogateBwKgForLiftVolume = useMemo(
+    () => maxSelfRecordedWeightKgFromLbEntries(weightEntries),
+    [weightEntries],
+  );
   const activityPlotPoints = useMemo(() => {
     const { from, to } = sessionChartDayRange(sessionChartSettings.range);
-    return buildActivityPlotPoints(plans, activityPlotKind, from, to);
-  }, [plans, activityPlotKind, sessionChartSettings.range]);
+    if (sessionChartSettings.metric === "efficiency") {
+      return buildStravaEfficiencyPlotPoints(
+        plans,
+        activityPlotKind,
+        from,
+        to,
+      );
+    }
+    return buildActivityPlotPoints(plans, activityPlotKind, from, to, {
+      surrogateBodyWeightKg: surrogateBwKgForLiftVolume,
+    });
+  }, [
+    plans,
+    activityPlotKind,
+    sessionChartSettings.range,
+    sessionChartSettings.metric,
+    surrogateBwKgForLiftVolume,
+  ]);
 
   const weightEntriesInRange = useMemo(() => {
     const { from, to } = sessionChartDayRange(sessionChartSettings.range);
@@ -1855,7 +1878,10 @@ export function Home() {
                             ? completedWorkoutTitle(p.completedWorkout)
                             : null;
                           const sessionBrief = p.completedWorkout
-                            ? formatCompletedSessionBrief(p.completedWorkout)
+                            ? formatCompletedSessionBrief(p.completedWorkout, {
+                                surrogateBodyWeightKg:
+                                  surrogateBwKgForLiftVolume,
+                              })
                             : null;
                           const planTargets = formatPlannedCardioTargets(p);
                           return (
@@ -1927,7 +1953,10 @@ export function Home() {
                                 inferPlanKindFromCompletedRow(cw) ??
                                 cw.activityKind;
                               const sessionBrief =
-                                formatCompletedSessionBrief(cw);
+                                formatCompletedSessionBrief(cw, {
+                                  surrogateBodyWeightKg:
+                                    surrogateBwKgForLiftVolume,
+                                });
                               const matchingPlans = dialogPlans.filter((p) =>
                                 planAcceptsLinkForCompleted(p, cw),
                               );
@@ -2515,6 +2544,9 @@ export function Home() {
                         <LinkedSessionPanel
                           planId={linkPlan.id}
                           completed={linkPlan.completedWorkout}
+                          surrogateBodyWeightKg={
+                            surrogateBwKgForLiftVolume
+                          }
                           onUnlinked={refreshAfterPlanChange}
                         />
                       ) : !isCardioKind(linkPlan.kind) ? (
