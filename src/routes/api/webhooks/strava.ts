@@ -1,9 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  logWebhookDelivery,
-  processStravaWebhookEvent,
-  type StravaWebhookEvent,
-} from "~/lib/webhooks/process-external-webhooks";
+import { webhookActions } from "@/server-fcts";
+import type { StravaWebhookEvent } from "@/types/requests/webhooks";
 
 export const Route = createFileRoute("/api/webhooks/strava")({
   server: {
@@ -29,7 +26,7 @@ export const Route = createFileRoute("/api/webhooks/strava")({
       },
       POST: async ({ request }) => {
         const rawBody = await request.text();
-        await logWebhookDelivery({
+        await webhookActions.logWebhookDelivery({
           source: "strava",
           idempotencyKey: null,
           payloadJson: rawBody,
@@ -67,7 +64,7 @@ export const Route = createFileRoute("/api/webhooks/strava")({
         const idempotencyKey = `strava:${sub}:${oid}:${aspect}:${et}`;
 
         try {
-          const result = await processStravaWebhookEvent(ev);
+          const result = await webhookActions.processStravaWebhookEvent(ev);
           if (result.duplicate) {
             return new Response(null, { status: 200 });
           }
@@ -76,7 +73,7 @@ export const Route = createFileRoute("/api/webhooks/strava")({
             detail.includes("ignored") || detail.includes("duplicate")
               ? "ignored"
               : "ok";
-          await logWebhookDelivery({
+          await webhookActions.logWebhookDelivery({
             source: "strava",
             idempotencyKey,
             payloadJson,
@@ -85,7 +82,7 @@ export const Route = createFileRoute("/api/webhooks/strava")({
           });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          await logWebhookDelivery({
+          await webhookActions.logWebhookDelivery({
             source: "strava",
             idempotencyKey,
             payloadJson,

@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1776213663967,
-      "tag": "0000_initial",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1776398152936,
-      "tag": "0001_add_completed_workouts_activity_kind",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1776399850724,
-      "tag": "0002_completed_workouts_is_resolved",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1776500000000,
-      "tag": "0003_planned_workouts_day_key",
+      "when": 1779104380196,
+      "tag": "0000_wide_typhoid_mary",
       "breakpoints": true
     }
   ]

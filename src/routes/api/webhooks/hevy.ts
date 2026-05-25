@@ -1,15 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  logWebhookDelivery,
-  processHevyWorkoutWebhook,
-} from "~/lib/webhooks/process-external-webhooks";
+import { webhookActions } from "@/server-fcts";
 
 export const Route = createFileRoute("/api/webhooks/hevy")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const rawBody = await request.text();
-        await logWebhookDelivery({
+        await webhookActions.logWebhookDelivery({
           source: "hevy",
           idempotencyKey: null,
           payloadJson: rawBody,
@@ -78,8 +75,10 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
             : rawBody;
 
         try {
-          const result = await processHevyWorkoutWebhook({ workoutId });
-          await logWebhookDelivery({
+          const result = await webhookActions.processHevyWorkoutWebhook({
+            workoutId,
+          });
+          await webhookActions.logWebhookDelivery({
             source: "hevy",
             idempotencyKey: null,
             payloadJson,
@@ -89,7 +88,7 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
           return new Response(null, { status: 200 });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          await logWebhookDelivery({
+          await webhookActions.logWebhookDelivery({
             source: "hevy",
             idempotencyKey: null,
             payloadJson,

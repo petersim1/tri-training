@@ -8,10 +8,10 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import type * as React from "react";
-import { DefaultCatchBoundary } from "~/components/DefaultCatchBoundary";
-import { NotFound } from "~/components/NotFound";
-import { getQueryClient } from "~/lib/query/client";
-import appCss from "~/styles/app.css?url";
+import { DefaultCatchBoundary } from "@/components/DefaultCatchBoundary";
+import { NotFound } from "@/components/NotFound";
+import { getQueryClient } from "@/lib/query/client";
+import appCss from "../styles/app.css?url";
 
 interface RouterContext {
   queryClient: QueryClient;

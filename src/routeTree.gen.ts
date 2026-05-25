@@ -13,11 +13,12 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
+import { Route as AuthedEventsRouteImport } from './routes/_authed/events'
 import { Route as AuthedActivitiesRouteImport } from './routes/_authed/activities'
 import { Route as ApiWebhooksStravaRouteImport } from './routes/api/webhooks/strava'
 import { Route as ApiWebhooksHevyRouteImport } from './routes/api/webhooks/hevy'
 import { Route as ApiStravaCallbackRouteImport } from './routes/api/strava/callback'
-import { Route as ApiPlannedWorkoutsBulkRouteImport } from './routes/api/planned-workouts/bulk'
+import { Route as ApiPlanningChatStreamRouteImport } from './routes/api/planning-chat/stream'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -36,6 +37,11 @@ const AuthedIndexRoute = AuthedIndexRouteImport.update({
 const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedEventsRoute = AuthedEventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedActivitiesRoute = AuthedActivitiesRouteImport.update({
@@ -58,9 +64,9 @@ const ApiStravaCallbackRoute = ApiStravaCallbackRouteImport.update({
   path: '/api/strava/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPlannedWorkoutsBulkRoute = ApiPlannedWorkoutsBulkRouteImport.update({
-  id: '/api/planned-workouts/bulk',
-  path: '/api/planned-workouts/bulk',
+const ApiPlanningChatStreamRoute = ApiPlanningChatStreamRouteImport.update({
+  id: '/api/planning-chat/stream',
+  path: '/api/planning-chat/stream',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -68,8 +74,9 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/login': typeof LoginRoute
   '/activities': typeof AuthedActivitiesRoute
+  '/events': typeof AuthedEventsRoute
   '/settings': typeof AuthedSettingsRoute
-  '/api/planned-workouts/bulk': typeof ApiPlannedWorkoutsBulkRoute
+  '/api/planning-chat/stream': typeof ApiPlanningChatStreamRoute
   '/api/strava/callback': typeof ApiStravaCallbackRoute
   '/api/webhooks/hevy': typeof ApiWebhooksHevyRoute
   '/api/webhooks/strava': typeof ApiWebhooksStravaRoute
@@ -77,9 +84,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/activities': typeof AuthedActivitiesRoute
+  '/events': typeof AuthedEventsRoute
   '/settings': typeof AuthedSettingsRoute
   '/': typeof AuthedIndexRoute
-  '/api/planned-workouts/bulk': typeof ApiPlannedWorkoutsBulkRoute
+  '/api/planning-chat/stream': typeof ApiPlanningChatStreamRoute
   '/api/strava/callback': typeof ApiStravaCallbackRoute
   '/api/webhooks/hevy': typeof ApiWebhooksHevyRoute
   '/api/webhooks/strava': typeof ApiWebhooksStravaRoute
@@ -89,9 +97,10 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authed/activities': typeof AuthedActivitiesRoute
+  '/_authed/events': typeof AuthedEventsRoute
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/': typeof AuthedIndexRoute
-  '/api/planned-workouts/bulk': typeof ApiPlannedWorkoutsBulkRoute
+  '/api/planning-chat/stream': typeof ApiPlanningChatStreamRoute
   '/api/strava/callback': typeof ApiStravaCallbackRoute
   '/api/webhooks/hevy': typeof ApiWebhooksHevyRoute
   '/api/webhooks/strava': typeof ApiWebhooksStravaRoute
@@ -102,8 +111,9 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/activities'
+    | '/events'
     | '/settings'
-    | '/api/planned-workouts/bulk'
+    | '/api/planning-chat/stream'
     | '/api/strava/callback'
     | '/api/webhooks/hevy'
     | '/api/webhooks/strava'
@@ -111,9 +121,10 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/activities'
+    | '/events'
     | '/settings'
     | '/'
-    | '/api/planned-workouts/bulk'
+    | '/api/planning-chat/stream'
     | '/api/strava/callback'
     | '/api/webhooks/hevy'
     | '/api/webhooks/strava'
@@ -122,9 +133,10 @@ export interface FileRouteTypes {
     | '/_authed'
     | '/login'
     | '/_authed/activities'
+    | '/_authed/events'
     | '/_authed/settings'
     | '/_authed/'
-    | '/api/planned-workouts/bulk'
+    | '/api/planning-chat/stream'
     | '/api/strava/callback'
     | '/api/webhooks/hevy'
     | '/api/webhooks/strava'
@@ -133,7 +145,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
   LoginRoute: typeof LoginRoute
-  ApiPlannedWorkoutsBulkRoute: typeof ApiPlannedWorkoutsBulkRoute
+  ApiPlanningChatStreamRoute: typeof ApiPlanningChatStreamRoute
   ApiStravaCallbackRoute: typeof ApiStravaCallbackRoute
   ApiWebhooksHevyRoute: typeof ApiWebhooksHevyRoute
   ApiWebhooksStravaRoute: typeof ApiWebhooksStravaRoute
@@ -169,6 +181,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSettingsRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/events': {
+      id: '/_authed/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof AuthedEventsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/activities': {
       id: '/_authed/activities'
       path: '/activities'
@@ -197,11 +216,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStravaCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/planned-workouts/bulk': {
-      id: '/api/planned-workouts/bulk'
-      path: '/api/planned-workouts/bulk'
-      fullPath: '/api/planned-workouts/bulk'
-      preLoaderRoute: typeof ApiPlannedWorkoutsBulkRouteImport
+    '/api/planning-chat/stream': {
+      id: '/api/planning-chat/stream'
+      path: '/api/planning-chat/stream'
+      fullPath: '/api/planning-chat/stream'
+      preLoaderRoute: typeof ApiPlanningChatStreamRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -209,12 +228,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthedRouteChildren {
   AuthedActivitiesRoute: typeof AuthedActivitiesRoute
+  AuthedEventsRoute: typeof AuthedEventsRoute
   AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedActivitiesRoute: AuthedActivitiesRoute,
+  AuthedEventsRoute: AuthedEventsRoute,
   AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedIndexRoute: AuthedIndexRoute,
 }
@@ -225,7 +246,7 @@ const AuthedRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
   LoginRoute: LoginRoute,
-  ApiPlannedWorkoutsBulkRoute: ApiPlannedWorkoutsBulkRoute,
+  ApiPlanningChatStreamRoute: ApiPlanningChatStreamRoute,
   ApiStravaCallbackRoute: ApiStravaCallbackRoute,
   ApiWebhooksHevyRoute: ApiWebhooksHevyRoute,
   ApiWebhooksStravaRoute: ApiWebhooksStravaRoute,

@@ -1,40 +1,43 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import {
-  backfillLinkedWorkoutsFn,
-  getStravaSettingsStravaFn,
-} from "~/lib/server-fns";
+import { useServerFn } from "@tanstack/react-start";
+import { useCallback, useEffect, useState } from "react";
+import { backfillActions, cookieActions, vendorActions } from "@/server-fcts";
 
 export const Route = createFileRoute("/_authed/settings")({
   loader: async () => {
-    const strava = await getStravaSettingsStravaFn();
-    return { strava };
+    const cookie = await cookieActions.getStravaTokensFromCookies();
+    if (cookie) {
+      return { kind: "connected", athleteId: cookie.athleteId };
+    }
+    if (!process.env.STRAVA_CLIENT_ID?.trim()) {
+      return { kind: "misconfigured" };
+    }
+    return { kind: "connect" };
   },
   component: SettingsPage,
 });
 
 function SettingsPage() {
-  const { strava } = Route.useLoaderData();
+  const { kind, athleteId } = Route.useLoaderData();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const runStartOAuth = useServerFn(vendorActions.startStravaOAuth);
   const [stravaOAuthMsg, setStravaOAuthMsg] = useState<string | null>(null);
+  const [stravaOAuthPending, setStravaOAuthPending] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
   const [backfillErr, setBackfillErr] = useState<string | null>(null);
 
   const backfillMutation = useMutation({
-    mutationFn: () => backfillLinkedWorkoutsFn(),
+    mutationFn: () => backfillActions.backfillLinkedWorkouts(),
     onMutate: () => {
       setBackfillMsg(null);
       setBackfillErr(null);
     },
     onSuccess: (r) => {
       setBackfillMsg(
-        `Imported Strava ${r.importedStrava}, Hevy ${r.importedHevy}, Hevy weights ${r.importedHevyWeights}. Linked ${r.linked}, skipped ${r.skipped}.${r.errors.length > 0 ? ` ${r.errors.length} error(s) — see below.` : ""}`,
+        `Imported Strava ${r.importedStrava}, Hevy ${r.importedHevy}, Hevy weights ${r.importedHevyWeights}.}`,
       );
-      if (r.errors.length > 0) {
-        setBackfillErr(r.errors.join("\n"));
-      }
       router.invalidate();
       queryClient.clear();
     },
@@ -42,6 +45,22 @@ function SettingsPage() {
       setBackfillErr(e instanceof Error ? e.message : String(e));
     },
   });
+
+  const onConnectStrava = useCallback(async () => {
+    setStravaOAuthPending(true);
+    try {
+      const r = await runStartOAuth();
+      if (!r.ok) {
+        setStravaOAuthMsg("misconfigured");
+        return;
+      }
+      window.location.assign(r.authorizeUrl);
+    } catch {
+      setStravaOAuthMsg("oauth_start_failed");
+    } finally {
+      setStravaOAuthPending(false);
+    }
+  }, [runStartOAuth]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -70,35 +89,26 @@ function SettingsPage() {
       <section className="space-y-3 rounded border border-zinc-800 p-4">
         <h2 className="font-medium text-zinc-100">Strava</h2>
         {stravaBanner}
-        {strava.kind === "connected" ? (
+        {kind === "connected" ? (
           <p className="text-sm text-emerald-400">
             Connected
-            {strava.athleteId != null ? ` (athlete ${strava.athleteId})` : ""}.
+            {athleteId != null ? ` (athlete ${athleteId})` : ""}.
           </p>
-        ) : strava.kind === "misconfigured" ? (
+        ) : kind === "misconfigured" ? (
           <p className="text-sm text-zinc-500">
             Strava OAuth is not configured (STRAVA_CLIENT_ID).
           </p>
         ) : (
           <>
             <p className="text-sm text-zinc-500">Not connected.</p>
-            <a
-              href={strava.mobileAuthorizeUrl}
-              className="inline-block rounded bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500"
-              onClick={(e) => {
-                e.preventDefault();
-                const now = Date.now();
-                window.location.href = strava.deepLinkUrl;
-                setTimeout(() => {
-                  if (Date.now() - now > 100) {
-                    return;
-                  }
-                  window.location.href = strava.mobileAuthorizeUrl;
-                }, 25);
-              }}
+            <button
+              type="button"
+              disabled={stravaOAuthPending}
+              onClick={() => void onConnectStrava()}
+              className="rounded bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-60"
             >
-              Connect Strava
-            </a>
+              {stravaOAuthPending ? "Continuing to Strava…" : "Connect Strava"}
+            </button>
           </>
         )}
       </section>

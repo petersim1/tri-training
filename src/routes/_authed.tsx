@@ -1,5 +1,8 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { LogoutButton } from "~/components/LogoutButton";
+
+import { LogoutButton } from "@/components/LogoutButton";
+
+import { PlanningChatProvider } from "@/components/planning-chat/PlanningAssistantDock";
 
 export const Route = createFileRoute("/_authed")({
   component: AuthedLayout,
@@ -7,46 +10,50 @@ export const Route = createFileRoute("/_authed")({
 
 function AuthedLayout() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="shrink-0 border-b border-zinc-800 bg-zinc-900/80">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-4 px-4 py-3">
-          <nav className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
-            <Link
-              to="/"
-              activeProps={{ className: "font-semibold text-white" }}
-            >
-              Home
-            </Link>
-            <Link
-              to="/activities"
-              search={{
-                kind: "all",
-                status: "all",
-                from: undefined,
-                to: undefined,
-                page: 1,
-              }}
-              activeProps={{ className: "font-semibold text-white" }}
-            >
-              Activities
-            </Link>
-            <Link
-              to="/settings"
-              activeProps={{ className: "font-semibold text-white" }}
-            >
-              Settings
-            </Link>
-          </nav>
-          <div className="ml-auto flex items-center gap-3">
-            <LogoutButton />
+    <PlanningChatProvider>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <header className="shrink-0 border-b border-zinc-800 bg-zinc-900/80">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-4 px-4 py-3">
+            <nav className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
+              <Link
+                to="/"
+                activeProps={{ className: "font-semibold text-white" }}
+              >
+                Home
+              </Link>
+              <Link
+                to="/activities"
+                search={{
+                  page: 1,
+                }}
+                activeProps={{ className: "font-semibold text-white" }}
+              >
+                Activities
+              </Link>
+              <Link
+                to="/events"
+                activeProps={{ className: "font-semibold text-white" }}
+              >
+                Events
+              </Link>
+              <Link
+                to="/settings"
+                activeProps={{ className: "font-semibold text-white" }}
+              >
+                Settings
+              </Link>
+            </nav>
+            <div className="ml-auto flex items-center gap-3">
+              <LogoutButton />
+            </div>
           </div>
-        </div>
-      </header>
-      <main className="flex w-full flex-1 flex-col bg-zinc-950">
-        <div className="mx-auto w-full max-w-5xl px-4 py-8">
-          <Outlet />
-        </div>
-      </main>
-    </div>
+        </header>
+        <main className="flex w-full flex-1 flex-col bg-zinc-950">
+          <div className="mx-auto w-full max-w-5xl px-4 py-8">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </PlanningChatProvider>
   );
 }

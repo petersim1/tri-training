@@ -1,13 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { deleteCookie, getCookie } from "@tanstack/react-start/server";
-import { ALLOWED_STRAVA_ATHLETE_ID } from "~/lib/strava/allowed-athlete";
-import {
-  clearStravaTokensCookie,
-  setStravaTokensCookie,
-} from "~/lib/strava/cookie-store";
-import { stravaRedirectUri } from "~/lib/strava/oauth";
-import { STRAVA_OAUTH_STATE_COOKIE } from "~/lib/strava/oauth-flow.shared";
-import { persistServiceStravaTokens } from "~/lib/strava/service-tokens";
+import { STRAVA_OAUTH_STATE_COOKIE, STRAVA_TOKENS_COOKIE } from "@/lib/cookies";
+import { ALLOWED_STRAVA_ATHLETE_ID } from "@/lib/strava/allowed-athlete";
+import { stravaRedirectUri } from "@/lib/strava/oauth";
+import { cookieActions, vendorActions } from "@/server-fcts";
 
 const TOKEN_URL = "https://www.strava.com/oauth/token";
 const STRAVA_ATHLETE_URL = "https://www.strava.com/api/v3/athlete";
@@ -210,23 +206,26 @@ export const Route = createFileRoute("/api/strava/callback")({
               allowed: ALLOWED_STRAVA_ATHLETE_ID,
             });
             deleteCookie(STRAVA_OAUTH_STATE_COOKIE, { path: "/" });
-            clearStravaTokensCookie();
+            deleteCookie(STRAVA_TOKENS_COOKIE, {
+              httpOnly: true,
+              secure: process.env.NODE_ENV === "production",
+              sameSite: "lax" as const,
+              path: "/",
+            });
             return redirectLogin(origin, "forbidden", "forbidden");
           }
 
           try {
-            setStravaTokensCookie({
-              accessToken: data.access_token,
-              refreshToken: data.refresh_token,
-              expiresAt: data.expires_at,
-              athleteId: athlete.id ?? null,
-            });
-            try {
-              await persistServiceStravaTokens({
+            await cookieActions.setStravaTokensCookie({
+              data: {
                 accessToken: data.access_token,
                 refreshToken: data.refresh_token,
                 expiresAt: data.expires_at,
-              });
+                athleteId: athlete.id ?? null,
+              },
+            });
+            try {
+              await vendorActions.persistServiceStravaTokens({ data });
             } catch (persistErr) {
               logError("persist service Strava tokens failed", persistErr);
             }

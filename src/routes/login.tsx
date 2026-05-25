@@ -1,17 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { getStravaLoginOAuthUrlsFn } from "~/lib/server-fns/vendors/strava";
+import { useServerFn } from "@tanstack/react-start";
+import { useCallback, useEffect, useState } from "react";
+import { vendorActions } from "@/server-fcts";
 
 export const Route = createFileRoute("/login")({
-  loader: async () => {
-    return { strava: await getStravaLoginOAuthUrlsFn() };
-  },
   component: LoginPage,
 });
 
 function LoginPage() {
-  const { strava } = Route.useLoaderData();
+  const runStartOAuth = useServerFn(vendorActions.startStravaOAuth);
   const [stravaOAuthMsg, setStravaOAuthMsg] = useState<string | null>(null);
+  const [oauthPending, setOAuthPending] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -22,13 +21,34 @@ function LoginPage() {
     }
   }, []);
 
+  const onStravaClick = useCallback(async () => {
+    console.log("CLICKED");
+    setOAuthPending(true);
+    try {
+      const r = await runStartOAuth();
+      if (!r.ok) {
+        setStravaOAuthMsg("misconfigured");
+        return;
+      }
+      window.location.assign(r.authorizeUrl);
+    } catch {
+      setStravaOAuthMsg("oauth_start_failed");
+    } finally {
+      setOAuthPending(false);
+    }
+  }, [runStartOAuth]);
+
   const stravaBanner =
     stravaOAuthMsg === "forbidden" ? (
       <p className="text-sm text-red-400">
         This Strava account is not allowed to use this app.
       </p>
+    ) : stravaOAuthMsg === "misconfigured" ? (
+      <p className="text-sm text-zinc-500">
+        Strava OAuth is not configured (STRAVA_CLIENT_ID).
+      </p>
     ) : stravaOAuthMsg ? (
-      <p className="break-words text-sm text-red-400">
+      <p className="wrap-break-words text-sm text-red-400">
         Strava OAuth: {stravaOAuthMsg}
       </p>
     ) : null;
@@ -41,29 +61,14 @@ function LoginPage() {
           Sign in with Strava. Your session lasts 30 days on this device.
         </p>
         {stravaBanner}
-        {strava.kind === "misconfigured" ? (
-          <p className="text-sm text-zinc-500">
-            Strava OAuth is not configured (STRAVA_CLIENT_ID).
-          </p>
-        ) : strava.kind === "connect" ? (
-          <a
-            href={strava.mobileAuthorizeUrl}
-            className="inline-block rounded bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500"
-            onClick={(e) => {
-              e.preventDefault();
-              const now = Date.now();
-              window.location.href = strava.deepLinkUrl;
-              setTimeout(() => {
-                if (Date.now() - now > 100) {
-                  return;
-                }
-                window.location.href = strava.mobileAuthorizeUrl;
-              }, 25);
-            }}
-          >
-            Sign in with Strava
-          </a>
-        ) : null}
+        <button
+          type="button"
+          disabled={oauthPending}
+          onClick={() => void onStravaClick()}
+          className="inline-block rounded bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-60"
+        >
+          {oauthPending ? "Continuing to Strava…" : "Sign in with Strava"}
+        </button>
       </div>
     </main>
   );

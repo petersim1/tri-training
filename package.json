@@ -15,6 +15,7 @@
     "routes:generate": "bunx @tanstack/router-cli@latest generate",
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bunx drizzle-kit migrate",
+    "db:studio": "bunx drizzle-kit studio",
     "db:push": "bunx drizzle-kit push",
     "prepare": "husky"
   },
@@ -25,9 +26,13 @@
     "@tanstack/react-router-devtools": "^1.166.13",
     "@tanstack/react-start": "^1.167.39",
     "drizzle-orm": "^0.41.0",
-    "nitro": "^3.0.260311-beta",
+    "openai": "^4.104.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",
@@ -38,6 +43,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "drizzle-kit": "^0.31.0",
     "husky": "^9.1.7",
+    "nitro": "^3.0.260522-beta",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
     "vite": "^8.0.0"

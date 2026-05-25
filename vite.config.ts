@@ -12,11 +12,14 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   plugins: [
-    tailwindcss(),
     tanstackStart({
       srcDirectory: "src",
+      importProtection: {
+        behavior: "error",
+      },
     }),
-    viteReact(),
     nitro(),
+    viteReact(),
+    tailwindcss(),
   ],
 });
