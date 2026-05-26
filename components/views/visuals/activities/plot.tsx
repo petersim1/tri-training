@@ -1,18 +1,19 @@
-// activity-metrics-chart-plot.tsx
-
+import { scaleLinear, scaleTime, ticks } from "d3";
 import { useMemo, useState } from "react";
-import type {
-  SessionChartMetric,
-  SessionChartRange,
+import {
+  type SessionChartMetric,
+  type SessionChartRange,
+  VALID_CUMULATIVE,
 } from "@/lib/constants/visuals";
 import type { VizResult } from "@/types/responses/activities";
 
-const VIEW_W = 800;
-const VIEW_H = 280;
 const PAD_L = 52;
 const PAD_R = 20;
-const PAD_T = 24;
-const PAD_B = 40;
+const PAD_T = 20;
+const PAD_B = 36;
+const VIEW_W = 1200;
+const VIEW_H = 280;
+const CHART_HEIGHT = 280;
 
 const BAR_FILL: Record<SessionChartMetric, string> = {
   volume: "rgb(167 139 250)",
@@ -33,23 +34,6 @@ function shortDateLabel(date: string) {
     : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function pickYTicks(yMin: number, yMax: number): number[] {
-  const span = yMax - yMin;
-  if (span <= 0 || !Number.isFinite(span)) return [yMin];
-  const roughStep = span / 4;
-  const exp = Math.floor(Math.log10(Math.max(roughStep, Number.EPSILON)));
-  const m = roughStep / 10 ** exp;
-  const niceMul = m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10;
-  const step = niceMul * 10 ** exp;
-  const start = Math.floor(yMin / step) * step;
-  const out: number[] = [];
-  for (let v = start; v <= yMax + span * 1e-12; v += step) {
-    if (v >= yMin - span * 1e-12) out.push(Math.round(v * 1e6) / 1e6);
-    if (out.length > 6) break;
-  }
-  return out.length >= 2 ? out : [yMin, yMax];
-}
-
 function formatValue(v: number, metric: SessionChartMetric) {
   if (metric === "volume")
     return v >= 1000 ? Math.round(v).toLocaleString() : v.toFixed(0);
@@ -60,9 +44,9 @@ function formatValue(v: number, metric: SessionChartMetric) {
 
 function yAxisLabel(metric: SessionChartMetric) {
   if (metric === "volume") return "kg×reps";
-  if (metric === "distance") return "km";
+  if (metric === "distance") return "mi";
   if (metric === "efficiency") return "m/beat";
-  if (metric === "pace") return "min/km";
+  if (metric === "pace") return "mph";
   return "min";
 }
 
@@ -78,12 +62,24 @@ function rangeToDateBounds(range: string): { from: Date; to: Date } | null {
   };
 }
 
+function convert(value: number, metric: SessionChartMetric): number {
+  switch (metric) {
+    case "distance":
+      return value / 1609.344;
+    case "time":
+      return value / 60;
+    case "pace":
+      return value * 2.23694;
+    default:
+      return value;
+  }
+}
+
 type Props = {
   points: VizResult[];
   metric: SessionChartMetric;
   range: SessionChartRange;
   cumulative: boolean;
-  cumulativeOk: boolean;
   isLoading: boolean;
 };
 
@@ -92,11 +88,11 @@ export function ActivityMetricsChartPlot({
   metric,
   range,
   cumulative,
-  cumulativeOk,
   isLoading,
 }: Props) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const fill = BAR_FILL[metric];
+  const cumulativeOk = VALID_CUMULATIVE[metric];
 
   const geometry = useMemo(() => {
     const sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
@@ -109,19 +105,15 @@ export function ActivityMetricsChartPlot({
       (sorted.length > 0
         ? new Date(`${sorted[sorted.length - 1].date}T12:00:00`)
         : new Date());
-    const xSpan = xTo.getTime() - xFrom.getTime();
 
     const innerW = VIEW_W - PAD_L - PAD_R;
     const innerH = VIEW_H - PAD_T - PAD_B;
-    const baselineY = PAD_T + innerH;
 
-    const xAt = (date: Date) =>
-      PAD_L +
-      (xSpan <= 0
-        ? innerW / 2
-        : ((date.getTime() - xFrom.getTime()) / xSpan) * innerW);
+    const xScale = scaleTime()
+      .domain([xFrom, xTo])
+      .range([PAD_L, PAD_L + innerW]);
 
-    const values = sorted.map((p) => p.value);
+    const values = sorted.map((p) => convert(p.value, metric));
     let run = 0;
     const displayValues =
       cumulative && cumulativeOk
@@ -133,50 +125,52 @@ export function ActivityMetricsChartPlot({
 
     const hasData = values.some((v) => v > 0);
     const yMax = Math.max(...displayValues, 1e-6);
-    const yTop = yMax + Math.max(yMax * 0.08, yMax * 0.02);
-    const yAt = (v: number) => PAD_T + innerH - ((v - 0) / (yTop - 0)) * innerH;
+
+    const yScale = scaleLinear()
+      .domain([0, yMax])
+      .range([PAD_T + innerH, PAD_T]);
+
     const barW = Math.min(
       10,
       Math.max(2, (innerW / Math.max(sorted.length, 1)) * 0.5),
     );
 
-    const allTicks: Date[] = [];
-    const cur = new Date(xFrom.getFullYear(), xFrom.getMonth(), 1);
-    while (cur <= xTo) {
-      allTicks.push(new Date(cur));
-      cur.setMonth(cur.getMonth() + 1);
-    }
+    // X ticks: up to 3 month boundaries
+    const allMonthTicks = xScale.ticks(12);
     const xTicks =
-      allTicks.length <= 3
-        ? allTicks
+      allMonthTicks.length <= 3
+        ? allMonthTicks
         : [
-            allTicks[0],
-            allTicks[Math.floor(allTicks.length / 2)],
-            allTicks[allTicks.length - 1],
+            allMonthTicks[0],
+            allMonthTicks[Math.floor(allMonthTicks.length / 2)],
+            allMonthTicks[allMonthTicks.length - 1],
           ];
+
+    // Y ticks via d3
+    const yTicks = ticks(0, yMax, 5);
 
     return {
       sorted,
       displayValues,
       hasData,
-      xAt,
-      yAt,
-      baselineY,
+      xScale,
+      yScale,
+      baselineY: yScale(0),
       barW,
       innerW,
       innerH,
-      yTicks: pickYTicks(0, yTop),
+      yTicks,
       xTicks,
       n: sorted.length,
     };
-  }, [points, range, cumulative, cumulativeOk]);
+  }, [points, range, metric, cumulative, cumulativeOk]);
 
   const {
     sorted,
     displayValues,
     hasData,
-    xAt,
-    yAt,
+    xScale,
+    yScale,
     baselineY,
     barW,
     innerW,
@@ -187,7 +181,7 @@ export function ActivityMetricsChartPlot({
   } = geometry;
 
   return (
-    <div style={{ height: 280 }}>
+    <div style={{ height: CHART_HEIGHT }}>
       {isLoading ? (
         <div className="flex h-full items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-500" />
@@ -204,10 +198,9 @@ export function ActivityMetricsChartPlot({
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           role="img"
         >
-          {/* Y axis */}
           <g pointerEvents="none" opacity={0.4}>
             {yTicks.map((lb) => {
-              const y = yAt(lb);
+              const y = yScale(lb);
               return (
                 <g key={`yl-${lb}`}>
                   <line
@@ -242,7 +235,6 @@ export function ActivityMetricsChartPlot({
             </text>
           </g>
 
-          {/* Bars or line */}
           {cumulative && cumulativeOk
             ? n >= 2 && (
                 <polyline
@@ -256,18 +248,18 @@ export function ActivityMetricsChartPlot({
                   points={sorted
                     .map(
                       (p, i) =>
-                        `${xAt(new Date(`${p.date}T12:00:00`))},${yAt(displayValues[i] ?? 0)}`,
+                        `${xScale(new Date(`${p.date}T12:00:00`))},${yScale(displayValues[i] ?? 0)}`,
                     )
                     .join(" ")}
                 />
               )
             : sorted.map((p, i) => {
                 const v = displayValues[i] ?? 0;
-                const cx = xAt(new Date(`${p.date}T12:00:00`));
-                const topY = yAt(v);
+                const cx = xScale(new Date(`${p.date}T12:00:00`));
+                const topY = yScale(v);
                 return (
                   <rect
-                    key={p.date}
+                    key={`${p.date}-${i}`}
                     x={cx - barW / 2}
                     y={topY}
                     width={barW}
@@ -280,9 +272,8 @@ export function ActivityMetricsChartPlot({
                 );
               })}
 
-          {/* X axis ticks */}
           {xTicks.map((d) => {
-            const x = xAt(d);
+            const x = xScale(d);
             if (x < PAD_L || x > VIEW_W - PAD_R) return null;
             return (
               <g key={d.toISOString()} pointerEvents="none">
@@ -307,11 +298,10 @@ export function ActivityMetricsChartPlot({
             );
           })}
 
-          {/* Hover line */}
           {hoverIdx != null && hoverIdx >= 0 && hoverIdx < n && (
             <line
-              x1={xAt(new Date(`${sorted[hoverIdx].date}T12:00:00`))}
-              x2={xAt(new Date(`${sorted[hoverIdx].date}T12:00:00`))}
+              x1={xScale(new Date(`${sorted[hoverIdx].date}T12:00:00`))}
+              x2={xScale(new Date(`${sorted[hoverIdx].date}T12:00:00`))}
               y1={PAD_T}
               y2={VIEW_H - PAD_B}
               stroke="rgb(113 113 122)"
@@ -321,14 +311,13 @@ export function ActivityMetricsChartPlot({
             />
           )}
 
-          {/* Dots */}
           {sorted.map((p, i) => {
             const isHovered = hoverIdx === i;
             return (
               <circle
-                key={p.date}
-                cx={xAt(new Date(`${p.date}T12:00:00`))}
-                cy={yAt(displayValues[i] ?? 0)}
+                key={`${p.date}-${i}`}
+                cx={xScale(new Date(`${p.date}T12:00:00`))}
+                cy={yScale(displayValues[i] ?? 0)}
                 r={isHovered ? 3.75 : 3}
                 fill="rgb(24 24 27)"
                 stroke="rgb(244 244 245)"
@@ -339,7 +328,6 @@ export function ActivityMetricsChartPlot({
             );
           })}
 
-          {/* Tooltip */}
           {hoverIdx != null &&
             hoverIdx >= 0 &&
             hoverIdx < n &&
@@ -347,7 +335,7 @@ export function ActivityMetricsChartPlot({
               const p = sorted[hoverIdx];
               if (!p) return null;
               const v = displayValues[hoverIdx] ?? 0;
-              const cx = xAt(new Date(`${p.date}T12:00:00`));
+              const cx = xScale(new Date(`${p.date}T12:00:00`));
               return (
                 <g pointerEvents="none">
                   <text
@@ -372,7 +360,6 @@ export function ActivityMetricsChartPlot({
               );
             })()}
 
-          {/* Scrubber */}
           {/* biome-ignore lint/a11y/noStaticElementInteractions: SVG chart scrubber */}
           <rect
             x={PAD_L}
@@ -391,7 +378,7 @@ export function ActivityMetricsChartPlot({
               let closest = 0;
               let minDist = Infinity;
               for (let i = 0; i < n; i++) {
-                const cx = xAt(new Date(`${sorted[i].date}T12:00:00`));
+                const cx = xScale(new Date(`${sorted[i].date}T12:00:00`));
                 const d = Math.abs(cx - local.x);
                 if (d < minDist) {
                   minDist = d;

@@ -51,8 +51,7 @@ export const loadHomePageDataFn = async (
   const calendarScope = await cookieActions.getCalendarScope();
   const sessionChartSettings = await cookieActions.getVizSettings();
 
-  // intentionally not pre-fetching the activityActions.calendar(), timezones + dates get too fucked
-  // and we likely end up suspending post-hydration anyways.
+  // can't prefetch the .calendar() fct because it's timezone-dependent.
 
   queryClient.prefetchQuery({
     queryKey: queryKeys.activityViz(

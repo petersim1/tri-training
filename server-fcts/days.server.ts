@@ -41,8 +41,7 @@ export const dayInfo = createServerFn({ method: "GET" })
       .select()
       .from(weightEntries)
       .where(eq(weightEntries.dayKey, data.dayKey))
-      .limit(1)
-      .then((r) => r[0] ?? null);
+      .get();
 
     const startOfDay = new Date(`${data.dayKey}T00:00:00`);
     const endOfDay = new Date(`${data.dayKey}T23:59:59.999`);
@@ -69,7 +68,7 @@ export const dayInfo = createServerFn({ method: "GET" })
 
     return {
       activities,
-      weight: weight.weightLb,
+      weight: weight?.weightLb,
       linkCandidates: unlinkedCandidates,
     };
   });

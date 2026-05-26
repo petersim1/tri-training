@@ -5,10 +5,7 @@
  */
 import { and, eq } from "drizzle-orm";
 import type { WorkoutVendor } from "@/lib/constants/activities";
-import type {
-  CompletedActivityKind,
-  StravaSportTypeLowercase,
-} from "@/lib/constants/vendors";
+import type { CompletedActivityKind } from "@/lib/constants/vendors";
 import { getDb } from "@/lib/db/index.server";
 import { completedWorkouts, webhookDeliveries } from "@/lib/db/schema.server";
 import { hevyFetchWorkoutById } from "@/lib/hevy/client";
@@ -107,8 +104,7 @@ export async function processHevyWorkoutWebhook(args: {
     .select()
     .from(completedWorkouts)
     .where(eq(completedWorkouts.id, key))
-    .limit(1)
-    .then((r) => r[0] ?? null);
+    .get();
   if (existing_workout) {
     await db
       .update(completedWorkouts)
@@ -208,9 +204,7 @@ export async function processStravaWebhookEvent(
   const activity = (await res.json()) as StravaActivitySummary;
 
   if (aspect === "create" || aspect === "update") {
-    const kind = stravaSportTypeToPlanKind(
-      activity.sport_type as StravaSportTypeLowercase,
-    );
+    const kind = stravaSportTypeToPlanKind(activity.sport_type);
     if (!kind) {
       return {
         detail: `strava: activity sport not mapped (${activity.sport_type ?? "?"})`,
@@ -221,8 +215,7 @@ export async function processStravaWebhookEvent(
       .select()
       .from(completedWorkouts)
       .where(eq(completedWorkouts.id, activity.id.toString()))
-      .limit(1)
-      .then((r) => r[0] ?? null);
+      .get();
     if (existing_workout) {
       await db
         .update(completedWorkouts)

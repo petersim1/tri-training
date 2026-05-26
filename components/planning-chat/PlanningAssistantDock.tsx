@@ -259,7 +259,7 @@ function invalidateCoach(qc: QueryClient, threadId: string | null) {
   }
   void qc.invalidateQueries({
     predicate: ({ queryKey }) =>
-      queryKey.length > 0 && queryKey[0] === "plannedWorkouts",
+      queryKey.length > 0 && queryKey[0] === "activities",
   });
 }
 

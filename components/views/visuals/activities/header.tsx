@@ -1,7 +1,8 @@
-// activity-metrics-chart-header.tsx
-import type {
-  SessionChartMetric,
-  SessionChartSettings,
+import {
+  type SessionChartMetric,
+  type SessionChartSettings,
+  VALID_CUMULATIVE,
+  VALID_METRICS,
 } from "@/lib/constants/visuals";
 
 type ActivityPlotKind = "run" | "bike" | "swim" | "lift";
@@ -68,17 +69,16 @@ const DISABLED_TITLE: Partial<
 type Props = {
   sessionChart: SessionChartSettings;
   onSessionChartPatch: (patch: Partial<SessionChartSettings>) => void;
-  cumulativeOk: boolean;
-  validMetrics: SessionChartMetric[];
 };
 
 export function ActivityMetricsChartHeader({
   sessionChart,
   onSessionChartPatch,
-  cumulativeOk,
-  validMetrics,
 }: Props) {
   const { kind, metric, cumulative } = sessionChart;
+
+  const cumulativeOk = VALID_CUMULATIVE[metric];
+  const validMetrics = VALID_METRICS[kind];
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-zinc-800/80 px-4 py-3">

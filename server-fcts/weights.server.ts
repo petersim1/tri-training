@@ -53,39 +53,39 @@ export const viz = createServerFn({ method: "GET" })
     return rows;
   });
 
-/** Set or replace the single weight for a calendar day (`YYYY-MM-DD`). */ export const setWeightForDayFn =
-  createServerFn({ method: "POST" })
-    .inputValidator(createWeightSchema)
-    .handler(async ({ data }) => {
-      const w = data.weightLb;
-      if (!Number.isFinite(w) || w <= 0) {
-        throw new Error("Enter a positive weight in pounds");
-      }
-      const now = new Date();
-      const id = crypto.randomUUID();
-      const db = await getDb();
-      await db.transaction(async (tx) => {
-        await tx
-          .delete(weightEntries)
-          .where(eq(weightEntries.dayKey, data.dayKey))
-          .run();
-        await tx
-          .insert(weightEntries)
-          .values({
-            id,
-            dayKey: data.dayKey,
-            measuredAt: new Date(data.dayKey).toString(),
-            weightLb: w,
-            notes: null,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .run();
-      });
-      return { id };
+/** Set or replace the single weight for a calendar day (`YYYY-MM-DD`). */
+export const set = createServerFn({ method: "POST" })
+  .inputValidator(createWeightSchema)
+  .handler(async ({ data }) => {
+    const w = data.weightLb;
+    if (!Number.isFinite(w) || w <= 0) {
+      throw new Error("Enter a positive weight in pounds");
+    }
+    const now = new Date();
+    const id = crypto.randomUUID();
+    const db = await getDb();
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(weightEntries)
+        .where(eq(weightEntries.dayKey, data.dayKey))
+        .run();
+      await tx
+        .insert(weightEntries)
+        .values({
+          id,
+          dayKey: data.dayKey,
+          measuredAt: new Date(data.dayKey).toString(),
+          weightLb: w,
+          notes: null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
     });
+    return { id };
+  });
 
-export const clearWeightForDayFn = createServerFn({ method: "POST" })
+export const remove = createServerFn({ method: "POST" })
   .inputValidator(dayKeySchema)
   .handler(async ({ data }) => {
     const db = await getDb();

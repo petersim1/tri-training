@@ -1,9 +1,11 @@
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { useFormReducer } from "@/hooks/useFormReducer";
 import { ACTIVITIES_PLANNED_MARKDOWN_TEMPLATE } from "@/lib/api/activities-markdown-import";
@@ -13,11 +15,9 @@ import {
   hevyWorkoutWebUrl,
   stravaActivityWebUrl,
 } from "@/lib/hevy/links";
-import { formatPlannedCardioTargets } from "@/lib/plans/cardio-targets";
 import {
+  activityKindToPlanKind,
   completedWorkoutTitle,
-  formatCompletedSessionBrief,
-  inferPlanKindFromCompletedRow,
 } from "@/lib/plans/completed-workout-data";
 import queryKeys from "@/lib/query-keys";
 import {
@@ -27,13 +27,13 @@ import {
 } from "@/lib/utils/dates";
 import { activityActions, markdownActions } from "@/server-fcts";
 import type { ActivityListSchemaValues } from "@/types/requests/activities";
-import { PencilEditIcon } from "../assets";
 import { LinkedSessionPanel } from "../LinkedSessionPanel";
 import { PlanCardioTargetsField } from "../PlanCardioTargetsField";
 import { PlanDayKeyField } from "../PlanDayKeyField";
 import { PlanKindField } from "../PlanKindField";
 import { PlanNotesField } from "../PlanNotesField";
-import { normalizePlanStatus, PlanStatusSelect } from "../PlanStatusSelect";
+import { PlanStatusSelect } from "../PlanStatusSelect";
+import { ActivityElement } from "../views/activities/element";
 import { ActivityFilters } from "../views/activities/filters";
 
 const STRAVA_ACTIVITIES_HOME = "https://www.strava.com/athlete/training";
@@ -57,6 +57,9 @@ export const ActivitiesContent: React.FC<{
 }> = ({ initialQuery }) => {
   const queryClient = useQueryClient();
 
+  const linkAll = useServerFn(activityActions.linkAll);
+  const deletePlan = useServerFn(activityActions.deletePlan);
+
   const formReducer = useFormReducer(initialQuery);
 
   const [linkAllOpen, setLinkAllOpen] = useState(false);
@@ -65,7 +68,6 @@ export const ActivitiesContent: React.FC<{
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadMarkdown, setUploadMarkdown] = useState("");
-  const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadIssues, setUploadIssues] = useState<
     { line?: number; message: string }[]
@@ -73,51 +75,75 @@ export const ActivitiesContent: React.FC<{
   const [editPlanId, setEditPlanId] = useState<string | null>(null);
   const calendarTimeZone = browserTimeZone();
 
-  const unresolvedQuery = useQuery({
+  const unresolvedQuery = useSuspenseQuery({
     queryKey: queryKeys.unlinkedActivities,
     queryFn: () => activityActions.unlinked(),
   });
 
   const linkAllMutation = useMutation({
-    mutationFn: () =>
-      activityActions.linkAll({
-        data: { timezone: browserTimeZone() },
-      }),
-  });
-
-  const deletePlanMutation = useMutation({
-    mutationFn: (id: string) => activityActions.deletePlan({ data: { id } }),
-    onSuccess: async () => {
-      setEditPlanId(null);
-      await queryClient.invalidateQueries({ queryKey: ["plannedWorkouts"] });
-      await queryClient.invalidateQueries({ queryKey: ["completedWorkouts"] });
-      await queryClient.invalidateQueries({ queryKey: ["planLinkCandidates"] });
+    mutationFn: () => linkAll({ data: { timezone: browserTimeZone() } }),
+    onMutate: () => {
+      setLinkAllError(null);
+      setLinkAllInfo(null);
     },
-  });
-
-  async function confirmLinkAll() {
-    setLinkAllError(null);
-    setLinkAllInfo(null);
-    try {
-      const res = await linkAllMutation.mutateAsync();
-      await queryClient.invalidateQueries({
+    onSuccess: (r) => {
+      queryClient.invalidateQueries({
         queryKey: queryKeys.unlinkedActivities,
       });
-      await queryClient.invalidateQueries({ queryKey: ["plannedWorkouts"] });
-      await queryClient.invalidateQueries({ queryKey: ["completedWorkouts"] });
-      await queryClient.invalidateQueries({ queryKey: ["planLinkCandidates"] });
-      if (res.linked > 0) {
-        setLinkAllOpen(false);
-        setLinkAllInfo(null);
-      } else {
-        setLinkAllInfo("Nothing to link.");
-      }
-    } catch (e) {
+      queryClient.invalidateQueries({
+        queryKey: ["activities"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar"],
+      });
+    },
+    onError: (e) => {
       setLinkAllError(
         e instanceof Error ? e.message : "Could not link sessions",
       );
-    }
-  }
+    },
+  });
+
+  const deletePlanMutation = useMutation({
+    mutationFn: (id: string) => deletePlan({ data: { id } }),
+    onSuccess: async () => {
+      setEditPlanId(null);
+      queryClient.invalidateQueries({
+        queryKey: ["activities"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar"],
+      });
+    },
+  });
+
+  const importMarkdownMutation = useMutation({
+    mutationFn: () =>
+      markdownActions.importActivitiesMarkdownFn({
+        data: { markdown: uploadMarkdown },
+      }),
+    onMutate: () => {
+      setUploadError(null);
+      setUploadIssues([]);
+    },
+    onSuccess: (result) => {
+      if (!result.ok) {
+        setUploadError(result.error);
+        setUploadIssues(result.issues);
+        return;
+      }
+      setUploadOpen(false);
+      queryClient.invalidateQueries({
+        queryKey: ["activities"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar"],
+      });
+    },
+    onError: (e) => {
+      setUploadError(e instanceof Error ? e.message : "Import failed");
+    },
+  });
 
   useEffect(() => {
     if (!linkAllOpen) {
@@ -148,32 +174,33 @@ export const ActivitiesContent: React.FC<{
       return;
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || uploadBusy) {
+      if (e.key !== "Escape" || importMarkdownMutation.isPending) {
         return;
       }
       setUploadOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [uploadOpen, uploadBusy]);
+  }, [uploadOpen, importMarkdownMutation.isPending]);
 
-  const { data: activityList } = useSuspenseQuery({
+  const {
+    data: activityList = {
+      totalPages: 0,
+      rows: [],
+    },
+  } = useQuery({
     queryKey: queryKeys.activitiesList(formReducer.formState.values),
     queryFn: () =>
       activityActions.list({
         data: formReducer.formState.values,
       }),
+    placeholderData: keepPreviousData,
   });
 
   const editingPlan =
     editPlanId === null
       ? null
       : activityList.rows.find((r) => r.id === editPlanId);
-
-  const pageCount = Math.max(
-    1,
-    Math.ceil(activityList.total ?? 0 / formReducer.formState.values.pageSize),
-  );
 
   useEffect(() => {
     if (editPlanId === null) {
@@ -205,40 +232,22 @@ export const ActivitiesContent: React.FC<{
     }
   }
 
-  async function submitMarkdownImport() {
-    setUploadError(null);
-    setUploadIssues([]);
-    setUploadBusy(true);
-    try {
-      const result = await markdownActions.importActivitiesMarkdownFn({
-        data: { markdown: uploadMarkdown },
-      });
-      if (!result.ok) {
-        setUploadError(result.error);
-        setUploadIssues(result.issues);
-        return;
-      }
-      setUploadOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ["plannedWorkouts"] });
-      await queryClient.invalidateQueries({ queryKey: ["planLinkCandidates"] });
-    } catch (e) {
-      setUploadError(e instanceof Error ? e.message : "Import failed");
-    } finally {
-      setUploadBusy(false);
-    }
-  }
-
   function refresh() {
-    void queryClient.invalidateQueries({ queryKey: ["plannedWorkouts"] });
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({ queryKey: ["calendar"] });
+    queryClient.invalidateQueries({ queryKey: ["activities"] });
+    queryClient.invalidateQueries({ queryKey: ["weight-viz"] });
+    queryClient.invalidateQueries({ queryKey: ["activity-viz"] });
+    queryClient.invalidateQueries({
       queryKey: queryKeys.unlinkedActivities,
     });
   }
 
   async function refreshAfterPlanChange() {
-    await queryClient.invalidateQueries({ queryKey: ["planLinkCandidates"] });
-    await queryClient.invalidateQueries({ queryKey: ["plannedWorkouts"] });
-    await queryClient.invalidateQueries({
+    queryClient.invalidateQueries({ queryKey: ["calendar"] });
+    queryClient.invalidateQueries({ queryKey: ["activities"] });
+    queryClient.invalidateQueries({ queryKey: ["weight-viz"] });
+    queryClient.invalidateQueries({ queryKey: ["activity-viz"] });
+    queryClient.invalidateQueries({
       queryKey: queryKeys.unlinkedActivities,
     });
   }
@@ -271,13 +280,14 @@ export const ActivitiesContent: React.FC<{
           >
             Refresh
           </button>
-          {(unresolvedQuery.data ?? []).length > 0 ? (
+          {unresolvedQuery.data.length > 0 ? (
             <button
               type="button"
               onClick={() => {
                 setLinkAllError(null);
                 setLinkAllInfo(null);
                 setLinkAllOpen(true);
+                linkAllMutation.reset();
               }}
               className="rounded border border-violet-600/50 bg-violet-950/35 px-3 py-1.5 text-sm text-violet-200 hover:bg-violet-950/55"
             >
@@ -292,71 +302,53 @@ export const ActivitiesContent: React.FC<{
         openUpload={() => setUploadOpen(true)}
       />
 
-      {activityList.total > 0 ? (
-        <div className="sticky top-0 z-30 mt-1 border-b border-zinc-800/80 bg-zinc-950/95 py-2 backdrop-blur-md">
-          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-zinc-500">
-              Showing{" "}
-              <span className="tabular-nums text-zinc-400">
-                {(formReducer.formState.values.page - 1) *
-                  formReducer.formState.values.pageSize +
-                  1}
+      <div className="sticky top-0 z-30 mt-1 border-b border-zinc-800/80 bg-zinc-950/95 py-2 backdrop-blur-md">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          {activityList.totalPages > 1 ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={formReducer.formState.values.page === 0}
+                onClick={() =>
+                  formReducer.setField(
+                    "page",
+                    formReducer.formState.values.page - 1,
+                  )
+                }
+                className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-900 disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span className="text-xs tabular-nums text-zinc-500">
+                {formReducer.formState.values.page + 1} /{" "}
+                {activityList.totalPages}
               </span>
-              –
-              <span className="tabular-nums text-zinc-400">
-                {Math.min(
-                  formReducer.formState.values.page *
-                    formReducer.formState.values.pageSize,
-                  activityList.total,
-                )}
-              </span>{" "}
-              of{" "}
-              <span className="tabular-nums text-zinc-400">
-                {activityList.total}
-              </span>
-            </p>
-            {pageCount > 1 ? (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={formReducer.formState.values.page <= 1}
-                  onClick={() =>
-                    formReducer.setField(
-                      "page",
-                      formReducer.formState.values.page - 1,
-                    )
-                  }
-                  className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <span className="text-xs tabular-nums text-zinc-500">
-                  {formReducer.formState.values.page} / {pageCount}
-                </span>
-                <button
-                  type="button"
-                  disabled={formReducer.formState.values.page >= pageCount}
-                  onClick={() =>
-                    formReducer.setField(
-                      "page",
-                      formReducer.formState.values.page + 1,
-                    )
-                  }
-                  className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            ) : null}
-          </div>
+              <button
+                type="button"
+                disabled={
+                  formReducer.formState.values.page ===
+                  activityList.totalPages - 1
+                }
+                onClick={() =>
+                  formReducer.setField(
+                    "page",
+                    formReducer.formState.values.page + 1,
+                  )
+                }
+                className="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-900 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
-      {activityList.total ? (
+      {activityList.rows.length === 0 && (
         <p className="text-sm text-zinc-500">
           No planned workouts match these filters.
         </p>
-      ) : null}
+      )}
 
       {uploadOpen ? (
         <div className="fixed inset-0 z-50">
@@ -364,12 +356,8 @@ export const ActivitiesContent: React.FC<{
             type="button"
             aria-label="Close"
             className="absolute inset-0 z-0 bg-black/60"
-            disabled={uploadBusy}
-            onClick={() => {
-              if (!uploadBusy) {
-                setUploadOpen(false);
-              }
-            }}
+            disabled={importMarkdownMutation.isPending}
+            onClick={() => setUploadOpen(false)}
           />
           <div className="pointer-events-none absolute inset-0 z-10 flex items-end justify-center p-4 sm:items-center">
             <div
@@ -421,7 +409,7 @@ export const ActivitiesContent: React.FC<{
               <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-800/80 pt-3">
                 <button
                   type="button"
-                  disabled={uploadBusy}
+                  disabled={importMarkdownMutation.isPending}
                   onClick={() => void copyMarkdownTemplate()}
                   className="mr-auto h-8 rounded border border-zinc-700 px-3 text-xs text-zinc-300 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -429,7 +417,7 @@ export const ActivitiesContent: React.FC<{
                 </button>
                 <button
                   type="button"
-                  disabled={uploadBusy}
+                  disabled={importMarkdownMutation.isPending}
                   onClick={() => setUploadOpen(false)}
                   className="h-8 rounded border border-zinc-700 px-3 text-xs text-zinc-300 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -437,11 +425,14 @@ export const ActivitiesContent: React.FC<{
                 </button>
                 <button
                   type="button"
-                  disabled={uploadBusy || uploadMarkdown.trim() === ""}
-                  onClick={() => void submitMarkdownImport()}
+                  disabled={
+                    importMarkdownMutation.isPending ||
+                    uploadMarkdown.trim() === ""
+                  }
+                  onClick={() => importMarkdownMutation.mutate()}
                   className="h-8 rounded border border-emerald-600/60 bg-emerald-950/35 px-3 text-xs font-medium text-emerald-200 hover:bg-emerald-950/55 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {uploadBusy ? "Importing…" : "Import"}
+                  {importMarkdownMutation.isPending ? "Importing…" : "Import"}
                 </button>
               </div>
             </div>
@@ -633,7 +624,7 @@ export const ActivitiesContent: React.FC<{
                 {(unresolvedQuery.data ?? []).map((cw) => {
                   const title = completedWorkoutTitle(cw) ?? "Session";
                   const kindLabel =
-                    inferPlanKindFromCompletedRow(cw) ?? cw.activityKind;
+                    activityKindToPlanKind(cw.activityKind) ?? cw.activityKind;
                   return (
                     <li
                       key={cw.id}
@@ -658,34 +649,47 @@ export const ActivitiesContent: React.FC<{
               {linkAllError ? (
                 <p className="text-sm text-red-400">{linkAllError}</p>
               ) : null}
-              <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-800/80 pt-3">
-                <button
-                  type="button"
-                  disabled={linkAllMutation.isPending}
-                  onClick={() => {
-                    setLinkAllOpen(false);
-                    setLinkAllError(null);
-                    setLinkAllInfo(null);
-                  }}
-                  className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={
-                    linkAllMutation.isPending ||
-                    unresolvedQuery.data?.length === 0
-                  }
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void confirmLinkAll();
-                  }}
-                  className="rounded border border-violet-600/60 bg-violet-950/40 px-3 py-1.5 text-sm font-medium text-violet-200 hover:bg-violet-950/65 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {linkAllMutation.isPending ? "Linking…" : "Confirm"}
-                </button>
+              <div className="flex flex-wrap justify-between items-center gap-2 border-t border-zinc-800/80 pt-3">
+                <div>
+                  {linkAllMutation.isSuccess && (
+                    <div className="text-zinc-400 text-sm">
+                      <p>
+                        <span>Linked {linkAllMutation.data.nLinked}</span>
+                        <span className="mx-1">&middot;</span>
+                        <span>Unlinked {linkAllMutation.data.nUnlinked}</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    disabled={linkAllMutation.isPending}
+                    onClick={() => {
+                      setLinkAllOpen(false);
+                      setLinkAllError(null);
+                      setLinkAllInfo(null);
+                    }}
+                    className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      linkAllMutation.isPending ||
+                      unresolvedQuery.data?.length === 0
+                    }
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      linkAllMutation.mutate();
+                    }}
+                    className="rounded border border-violet-600/60 bg-violet-950/40 px-3 py-1.5 text-sm font-medium text-violet-200 hover:bg-violet-950/65 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {linkAllMutation.isPending ? "Linking…" : "Confirm"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -693,107 +697,15 @@ export const ActivitiesContent: React.FC<{
       ) : null}
 
       {activityList.rows.length > 0 ? (
-        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {activityList.rows.map((p) => {
-            const linked = Boolean(p.completedWorkout);
-            const title =
-              linked && p.completedWorkout
-                ? completedWorkoutTitle(p.completedWorkout)
-                : null;
-            const brief =
-              linked && p.completedWorkout
-                ? formatCompletedSessionBrief(p.completedWorkout)
-                : null;
-            const planTargets = ["run", "bike", "swim"].includes(p.kind)
-              ? formatPlannedCardioTargets(p)
-              : null;
-            const vendorOpen = p.completedWorkout
-              ? completedWorkoutOpenInVendor(p.completedWorkout)
-              : null;
-            return (
-              <li
-                key={p.id}
-                className="min-w-0 rounded-md border border-zinc-800/80 bg-zinc-950/70 px-2 py-2"
-              >
-                <div className="flex min-w-0 flex-col gap-1">
-                  <div className="flex min-w-0 items-start justify-between gap-1.5">
-                    <div className="flex min-w-0 flex-wrap items-center gap-1">
-                      <span className="text-[10px] font-medium capitalize text-zinc-200">
-                        {p.kind}
-                      </span>
-                      <span className="rounded bg-zinc-800/90 px-1 py-px text-[9px] capitalize text-zinc-400">
-                        {normalizePlanStatus(p.status)}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Edit ${p.kind} — ${formatPlanDayKey(p.dayKey)}`}
-                      className="shrink-0 rounded p-0.5 text-zinc-500 hover:bg-zinc-800/90 hover:text-zinc-300"
-                      onClick={() => setEditPlanId(p.id)}
-                    >
-                      <PencilEditIcon className="size-3.5" />
-                    </button>
-                  </div>
-                  <p
-                    className="text-[9px] tabular-nums text-zinc-500"
-                    title={p.dayKey}
-                  >
-                    {formatPlanDayKey(p.dayKey)}
-                  </p>
-                  {linked && p.completedWorkout ? (
-                    <div className="rounded border border-emerald-900/35 bg-emerald-950/20 px-1.5 py-1">
-                      <div className="flex min-w-0 items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[9px] font-medium uppercase tracking-wide text-emerald-600/85">
-                            Linked
-                          </p>
-                          {title ? (
-                            <p className="mt-0.5 line-clamp-2 text-[10px] font-medium leading-snug text-zinc-300">
-                              {title}
-                            </p>
-                          ) : null}
-                          {brief ? (
-                            <p className="mt-0.5 text-[9px] text-zinc-500">
-                              {brief}
-                            </p>
-                          ) : null}
-                          {planTargets ? (
-                            <p className="mt-0.5 text-[9px] text-zinc-600">
-                              Target: {planTargets}
-                            </p>
-                          ) : null}
-                        </div>
-                        {vendorOpen ? (
-                          <a
-                            href={vendorOpen.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 pt-0.5 text-right text-[9px] font-medium leading-tight text-emerald-400/95 hover:text-emerald-300 hover:underline"
-                          >
-                            {vendorOpen.label}
-                          </a>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : ["run", "bike", "swim"].includes(p.kind) ? (
-                    <p className="text-[10px] text-zinc-500">
-                      {planTargets ?? "No targets set"}
-                    </p>
-                  ) : (
-                    <p className="text-[9px] text-zinc-600">
-                      No session linked
-                    </p>
-                  )}
-                  {p.notes?.trim() ? (
-                    <p className="line-clamp-2 text-[10px] leading-tight text-zinc-500">
-                      {p.notes.trim()}
-                    </p>
-                  ) : null}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {activityList.rows.map((p) => (
+            <ActivityElement
+              key={p.id}
+              workout={p}
+              onEdit={() => setEditPlanId(p.id)}
+            />
+          ))}
+        </div>
       ) : null}
     </div>
   );

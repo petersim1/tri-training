@@ -1,6 +1,5 @@
 import type { PlanStatus } from "@/components/PlanStatusSelect";
 import type { PlanKind } from "@/lib/constants/activities";
-import type { SessionChartMetric } from "@/lib/constants/visuals";
 import type {
   CompletedWorkoutRow,
   PlannedWorkoutWithCompleted,
@@ -8,7 +7,7 @@ import type {
 
 export type PlannedWorkoutsPageResult = {
   rows: PlannedWorkoutWithCompleted[];
-  total: number;
+  totalPages: number;
 };
 
 export type ActivityItem = {
@@ -29,21 +28,15 @@ export type VizResult = {
   value: number;
 };
 
-export type VizResponse = {
-  validMetrics: SessionChartMetric[];
-  cumulativeOk: boolean;
-  results: VizResult[];
-};
-
 export type DayItem = {
   activities: PlannedWorkoutWithCompleted[];
   weight?: number;
   linkCandidates: CompletedWorkoutRow[];
 };
 
-export type LinkAllUnresolvedCompletedItem = {
-  completedWorkoutId: string;
-  planId: string;
+export type LinkAllResponse = {
+  nLinked: number;
+  nUnlinked: number;
 };
 
 export type BackfillReport = {

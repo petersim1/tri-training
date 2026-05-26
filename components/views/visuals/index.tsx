@@ -43,7 +43,7 @@ export const Visualizer: React.FC<{
         sessionChart={sessionChartSettings}
         onSessionChartPatch={handlePlotChange}
       />
-      <WeightTrendChart range={sessionChartSettings.range} />
+      <WeightTrendChart sessionChart={sessionChartSettings} />
     </section>
   );
 };

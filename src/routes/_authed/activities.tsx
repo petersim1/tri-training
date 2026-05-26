@@ -3,7 +3,7 @@ import {
   dehydrate,
   HydrationBoundary,
 } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { ActivitiesContent } from "@/components/screens/activities";
 import queryKeys from "@/lib/query-keys";
 import { activityActions } from "@/server-fcts";
@@ -14,6 +14,9 @@ import {
 
 export const Route = createFileRoute("/_authed/activities")({
   validateSearch: activityListSchema,
+  search: {
+    middlewares: [stripSearchParams(activityListSchema.parse({}))],
+  },
   loaderDeps: ({ search }) => search,
   loader: async ({
     context,

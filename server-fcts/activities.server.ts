@@ -30,7 +30,7 @@ import {
   weightEntries,
 } from "@/lib/db/schema.server";
 import type { HevyWorkoutSummary } from "@/lib/hevy/types";
-import { inferPlanKindFromCompletedRow } from "@/lib/plans/completed-workout-data";
+import { activityKindToPlanKind } from "@/lib/plans/completed-workout-data";
 import type { StravaActivitySummary } from "@/lib/strava/types";
 import { getDateRange, toIsoDate, toUtcBounds } from "@/lib/utils/dates";
 import { cookieActions } from "@/server-fcts";
@@ -46,9 +46,8 @@ import {
 import { timezoneSchema } from "@/types/requests/shared";
 import type {
   CalendarPageItem,
-  LinkAllUnresolvedCompletedItem,
+  LinkAllResponse,
   PlannedWorkoutsPageResult,
-  VizResponse,
   VizResult,
 } from "@/types/responses/activities";
 
@@ -121,14 +120,16 @@ export const list = createServerFn({ method: "GET" })
 
     const db = await getDb();
 
-    const offset = (data.page - 1) * data.pageSize;
+    const offset = data.page * data.pageSize;
 
     const [countFilteredRow] = await db
       .select({ n: count() })
       .from(plannedWorkouts)
       .where(whereClause)
       .all();
-    const total = Number(countFilteredRow?.n ?? 0);
+    const totalPages = Math.ceil(
+      Number(countFilteredRow?.n ?? 0) / data.pageSize,
+    );
 
     const rows = await db
       .select({
@@ -153,12 +154,12 @@ export const list = createServerFn({ method: "GET" })
       return { ...plan, completedWorkout };
     });
 
-    return { rows: mapped, total };
+    return { rows: mapped, totalPages };
   });
 
 export const viz = createServerFn({ method: "GET" })
   .inputValidator(vizSchema)
-  .handler(async ({ data }): Promise<VizResponse> => {
+  .handler(async ({ data }): Promise<VizResult[]> => {
     const currentSettings = await cookieActions.getVizSettings();
 
     const options: SessionChartSettings = {
@@ -169,18 +170,10 @@ export const viz = createServerFn({ method: "GET" })
     const validMetrics = VALID_METRICS[options.kind];
     const cumulativeOk = VALID_CUMULATIVE[options.metric];
     if (!validMetrics.includes(options.metric)) {
-      return {
-        validMetrics,
-        cumulativeOk,
-        results: [],
-      };
+      return [];
     }
     if (options.cumulative && !cumulativeOk) {
-      return {
-        validMetrics,
-        cumulativeOk,
-        results: [],
-      };
+      return [];
     }
 
     const wheres = [];
@@ -259,7 +252,7 @@ export const viz = createServerFn({ method: "GET" })
         ) {
           out.push({
             date: r.dayKey,
-            value: sData.distance / sData.moving_time,
+            value: sData.distance / sData.moving_time, // km / min
           });
         } else if (
           options.metric === "efficiency" &&
@@ -279,8 +272,9 @@ export const viz = createServerFn({ method: "GET" })
           out.push({
             date: r.dayKey,
             value:
-              new Date(hData.end_time).getTime() -
-              new Date(hData.start_time).getTime() / 1000,
+              (new Date(hData.end_time).getTime() -
+                new Date(hData.start_time).getTime()) /
+              1_000,
           });
         } else if (options.metric === "volume") {
           let volume = 0;
@@ -302,22 +296,14 @@ export const viz = createServerFn({ method: "GET" })
     });
 
     if (!options.cumulative) {
-      return {
-        validMetrics,
-        cumulativeOk,
-        results: out,
-      };
+      return out;
     }
 
-    return {
-      validMetrics,
-      cumulativeOk,
-      results: out.reduce((acc, item) => {
-        const prev = acc.at(-1)?.value ?? 0;
-        acc.push({ date: item.date, value: prev + item.value });
-        return acc;
-      }, [] as VizResult[]),
-    };
+    return out.reduce((acc, item) => {
+      const prev = acc.at(-1)?.value ?? 0;
+      acc.push({ date: item.date, value: prev + item.value });
+      return acc;
+    }, [] as VizResult[]);
   });
 
 export const unlinked = createServerFn({ method: "GET" })
@@ -336,105 +322,96 @@ export const unlinked = createServerFn({ method: "GET" })
 
 export const linkAll = createServerFn({ method: "POST" })
   .inputValidator(timezoneSchema)
-  .handler(
-    async ({
-      data,
-    }): Promise<{
-      linked: number;
-      details: LinkAllUnresolvedCompletedItem[];
-    }> => {
-      const db = await getDb();
-      const now = new Date();
+  .handler(async ({ data }): Promise<LinkAllResponse> => {
+    const db = await getDb();
+    const now = new Date();
 
-      const unresolved = await db
-        .select()
-        .from(completedWorkouts)
-        .where(eq(completedWorkouts.isResolved, false))
-        .orderBy(asc(completedWorkouts.createdAt))
-        .all();
+    const unresolved = await db
+      .select()
+      .from(completedWorkouts)
+      .where(eq(completedWorkouts.isResolved, false))
+      .orderBy(asc(completedWorkouts.createdAt))
+      .all();
 
-      const allPlans = await db
-        .select()
-        .from(plannedWorkouts)
-        .where(
-          and(
-            isNull(plannedWorkouts.completedWorkoutId),
-            eq(plannedWorkouts.status, "planned"),
-          ),
-        )
-        .all();
-      const plansByDayKind = new Map(
-        allPlans.map((p) => [`${p.dayKey}:${p.kind}`, p]),
-      );
+    const allPlans = await db
+      .select()
+      .from(plannedWorkouts)
+      .where(
+        and(
+          isNull(plannedWorkouts.completedWorkoutId),
+          eq(plannedWorkouts.status, "planned"),
+        ),
+      )
+      .all();
+    const plansByDayKind = new Map<string, PlannedWorkoutRow[]>();
+    for (const p of allPlans) {
+      const key = `${p.dayKey}:${p.kind}`;
+      const arr = plansByDayKind.get(key) ?? [];
+      arr.push(p);
+      plansByDayKind.set(key, arr);
+    }
 
-      const details: LinkAllUnresolvedCompletedItem[] = [];
-      const resolvedIds = [];
+    const resolvedIds = [];
 
-      for (const cw of unresolved) {
-        const dayKey = toIsoDate(cw.createdAt, data.timezone);
-        const planKind = inferPlanKindFromCompletedRow(cw);
-        if (!planKind) continue;
+    for (const cw of unresolved) {
+      const dayKey = toIsoDate(cw.createdAt, data.timezone);
+      const planKind = activityKindToPlanKind(cw.activityKind);
+      if (!planKind) continue;
 
-        const existing = plansByDayKind.get(`${dayKey}:${planKind}`);
+      const key = `${dayKey}:${planKind}`;
+      const candidates = plansByDayKind.get(key) ?? [];
+      const existing = candidates.shift(); // take the first available, remove it so next cw doesn't reuse it
 
-        if (existing) {
-          await db
-            .update(plannedWorkouts)
-            .set({
-              completedWorkoutId: cw.id,
-              status: "completed",
-              updatedAt: now,
-            })
-            .where(eq(plannedWorkouts.id, existing.id))
-            .run();
-          existing.completedWorkoutId = cw.id;
-          existing.status = "completed";
-        } else {
-          const id = crypto.randomUUID();
-          await db
-            .insert(plannedWorkouts)
-            .values({
-              id,
-              kind: planKind,
-              dayKey,
-              notes: null,
-              status: "completed",
-              routineVendor: cw.vendor,
-              routineId: null,
-              completedWorkoutId: cw.id,
-              distance: null,
-              distanceUnits: null,
-              timeSeconds: null,
-              createdAt: now,
-              updatedAt: now,
-            })
-            .run();
-          plansByDayKind.set(`${dayKey}:${planKind}`, {
+      if (existing) {
+        await db
+          .update(plannedWorkouts)
+          .set({
+            completedWorkoutId: cw.id,
+            status: "completed",
+            updatedAt: now,
+          })
+          .where(eq(plannedWorkouts.id, existing.id))
+          .run();
+        existing.completedWorkoutId = cw.id;
+        existing.status = "completed";
+      } else {
+        const id = crypto.randomUUID();
+        await db
+          .insert(plannedWorkouts)
+          .values({
             id,
             kind: planKind,
             dayKey,
-          } as PlannedWorkoutRow);
-        }
-
-        resolvedIds.push(cw.id);
-
-        details.push({
-          completedWorkoutId: cw.id,
-          planId: existing?.id ?? details[details.length - 1]?.planId,
-        });
-      }
-
-      if (resolvedIds.length > 0) {
-        await db
-          .update(completedWorkouts)
-          .set({ isResolved: true, updatedAt: now })
-          .where(inArray(completedWorkouts.id, resolvedIds))
+            notes: null,
+            status: "completed",
+            routineVendor: cw.vendor,
+            routineId: null,
+            completedWorkoutId: cw.id,
+            distance: null,
+            distanceUnits: null,
+            timeSeconds: null,
+            createdAt: now,
+            updatedAt: now,
+          })
           .run();
       }
 
-      return { linked: resolvedIds.length, details };
-    },
-  );
+      resolvedIds.push(cw.id);
+    }
+
+    if (resolvedIds.length > 0) {
+      await db
+        .update(completedWorkouts)
+        .set({ isResolved: true, updatedAt: now })
+        .where(inArray(completedWorkouts.id, resolvedIds))
+        .run();
+    }
+
+    return {
+      nLinked: resolvedIds.length,
+      nUnlinked: unresolved.length - resolvedIds.length,
+    };
+  });
 
 export const getLinkCandidates = createServerFn({ method: "GET" })
   .inputValidator(candidateLinkSchema)
@@ -538,7 +515,7 @@ export const createFromCompleted = createServerFn({ method: "POST" })
     if (!completed) throw new Error("Completed workout not found");
     if (completed.isResolved) throw new Error("Workout is already linked");
 
-    const planKind = inferPlanKindFromCompletedRow(completed);
+    const planKind = activityKindToPlanKind(completed.activityKind);
     if (!planKind) {
       throw new Error(
         `cannot create a plan from ${completed.vendor} ${completed.activityKind} type`,

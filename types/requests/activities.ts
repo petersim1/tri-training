@@ -70,6 +70,10 @@ export const createFromCompletedSchema = z.object({
   completedWorkoutId: z.string(),
 });
 
+export type CreateFromCompletedInput = z.infer<
+  typeof createFromCompletedSchema
+>;
+
 export const updatePlanSchema = z.object({
   ...idSchema.shape,
   ...dayKeySchema.partial().shape,

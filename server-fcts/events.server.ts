@@ -16,13 +16,13 @@ export const get = createServerFn({ method: "GET" })
       .select()
       .from(sportEvents)
       .where(eq(sportEvents.id, data.id))
-      .limit(1);
+      .get();
 
-    if (!row.length) {
+    if (!row) {
       throw new Error("not found");
     }
 
-    return row[0];
+    return row;
   });
 
 export const list = createServerFn({ method: "GET" }).handler(

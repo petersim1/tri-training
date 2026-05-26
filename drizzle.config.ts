@@ -6,7 +6,7 @@ const tursoToken = process.env.DATABASE_TURSO_AUTH_TOKEN?.trim();
 export default defineConfig(
   tursoUrl && tursoToken
     ? {
-        schema: "./src/lib/db/schema.ts",
+        schema: "./lib/db/schema.server.ts",
         out: "./drizzle",
         dialect: "turso",
         dbCredentials: {
@@ -15,7 +15,7 @@ export default defineConfig(
         },
       }
     : {
-        schema: "./src/lib/db/schema.ts",
+        schema: "./lib/db/schema.server.ts",
         out: "./drizzle",
         dialect: "sqlite",
         dbCredentials: {

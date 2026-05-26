@@ -1,5 +1,8 @@
 import type { PlanKind } from "../constants/activities";
-import type { StravaSportTypeLowercase } from "../constants/vendors";
+import type {
+  CompletedActivityKind,
+  StravaSportTypeLowercase,
+} from "../constants/vendors";
 import type { CompletedWorkoutRow, JsonValue } from "../db/schema.server";
 import type {
   HevyExerciseSummary,
@@ -71,30 +74,10 @@ export function completedWorkoutLocalDayKeyInTimeZone(
   return iso ? toIsoDate(new Date(iso), timeZone) : null;
 }
 
-/** Map a stored session row to a plan `kind` (lift / run / bike / swim), or null if unsupported. */
-export function inferPlanKindFromCompletedRow(
-  c: CompletedWorkoutRow,
-): PlanKind | null {
-  if (c.vendor === "hevy") {
-    return "lift";
-  } else {
-    if (c.activityKind === "run") {
-      return "run";
-    } else if (c.activityKind === "swim") {
-      return "swim";
-    } else if (c.activityKind === "ride" || c.activityKind === "virtualride") {
-      return "bike";
-    } else if (c.activityKind === "yoga") {
-      return "recovery";
-    }
-  }
-  return null;
-}
-
-export const stravaSportTypeToPlanKind = (
-  sportType: StravaSportTypeLowercase,
+export const activityKindToPlanKind = (
+  a: CompletedActivityKind,
 ): PlanKind | null => {
-  switch (sportType) {
+  switch (a) {
     case "run":
     case "trailrun":
     case "virtualrun":
@@ -106,8 +89,6 @@ export const stravaSportTypeToPlanKind = (
     case "mountainbikeride":
     case "emountainbikeride":
     case "virtualride":
-    case "velomobile":
-    case "handcycle":
       return "bike";
 
     case "swim":
@@ -116,22 +97,32 @@ export const stravaSportTypeToPlanKind = (
     case "weighttraining":
     case "crossfit":
     case "highintensityintervaltraining":
+    case "workout":
+    case "lift": // from hevy specifically.
       return "lift";
 
-    case "walk":
-    case "hike":
     case "yoga":
-    case "pilates":
-    case "elliptical":
-    case "stairstepper":
-    case "rowing":
-    case "virtualrow":
-    case "workout":
       return "recovery";
+
+    // case "walk":
+    // case "hike":
+    // case "pilates":
+    // case "elliptical":
+    // case "stairstepper":
+    // case "rowing":
+    // case "virtualrow":
+    //   return "recovery";
 
     default:
       return null;
   }
+};
+
+export const stravaSportTypeToPlanKind = (
+  sportType: string,
+): PlanKind | null => {
+  const lcase = sportType.toLowerCase() as StravaSportTypeLowercase;
+  return activityKindToPlanKind(lcase);
 };
 
 export function completedWorkoutTitle(c: CompletedWorkoutRow): string | null {

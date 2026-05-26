@@ -90,7 +90,6 @@ export async function getMostRecentAssistantProposal(
       ),
     )
     .orderBy(desc(planningChatMessages.seq))
-    .limit(1)
     .get();
   if (!row) {
     return undefined;

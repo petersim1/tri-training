@@ -3,13 +3,13 @@ import type { PlanKind } from "@/lib/constants/activities";
 import { getDb } from "@/lib/db/index.server";
 import { completedWorkouts } from "@/lib/db/schema.server";
 import {
+  activityKindToPlanKind,
   completedWorkoutAverageHeartrateBpm,
   completedWorkoutDistanceM,
   completedWorkoutHevyLiftExerciseLinesPlanner,
   completedWorkoutLocalDayKeyInTimeZone,
   completedWorkoutMovingSeconds,
   completedWorkoutStartIso,
-  inferPlanKindFromCompletedRow,
 } from "@/lib/plans/completed-workout-data";
 import { activityActions } from "@/server-fcts";
 import type { ActivityListSchemaValues } from "@/types/requests/activities";
@@ -81,7 +81,7 @@ export async function plannerListCompletedWorkouts(input: {
       continue;
     }
     const dk = tz ? completedWorkoutLocalDayKeyInTimeZone(r, tz) : null;
-    const inferredPlanKind = inferPlanKindFromCompletedRow(r);
+    const inferredPlanKind = activityKindToPlanKind(r.activityKind);
     if (kindFilter !== "all" && inferredPlanKind !== kindFilter) {
       continue;
     }

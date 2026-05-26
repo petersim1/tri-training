@@ -24,7 +24,7 @@ function AuthedLayout() {
               <Link
                 to="/activities"
                 search={{
-                  page: 1,
+                  page: undefined,
                 }}
                 activeProps={{ className: "font-semibold text-white" }}
               >

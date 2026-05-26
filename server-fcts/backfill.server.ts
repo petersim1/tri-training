@@ -1,8 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import type {
-  CompletedActivityKind,
-  StravaSportTypeLowercase,
-} from "@/lib/constants/vendors";
+import type { CompletedActivityKind } from "@/lib/constants/vendors";
 import { getDb } from "@/lib/db/index.server";
 import {
   completedWorkouts,
@@ -12,9 +9,8 @@ import {
 } from "@/lib/db/schema.server";
 import {
   fetchAllBodyMeasurements,
-  fetchAllHevyRoutines,
+  fetchAllHevyWorkouts,
 } from "@/lib/hevy/fetch-all";
-import { stravaSportTypeToPlanKind } from "@/lib/plans/completed-workout-data";
 import { fetchAllStravaWorkouts } from "@/lib/strava/fetch-all";
 import type { BackfillReport } from "@/types/responses/activities";
 
@@ -50,9 +46,11 @@ export const backfillLinkedWorkouts = createServerFn({
   );
   const existingHevyMeasureEntries = new Set(measurements.map((m) => m.dayKey));
 
-  const hevyWorkouts = await fetchAllHevyRoutines();
-  const hevyMeasurements = await fetchAllBodyMeasurements();
-  const stravaWorkouts = await fetchAllStravaWorkouts();
+  const [hevyWorkouts, hevyMeasurements, stravaWorkouts] = await Promise.all([
+    fetchAllHevyWorkouts(),
+    fetchAllBodyMeasurements(),
+    fetchAllStravaWorkouts(),
+  ]);
 
   const workoutsCreate: NewCompletedWorkout[] = [];
   const weightEntriesCreate: NewWeightEntryRow[] = [];
@@ -63,6 +61,8 @@ export const backfillLinkedWorkouts = createServerFn({
       report.importedHevy += 1;
       workoutsCreate.push({
         id: crypto.randomUUID(),
+        createdAt: new Date(w.created_at),
+        updatedAt: new Date(w.created_at),
         vendor: "hevy",
         vendorId: id,
         activityKind: "lift",
@@ -89,20 +89,17 @@ export const backfillLinkedWorkouts = createServerFn({
   for (const w of stravaWorkouts) {
     const id = w.id.toString();
     if (!existingStravaIds.has(id)) {
-      const kind = stravaSportTypeToPlanKind(
-        w.sport_type as StravaSportTypeLowercase,
-      );
-      if (kind) {
-        report.importedStrava += 1;
-        workoutsCreate.push({
-          id: crypto.randomUUID(),
-          vendor: "strava",
-          vendorId: id,
-          activityKind: kind as CompletedActivityKind,
-          isResolved: false,
-          data: w,
-        });
-      }
+      report.importedStrava += 1;
+      workoutsCreate.push({
+        id: crypto.randomUUID(),
+        createdAt: new Date(w.start_date),
+        updatedAt: new Date(w.start_date),
+        vendor: "strava",
+        vendorId: id,
+        activityKind: w.sport_type.toLowerCase() as CompletedActivityKind,
+        isResolved: false,
+        data: w,
+      });
     }
   }
 
