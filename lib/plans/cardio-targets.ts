@@ -1,27 +1,3 @@
-/** Convert stored planned distance + units to kilometers (for charts). */
-export function plannedDistanceToKm(
-  distance: number | null,
-  distanceUnits: string | null,
-): number | null {
-  if (distance == null || !Number.isFinite(distance) || distance < 0) {
-    return null;
-  }
-  const u = (distanceUnits ?? "").trim().toLowerCase();
-  if (u === "" || u === "km") {
-    return distance;
-  }
-  if (u === "mi") {
-    return distance * 1.609344;
-  }
-  if (u === "m") {
-    return distance / 1000;
-  }
-  if (u === "yd") {
-    return distance * 0.0009144;
-  }
-  return null;
-}
-
 /** Human-readable duration for planned cardio `time_seconds`. */
 export function formatTargetDurationSec(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));

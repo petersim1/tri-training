@@ -30,32 +30,6 @@ export function wrapPlanningToolTraceMetadata(
   } satisfies PlanningAssistantToolTraceMetadata;
 }
 
-export function parsePlanningToolTraceFromMetadata(
-  metadata: JsonValue | null | undefined,
-): PersistedPlanningToolRoundJson[] {
-  if (metadata === null || metadata === undefined) {
-    return [];
-  }
-  if (typeof metadata !== "object" || Array.isArray(metadata)) {
-    return [];
-  }
-  const rounds = (metadata as { planningToolTrace?: unknown })
-    .planningToolTrace;
-  if (
-    !rounds ||
-    typeof rounds !== "object" ||
-    Array.isArray(rounds) ||
-    !("rounds" in rounds)
-  ) {
-    return [];
-  }
-  const r = (rounds as { rounds?: unknown }).rounds;
-  if (!Array.isArray(r) || r.length === 0) {
-    return [];
-  }
-  return r as PersistedPlanningToolRoundJson[];
-}
-
 const PLANNING_CALENDAR_WRITE_TOOLS = new Set([
   "create_planned_workout",
   "update_planned_workout",

@@ -2,14 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { PLAN_KIND_VALUES, type PlanKind } from "@/lib/constants/activities";
-import type {
-  CompletedWorkoutRow,
-  PlannedWorkoutWithCompleted,
-} from "@/lib/db/schema.server";
+import type { WorkoutEntryWithCompleted } from "@/lib/db/schema.server";
 import queryKeys from "@/lib/query-keys";
+import { rawActivityType } from "@/lib/utils/vendors";
 import { activityActions, dayActions, weightActions } from "@/server-fcts";
 import type {
-  CreateFromCompletedInput,
   CreatePlanInput,
   UpdatePlanInput,
 } from "@/types/requests/activities";
@@ -85,7 +82,6 @@ export const ActivityModal: React.FC<{
           <RoutineModal
             dayKey={dayKey}
             plan={selectedPlan}
-            linkCandidates={data.linkCandidates}
             onClose={onClose}
             onBack={() => setStep("summary")}
           />
@@ -144,9 +140,9 @@ const SummaryModal: React.FC<{
   });
 
   const createFromCompletedMutation = useMutation({
-    mutationFn: (completedWorkoutId: string) =>
+    mutationFn: (vendorActivityId: string) =>
       activityActions.createFromCompleted({
-        data: { dayKey, completedWorkoutId },
+        data: { dayKey, vendorActivityId },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dayDetails(dayKey) });
@@ -217,7 +213,7 @@ const SummaryModal: React.FC<{
                   workout={p}
                   onEdit={() => onOpenPlan(p.id)}
                   hideDate
-                  hideNote={!!p.completedWorkout}
+                  hideNote={!!p.vendorActivityId}
                 />
               ))}
             </ul>
@@ -230,22 +226,22 @@ const SummaryModal: React.FC<{
               Completed (no plan)
             </h3>
             <ul className="space-y-3">
-              {data.linkCandidates.map((cw) => (
+              {data.linkCandidates.map((va) => (
                 <li
-                  key={cw.id}
+                  key={va.id}
                   className="rounded border border-zinc-800 bg-zinc-900/80 px-3 py-2"
                 >
                   <div className="text-sm text-zinc-100 capitalize">
-                    {cw.activityKind}
+                    {rawActivityType(va)}
                   </div>
                   <div className="mt-0.5 text-xs capitalize text-zinc-500">
-                    {cw.vendor}
+                    {va.vendor}
                   </div>
                   <div className="mt-2">
                     <button
                       type="button"
                       disabled={createFromCompletedMutation.isPending}
-                      onClick={() => createFromCompletedMutation.mutate(cw.id)}
+                      onClick={() => createFromCompletedMutation.mutate(va.id)}
                       className="rounded border border-violet-500/60 bg-violet-950/40 px-2.5 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-950/70 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {createFromCompletedMutation.isPending
@@ -452,11 +448,10 @@ const AddModal: React.FC<{
 
 const RoutineModal: React.FC<{
   dayKey: string;
-  plan: PlannedWorkoutWithCompleted;
-  linkCandidates: CompletedWorkoutRow[];
+  plan: WorkoutEntryWithCompleted;
   onClose: () => void;
   onBack: () => void;
-}> = ({ dayKey, plan, linkCandidates, onClose, onBack }) => {
+}> = ({ dayKey, plan, onClose, onBack }) => {
   const queryClient = useQueryClient();
   const [planErr, setPlanErr] = useState<string | null>(null);
   const [notes, setNotes] = useState(plan.notes ?? "");
@@ -484,20 +479,6 @@ const RoutineModal: React.FC<{
       setPlanErr(e instanceof Error ? e.message : "Update failed"),
   });
 
-  const createFromCompletedMutation = useMutation({
-    mutationFn: (data: CreateFromCompletedInput) =>
-      activityActions.createFromCompleted({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dayDetails(dayKey) });
-      queryClient.invalidateQueries({ queryKey: ["calendar"] });
-      queryClient.invalidateQueries({ queryKey: ["activities"] });
-      queryClient.invalidateQueries({ queryKey: ["weight-viz"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-viz"] });
-    },
-    onError: (e) =>
-      setPlanErr(e instanceof Error ? e.message : "Update failed"),
-  });
-
   const deletePlanMutation = useMutation({
     mutationFn: () => activityActions.deletePlan({ data: { id: plan.id } }),
     onSuccess: () => {
@@ -508,11 +489,6 @@ const RoutineModal: React.FC<{
       queryClient.invalidateQueries({ queryKey: ["activity-viz"] });
       onBack();
     },
-  });
-
-  const candidatesForPlan = linkCandidates.filter((cw) => {
-    if (plan.kind === "lift") return cw.vendor === "hevy";
-    return cw.vendor === "strava";
   });
 
   return (
@@ -562,7 +538,7 @@ const RoutineModal: React.FC<{
       <div className="mt-4 border-t border-zinc-800 pt-2.5 flex justify-between">
         <button
           type="button"
-          disabled={deletePlanMutation.isPending || !!plan.completedWorkoutId}
+          disabled={deletePlanMutation.isPending || !!plan.vendorActivityId}
           className="text-[11px] text-red-400/90 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
           onClick={(e) => {
             e.preventDefault();

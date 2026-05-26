@@ -5,13 +5,11 @@
  */
 import { and, eq } from "drizzle-orm";
 import type { WorkoutVendor } from "@/lib/constants/activities";
-import type { CompletedActivityKind } from "@/lib/constants/vendors";
 import { getDb } from "@/lib/db/index.server";
-import { completedWorkouts, webhookDeliveries } from "@/lib/db/schema.server";
+import { vendorActivities, webhookDeliveries } from "@/lib/db/schema.server";
 import { hevyFetchWorkoutById } from "@/lib/hevy/client";
-import { stravaSportTypeToPlanKind } from "@/lib/plans/completed-workout-data";
 import { ALLOWED_STRAVA_ATHLETE_ID } from "@/lib/strava/allowed-athlete";
-import type { StravaActivitySummary } from "@/lib/strava/types";
+import type { StravaActivity } from "@/lib/strava/types";
 import { vendorActions } from "@/server-fcts";
 import type { StravaWebhookEvent } from "@/types/requests/webhooks";
 
@@ -64,11 +62,11 @@ async function deleteCompletedByVendor(
     return;
   }
   await db
-    .delete(completedWorkouts)
+    .delete(vendorActivities)
     .where(
       and(
-        eq(completedWorkouts.vendor, vendor),
-        eq(completedWorkouts.vendorId, vid),
+        eq(vendorActivities.vendor, vendor),
+        eq(vendorActivities.vendorId, vid),
       ),
     )
     .run();
@@ -102,22 +100,20 @@ export async function processHevyWorkoutWebhook(args: {
 
   const existing_workout = await db
     .select()
-    .from(completedWorkouts)
-    .where(eq(completedWorkouts.id, key))
+    .from(vendorActivities)
+    .where(eq(vendorActivities.id, key))
     .get();
   if (existing_workout) {
     await db
-      .update(completedWorkouts)
+      .update(vendorActivities)
       .set({ updatedAt: now, data: w })
-      .where(eq(completedWorkouts.id, existing_workout.id));
+      .where(eq(vendorActivities.id, existing_workout.id));
     return { detail: "hevy: completed workout updated / no new row" };
   } else {
-    await db.insert(completedWorkouts).values({
+    await db.insert(vendorActivities).values({
       id: crypto.randomUUID(),
       vendor: "hevy",
       vendorId: key,
-      activityKind: "lift",
-      isResolved: false,
       data: w,
     });
     return { detail: "hevy: imported new completed workout row" };
@@ -201,34 +197,25 @@ export async function processStravaWebhookEvent(
     throw new Error(`Strava API error ${res.status}: ${text}`);
   }
 
-  const activity = (await res.json()) as StravaActivitySummary;
+  const activity = (await res.json()) as StravaActivity;
 
   if (aspect === "create" || aspect === "update") {
-    const kind = stravaSportTypeToPlanKind(activity.sport_type);
-    if (!kind) {
-      return {
-        detail: `strava: activity sport not mapped (${activity.sport_type ?? "?"})`,
-      };
-    }
-
     const existing_workout = await db
       .select()
-      .from(completedWorkouts)
-      .where(eq(completedWorkouts.id, activity.id.toString()))
+      .from(vendorActivities)
+      .where(eq(vendorActivities.id, activity.id.toString()))
       .get();
     if (existing_workout) {
       await db
-        .update(completedWorkouts)
+        .update(vendorActivities)
         .set({ updatedAt: now, data: activity })
-        .where(eq(completedWorkouts.id, existing_workout.id));
-      return { detail: "hevy: completed workout updated / no new row" };
+        .where(eq(vendorActivities.id, existing_workout.id));
+      return { detail: "strava: completed workout updated / no new row" };
     } else {
-      await db.insert(completedWorkouts).values({
+      await db.insert(vendorActivities).values({
         id: crypto.randomUUID(),
         vendor: "strava",
         vendorId: activity.id.toString(),
-        activityKind: kind as CompletedActivityKind,
-        isResolved: false,
         data: activity,
       });
       return { detail: "hevy: imported new completed workout row" };

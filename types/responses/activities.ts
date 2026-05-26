@@ -1,12 +1,12 @@
 import type { PlanStatus } from "@/components/PlanStatusSelect";
 import type { PlanKind } from "@/lib/constants/activities";
 import type {
-  CompletedWorkoutRow,
-  PlannedWorkoutWithCompleted,
+  VendorActivityRow,
+  WorkoutEntryWithCompleted,
 } from "@/lib/db/schema.server";
 
 export type PlannedWorkoutsPageResult = {
-  rows: PlannedWorkoutWithCompleted[];
+  rows: WorkoutEntryWithCompleted[];
   totalPages: number;
 };
 
@@ -29,9 +29,9 @@ export type VizResult = {
 };
 
 export type DayItem = {
-  activities: PlannedWorkoutWithCompleted[];
+  activities: WorkoutEntryWithCompleted[];
   weight?: number;
-  linkCandidates: CompletedWorkoutRow[];
+  linkCandidates: VendorActivityRow[];
 };
 
 export type LinkAllResponse = {

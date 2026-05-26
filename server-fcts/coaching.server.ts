@@ -254,7 +254,7 @@ function asConstraintValue(v: unknown): Record<string, JsonValue> | null {
 }
 
 /** Apply ordered diff ops; mutates a clone of `prevConstraints`. */
-export function applyConstraintsPatch(
+function applyConstraintsPatch(
   prevConstraints: JsonValue[],
   patchUnknown: unknown,
 ): JsonValue[] {

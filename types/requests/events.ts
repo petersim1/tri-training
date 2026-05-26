@@ -7,8 +7,6 @@ import {
 import { SPORT_EVENT_DISCIPLINES } from "@/lib/constants/events";
 import { dayKeySchema, idSchema } from "./shared";
 
-export const eventTargetSchema = z.object({});
-
 const sportEventTargetSegmentSchema = z.object({
   activity: z.enum(PLAN_KIND_VALUES),
   label: z.string().nullable().optional(),

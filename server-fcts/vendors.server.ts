@@ -21,7 +21,7 @@ type TokenResponse = {
 const SERVICE_ROW_ID = 1 as const;
 
 /** Refresh access token; used by cookie-based sessions and server-stored tokens (webhooks). */
-export async function exchangeStravaRefreshToken(
+async function exchangeStravaRefreshToken(
   refreshToken: string,
 ): Promise<TokenResponse> {
   const clientId = process.env.STRAVA_CLIENT_ID;

@@ -1,14 +1,12 @@
 import { stravaFetchJson } from "./client";
-import type { StravaActivitySummary } from "./types";
+import type { StravaActivity } from "./types";
 
-export async function fetchAllStravaWorkouts(): Promise<
-  StravaActivitySummary[]
-> {
-  const out: StravaActivitySummary[] = [];
+export async function fetchAllStravaWorkouts(): Promise<StravaActivity[]> {
+  const out: StravaActivity[] = [];
   try {
     let page = 1;
     while (page <= 500) {
-      const list = await stravaFetchJson<StravaActivitySummary[]>(
+      const list = await stravaFetchJson<StravaActivity[]>(
         `/athlete/activities?per_page=${200}&page=${page}`,
       );
       if (list === null) {

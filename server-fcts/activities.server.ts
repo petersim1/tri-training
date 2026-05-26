@@ -21,23 +21,22 @@ import {
 } from "@/lib/constants/visuals";
 import { getDb } from "@/lib/db/index.server";
 import {
-  type CompletedWorkoutRow,
-  completedWorkouts,
-  type NewPlannedWorkout,
-  type PlannedWorkoutRow,
-  type PlannedWorkoutWithCompleted,
-  plannedWorkouts,
+  type NewWorkoutEntryRow,
+  type TypedVendorWorkoutRow,
+  type VendorActivityRow,
+  vendorActivities,
+  type WorkoutEntryRow,
+  type WorkoutEntryWithCompleted,
   weightEntries,
+  workoutEntries,
 } from "@/lib/db/schema.server";
-import type { HevyWorkoutSummary } from "@/lib/hevy/types";
-import { activityKindToPlanKind } from "@/lib/plans/completed-workout-data";
-import type { StravaActivitySummary } from "@/lib/strava/types";
-import { getDateRange, toIsoDate, toUtcBounds } from "@/lib/utils/dates";
+import { getVizValue } from "@/lib/utils/calculations";
+import { getDateRange, toIsoDate } from "@/lib/utils/dates";
+import { vendorActivityToPlanKind } from "@/lib/utils/vendors";
 import { cookieActions } from "@/server-fcts";
 import {
   activityListSchema,
   calendarSchema,
-  candidateLinkSchema,
   createFromCompletedSchema,
   createPlanSchema,
   updatePlanSchema,
@@ -61,18 +60,18 @@ export const calendar = createServerFn({ method: "GET" })
 
     const rows = await db
       .select({
-        id: plannedWorkouts.id,
-        kind: plannedWorkouts.kind,
-        dayKey: plannedWorkouts.dayKey,
-        status: plannedWorkouts.status,
+        id: workoutEntries.id,
+        kind: workoutEntries.kind,
+        dayKey: workoutEntries.dayKey,
+        status: workoutEntries.status,
         hasWeight: sql<boolean>`${weightEntries.dayKey} is not null`,
       })
-      .from(plannedWorkouts)
-      .leftJoin(weightEntries, eq(plannedWorkouts.dayKey, weightEntries.dayKey))
+      .from(workoutEntries)
+      .leftJoin(weightEntries, eq(workoutEntries.dayKey, weightEntries.dayKey))
       .where(
         and(
-          gte(plannedWorkouts.dayKey, dateFrom),
-          lte(plannedWorkouts.dayKey, dateTo),
+          gte(workoutEntries.dayKey, dateFrom),
+          lte(workoutEntries.dayKey, dateTo),
         ),
       )
       .all();
@@ -104,16 +103,16 @@ export const list = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<PlannedWorkoutsPageResult> => {
     const wheres = [];
     if (data.kind) {
-      wheres.push(eq(plannedWorkouts.kind, data.kind as PlanKind));
+      wheres.push(eq(workoutEntries.kind, data.kind as PlanKind));
     }
     if (data.status) {
-      wheres.push(eq(plannedWorkouts.status, data.status as PlanStatus));
+      wheres.push(eq(workoutEntries.status, data.status as PlanStatus));
     }
     if (data.dateFrom) {
-      wheres.push(gte(plannedWorkouts.dayKey, data.dateFrom));
+      wheres.push(gte(workoutEntries.dayKey, data.dateFrom));
     }
     if (data.dateTo) {
-      wheres.push(lte(plannedWorkouts.dayKey, data.dateTo));
+      wheres.push(lte(workoutEntries.dayKey, data.dateTo));
     }
 
     const whereClause = and(...wheres);
@@ -124,7 +123,7 @@ export const list = createServerFn({ method: "GET" })
 
     const [countFilteredRow] = await db
       .select({ n: count() })
-      .from(plannedWorkouts)
+      .from(workoutEntries)
       .where(whereClause)
       .all();
     const totalPages = Math.ceil(
@@ -133,25 +132,25 @@ export const list = createServerFn({ method: "GET" })
 
     const rows = await db
       .select({
-        ...getTableColumns(plannedWorkouts),
-        cw: completedWorkouts,
+        ...getTableColumns(workoutEntries),
+        va: vendorActivities,
       })
-      .from(plannedWorkouts)
+      .from(workoutEntries)
       .leftJoin(
-        completedWorkouts,
-        eq(plannedWorkouts.completedWorkoutId, completedWorkouts.id),
+        vendorActivities,
+        eq(workoutEntries.vendorActivityId, vendorActivities.id),
       )
       .where(whereClause)
-      .orderBy(desc(plannedWorkouts.dayKey))
+      .orderBy(desc(workoutEntries.dayKey))
       .limit(data.pageSize)
       .offset(offset)
       .all();
 
     const mapped = rows.map((r) => {
-      const { cw, ...plan } = r;
-      const completedWorkout: CompletedWorkoutRow | null =
-        cw?.id != null ? cw : null;
-      return { ...plan, completedWorkout };
+      const { va, ...plan } = r;
+      const vendorActivity: VendorActivityRow | null =
+        va?.id != null ? va : null;
+      return { ...plan, vendorActivity };
     });
 
     return { rows: mapped, totalPages };
@@ -180,118 +179,56 @@ export const viz = createServerFn({ method: "GET" })
     const date = new Date();
     if (options.range === "3m") {
       date.setMonth(date.getMonth() - 3);
-      wheres.push(
-        gte(plannedWorkouts.dayKey, date.toISOString().split("T")[0]),
-      );
+      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
     }
     if (options.range === "6m") {
       date.setMonth(date.getMonth() - 6);
-      wheres.push(
-        gte(plannedWorkouts.dayKey, date.toISOString().split("T")[0]),
-      );
+      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
     }
     if (options.range === "12m") {
       date.setFullYear(date.getFullYear() - 1);
-      wheres.push(
-        gte(plannedWorkouts.dayKey, date.toISOString().split("T")[0]),
-      );
+      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
     }
     if (options.range === "ytd") {
       date.setMonth(0);
       date.setDate(0);
-      wheres.push(
-        gte(plannedWorkouts.dayKey, date.toISOString().split("T")[0]),
-      );
+      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
     }
 
-    wheres.push(eq(plannedWorkouts.kind, options.kind));
-    wheres.push(eq(plannedWorkouts.status, "completed"));
+    wheres.push(eq(workoutEntries.kind, options.kind));
+    wheres.push(eq(workoutEntries.status, "completed"));
 
     const db = await getDb();
 
     const rows = await db
       .select({
-        kind: plannedWorkouts.kind,
-        dayKey: plannedWorkouts.dayKey,
-        completedWorkout: {
-          activityKind: completedWorkouts.activityKind,
-          vendor: completedWorkouts.vendor,
-          data: completedWorkouts.data,
+        kind: workoutEntries.kind,
+        dayKey: workoutEntries.dayKey,
+        vendorActivy: {
+          vendor: vendorActivities.vendor,
+          data: vendorActivities.data,
         },
       })
-      .from(plannedWorkouts)
+      .from(workoutEntries)
       .leftJoin(
-        completedWorkouts,
-        eq(plannedWorkouts.completedWorkoutId, completedWorkouts.id),
+        vendorActivities,
+        eq(workoutEntries.vendorActivityId, vendorActivities.id),
       )
       .where(and(...wheres))
-      .orderBy(asc(plannedWorkouts.dayKey))
+      .orderBy(asc(workoutEntries.dayKey))
       .all();
 
     const out: VizResult[] = [];
     rows.forEach((r) => {
-      const { completedWorkout } = r;
-      if (!completedWorkout) return;
-      const { data, vendor } = completedWorkout;
-      if (vendor === "strava") {
-        const sData = data as StravaActivitySummary;
-        if (options.metric === "time" && sData.moving_time) {
-          out.push({
-            date: r.dayKey,
-            value: sData.moving_time,
-          });
-        } else if (options.metric === "distance" && sData.distance) {
-          out.push({
-            date: r.dayKey,
-            value: sData.distance,
-          });
-        } else if (
-          options.metric === "pace" &&
-          sData.distance &&
-          sData.moving_time
-        ) {
-          out.push({
-            date: r.dayKey,
-            value: sData.distance / sData.moving_time, // km / min
-          });
-        } else if (
-          options.metric === "efficiency" &&
-          sData.distance &&
-          sData.moving_time &&
-          sData.average_heartrate
-        ) {
-          out.push({
-            date: r.dayKey,
-            value:
-              sData.distance / (sData.average_heartrate * sData.moving_time),
-          });
-        }
-      } else if (vendor === "hevy") {
-        const hData = data as HevyWorkoutSummary;
-        if (options.metric === "time") {
-          out.push({
-            date: r.dayKey,
-            value:
-              (new Date(hData.end_time).getTime() -
-                new Date(hData.start_time).getTime()) /
-              1_000,
-          });
-        } else if (options.metric === "volume") {
-          let volume = 0;
-          hData.exercises.forEach((exercise) => {
-            exercise.sets.forEach((set) => {
-              if (set.reps && set.weight_kg) {
-                volume += Number(set.reps) * Number(set.weight_kg);
-              }
-            });
-          });
-          if (volume) {
-            out.push({
-              date: r.dayKey,
-              value: volume,
-            });
-          }
-        }
+      const { vendorActivy } = r;
+      if (!vendorActivy) return;
+      const va = vendorActivy as TypedVendorWorkoutRow;
+      const value = getVizValue(va, options.metric);
+      if (value) {
+        out.push({
+          date: r.dayKey,
+          value,
+        });
       }
     });
 
@@ -301,24 +238,32 @@ export const viz = createServerFn({ method: "GET" })
 
     return out.reduce((acc, item) => {
       const prev = acc.at(-1)?.value ?? 0;
-      acc.push({ date: item.date, value: prev + item.value });
+      acc.push({
+        date: item.date,
+        value: prev + item.value,
+      });
       return acc;
     }, [] as VizResult[]);
   });
 
-export const unlinked = createServerFn({ method: "GET" })
-  .inputValidator((data) => data)
-  .handler(async (): Promise<CompletedWorkoutRow[]> => {
+export const unlinked = createServerFn({ method: "GET" }).handler(
+  async (): Promise<VendorActivityRow[]> => {
     const db = await getDb();
+
     const rows = await db
-      .select()
-      .from(completedWorkouts)
-      .where(eq(completedWorkouts.isResolved, false))
-      .orderBy(desc(completedWorkouts.createdAt))
+      .select({ vendorActivities })
+      .from(vendorActivities)
+      .leftJoin(
+        workoutEntries,
+        eq(workoutEntries.vendorActivityId, vendorActivities.id),
+      )
+      .where(isNull(workoutEntries.id))
+      .orderBy(desc(vendorActivities.createdAt))
       .all();
 
-    return rows;
-  });
+    return rows.map((r) => r.vendorActivities);
+  },
+);
 
 export const linkAll = createServerFn({ method: "POST" })
   .inputValidator(timezoneSchema)
@@ -326,24 +271,20 @@ export const linkAll = createServerFn({ method: "POST" })
     const db = await getDb();
     const now = new Date();
 
-    const unresolved = await db
-      .select()
-      .from(completedWorkouts)
-      .where(eq(completedWorkouts.isResolved, false))
-      .orderBy(asc(completedWorkouts.createdAt))
-      .all();
+    const unlinkedActivities = await unlinked();
 
     const allPlans = await db
       .select()
-      .from(plannedWorkouts)
+      .from(workoutEntries)
       .where(
         and(
-          isNull(plannedWorkouts.completedWorkoutId),
-          eq(plannedWorkouts.status, "planned"),
+          isNull(workoutEntries.vendorActivityId),
+          eq(workoutEntries.status, "planned"),
         ),
       )
       .all();
-    const plansByDayKind = new Map<string, PlannedWorkoutRow[]>();
+
+    const plansByDayKind = new Map<string, WorkoutEntryRow[]>();
     for (const p of allPlans) {
       const key = `${p.dayKey}:${p.kind}`;
       const arr = plansByDayKind.get(key) ?? [];
@@ -353,9 +294,10 @@ export const linkAll = createServerFn({ method: "POST" })
 
     const resolvedIds = [];
 
-    for (const cw of unresolved) {
-      const dayKey = toIsoDate(cw.createdAt, data.timezone);
-      const planKind = activityKindToPlanKind(cw.activityKind);
+    for (const unlinkedActivity of unlinkedActivities) {
+      const activity = unlinkedActivity as TypedVendorWorkoutRow;
+      const dayKey = toIsoDate(activity.createdAt, data.timezone);
+      const planKind = vendorActivityToPlanKind(activity);
       if (!planKind) continue;
 
       const key = `${dayKey}:${planKind}`;
@@ -364,29 +306,29 @@ export const linkAll = createServerFn({ method: "POST" })
 
       if (existing) {
         await db
-          .update(plannedWorkouts)
+          .update(workoutEntries)
           .set({
-            completedWorkoutId: cw.id,
+            vendorActivityId: activity.id,
             status: "completed",
             updatedAt: now,
           })
-          .where(eq(plannedWorkouts.id, existing.id))
+          .where(eq(workoutEntries.id, existing.id))
           .run();
-        existing.completedWorkoutId = cw.id;
+        existing.vendorActivityId = activity.id;
         existing.status = "completed";
       } else {
         const id = crypto.randomUUID();
         await db
-          .insert(plannedWorkouts)
+          .insert(workoutEntries)
           .values({
             id,
             kind: planKind,
             dayKey,
             notes: null,
             status: "completed",
-            routineVendor: cw.vendor,
+            routineVendor: activity.vendor,
             routineId: null,
-            completedWorkoutId: cw.id,
+            vendorActivityId: activity.id,
             distance: null,
             distanceUnits: null,
             timeSeconds: null,
@@ -396,81 +338,44 @@ export const linkAll = createServerFn({ method: "POST" })
           .run();
       }
 
-      resolvedIds.push(cw.id);
+      resolvedIds.push(activity.id);
     }
 
     if (resolvedIds.length > 0) {
       await db
-        .update(completedWorkouts)
-        .set({ isResolved: true, updatedAt: now })
-        .where(inArray(completedWorkouts.id, resolvedIds))
+        .update(vendorActivities)
+        .set({ updatedAt: now })
+        .where(inArray(vendorActivities.id, resolvedIds))
         .run();
     }
 
     return {
       nLinked: resolvedIds.length,
-      nUnlinked: unresolved.length - resolvedIds.length,
+      nUnlinked: unlinkedActivities.length - resolvedIds.length,
     };
-  });
-
-export const getLinkCandidates = createServerFn({ method: "GET" })
-  .inputValidator(candidateLinkSchema)
-  .handler(async ({ data }): Promise<CompletedWorkoutRow[]> => {
-    const db = await getDb();
-    const plan = await db
-      .select()
-      .from(plannedWorkouts)
-      .where(eq(plannedWorkouts.id, data.planId))
-      .get();
-    if (!plan) {
-      throw new Error("Plan not found");
-    }
-    if (plan.kind === "recovery") {
-      return [];
-    }
-
-    const { start, end } = toUtcBounds(plan.dayKey, data.timezone);
-
-    const completed = await db
-      .select()
-      .from(completedWorkouts)
-      .where(
-        and(
-          and(
-            gte(completedWorkouts.createdAt, start),
-            lte(completedWorkouts.createdAt, end),
-            eq(completedWorkouts.isResolved, false),
-          ),
-        ),
-      );
-
-    return completed;
   });
 
 /** Server-fn registration only — DB implementation lives in `planner-db-operations.ts` (not client-bundled). */
 export const get = createServerFn({ method: "GET" })
   .inputValidator((d: { id: string }) => d)
-  .handler(async ({ data }): Promise<PlannedWorkoutWithCompleted | null> => {
+  .handler(async ({ data }): Promise<WorkoutEntryWithCompleted | null> => {
     const db = await getDb();
     const row = await db
       .select({
-        ...getTableColumns(plannedWorkouts),
-        cw: completedWorkouts,
+        ...getTableColumns(workoutEntries),
+        vendorActivity: vendorActivities,
       })
-      .from(plannedWorkouts)
+      .from(workoutEntries)
       .leftJoin(
-        completedWorkouts,
-        eq(plannedWorkouts.completedWorkoutId, completedWorkouts.id),
+        vendorActivities,
+        eq(workoutEntries.vendorActivityId, vendorActivities.id),
       )
-      .where(eq(plannedWorkouts.id, data.id))
+      .where(eq(workoutEntries.id, data.id))
       .get();
     if (!row) {
       return null;
     }
-    const { cw, ...plan } = row;
-    const completedWorkout: CompletedWorkoutRow | null =
-      cw?.id != null ? cw : null;
-    return { ...plan, completedWorkout };
+    return row;
   });
 
 export const create = createServerFn({ method: "POST" })
@@ -484,7 +389,7 @@ export const create = createServerFn({ method: "POST" })
 
     const id = crypto.randomUUID();
     await db
-      .insert(plannedWorkouts)
+      .insert(workoutEntries)
       .values({
         id,
         kind: data.kind,
@@ -493,7 +398,7 @@ export const create = createServerFn({ method: "POST" })
         status: "planned",
         routineVendor: data.kind === "lift" ? "hevy" : "strava",
         routineId: data.kind === "lift" ? data.routineId : null,
-        completedWorkoutId: null,
+        vendorActivityId: null,
         distance,
         distanceUnits,
         timeSeconds: data.timeSeconds,
@@ -509,27 +414,35 @@ export const createFromCompleted = createServerFn({ method: "POST" })
 
     const completed = await db
       .select()
-      .from(completedWorkouts)
-      .where(eq(completedWorkouts.id, data.completedWorkoutId))
+      .from(vendorActivities)
+      .where(eq(vendorActivities.id, data.vendorActivityId))
       .get();
     if (!completed) throw new Error("Completed workout not found");
-    if (completed.isResolved) throw new Error("Workout is already linked");
+    const linked = await db
+      .select()
+      .from(workoutEntries)
+      .where(eq(workoutEntries.vendorActivityId, completed.id))
+      .get();
+    if (linked) throw new Error("Activity is already linked");
 
-    const planKind = activityKindToPlanKind(completed.activityKind);
+    const planKind = vendorActivityToPlanKind(
+      completed as TypedVendorWorkoutRow,
+    );
+
     if (!planKind) {
       throw new Error(
-        `cannot create a plan from ${completed.vendor} ${completed.activityKind} type`,
+        `cannot create a plan from ${completed.vendor} due to incompatible activity type`,
       );
     }
 
     const existing = await db
       .select()
-      .from(plannedWorkouts)
+      .from(workoutEntries)
       .where(
         and(
-          eq(plannedWorkouts.dayKey, data.dayKey),
-          eq(plannedWorkouts.kind, planKind),
-          isNull(plannedWorkouts.completedWorkoutId),
+          eq(workoutEntries.dayKey, data.dayKey),
+          eq(workoutEntries.kind, planKind),
+          isNull(workoutEntries.vendorActivityId),
         ),
       )
       .get();
@@ -537,17 +450,17 @@ export const createFromCompleted = createServerFn({ method: "POST" })
     const id = existing ? existing.id : crypto.randomUUID();
     if (existing) {
       await db
-        .update(plannedWorkouts)
+        .update(workoutEntries)
         .set({
-          completedWorkoutId: completed.id,
+          vendorActivityId: completed.id,
           status: "completed",
           updatedAt: new Date(),
         })
-        .where(eq(plannedWorkouts.id, existing.id))
+        .where(eq(workoutEntries.id, existing.id))
         .run();
     } else {
       await db
-        .insert(plannedWorkouts)
+        .insert(workoutEntries)
         .values({
           id,
           kind: planKind,
@@ -555,7 +468,7 @@ export const createFromCompleted = createServerFn({ method: "POST" })
           status: "completed",
           routineVendor: completed.vendor,
           routineId: null,
-          completedWorkoutId: completed.id,
+          vendorActivityId: completed.id,
           notes: null,
           distance: null,
           distanceUnits: null,
@@ -563,12 +476,6 @@ export const createFromCompleted = createServerFn({ method: "POST" })
         })
         .run();
     }
-
-    await db
-      .update(completedWorkouts)
-      .set({ isResolved: true, updatedAt: new Date() })
-      .where(eq(completedWorkouts.id, completed.id))
-      .run();
 
     return { id };
   });
@@ -579,15 +486,15 @@ export const update = createServerFn({ method: "POST" })
     const db = await getDb();
     const row = await db
       .select()
-      .from(plannedWorkouts)
-      .where(eq(plannedWorkouts.id, data.id))
+      .from(workoutEntries)
+      .where(eq(workoutEntries.id, data.id))
       .get();
 
     if (!row) throw new Error("Plan not found");
 
     const canEditSchedule =
-      row.status === "planned" && row.completedWorkoutId == null;
-    const updates: Partial<NewPlannedWorkout> = { updatedAt: new Date() };
+      row.status === "planned" && row.vendorActivityId == null;
+    const updates: Partial<NewWorkoutEntryRow> = { updatedAt: new Date() };
 
     if (data.notes !== undefined) updates.notes = data.notes;
 
@@ -614,7 +521,7 @@ export const update = createServerFn({ method: "POST" })
           timeSeconds: null,
         });
       } else {
-        Object.assign(updates, { routineVendor: "strava", routineId: null });
+        Object.assign(updates, { routineVendor: null, routineId: null });
         if (row.kind === "lift")
           Object.assign(updates, {
             distance: null,
@@ -646,9 +553,9 @@ export const update = createServerFn({ method: "POST" })
     }
 
     await db
-      .update(plannedWorkouts)
+      .update(workoutEntries)
       .set(updates)
-      .where(eq(plannedWorkouts.id, data.id))
+      .where(eq(workoutEntries.id, data.id))
       .run();
     return { ok: true };
   });
@@ -658,9 +565,9 @@ export const deletePlan = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const db = await getDb();
     const plan = await db
-      .select({ completedWorkoutId: plannedWorkouts.completedWorkoutId })
-      .from(plannedWorkouts)
-      .where(eq(plannedWorkouts.id, data.id))
+      .select({ completedWorkoutId: workoutEntries.vendorActivityId })
+      .from(workoutEntries)
+      .where(eq(workoutEntries.id, data.id))
       .get();
     if (!plan) throw new Error("plan not found");
     if (plan.completedWorkoutId) {
@@ -669,9 +576,6 @@ export const deletePlan = createServerFn({ method: "POST" })
         note: "cannot delete a completed workout",
       };
     }
-    await db
-      .delete(plannedWorkouts)
-      .where(eq(plannedWorkouts.id, data.id))
-      .run();
+    await db.delete(workoutEntries).where(eq(workoutEntries.id, data.id)).run();
     return { ok: true };
   });

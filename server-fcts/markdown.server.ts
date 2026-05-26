@@ -10,8 +10,8 @@ import {
 } from "@/lib/constants/activities";
 import { getDb } from "@/lib/db/index.server";
 import {
-  type NewPlannedWorkout,
-  plannedWorkouts,
+  type NewWorkoutEntryRow,
+  workoutEntries,
 } from "@/lib/db/schema.server";
 import { buildActivitiesMarkdownExport } from "@/lib/plans/activities-markdown-export";
 import { activityActions } from "@/server-fcts";
@@ -52,9 +52,11 @@ export const exportActivitiesMarkdownFn = createServerFn({
       if (hasFrom && hasTo && fromRaw > toRaw) {
         throw new Error("from date must be on or before to date");
       }
-      const rows = await activityActions.list({ data });
+      const rows = await activityActions.list({
+        data: { ...data, pageSize: 100 },
+      });
       const markdown = buildActivitiesMarkdownExport(rows.rows);
-      return { markdown, rowCount: rows.total };
+      return { markdown, rowCount: rows.rows.length };
     },
   );
 
@@ -107,7 +109,7 @@ export const importActivitiesMarkdownFn = createServerFn({
 
     const now = new Date();
     const issues: BulkValidationIssue[] = [];
-    const rows: NewPlannedWorkout[] = [];
+    const rows: NewWorkoutEntryRow[] = [];
 
     for (let i = 0; i < parsed.items.length; i++) {
       const item = parsed.items[i];
@@ -135,7 +137,7 @@ export const importActivitiesMarkdownFn = createServerFn({
     try {
       await db.transaction(async (tx) => {
         for (const row of rows) {
-          await tx.insert(plannedWorkouts).values(row).run();
+          await tx.insert(workoutEntries).values(row).run();
         }
       });
     } catch (e) {

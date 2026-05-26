@@ -107,7 +107,7 @@ export function PlanningChatProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function usePlanningChatDock(): PlanningDockContextValue {
+function usePlanningChatDock(): PlanningDockContextValue {
   const v = useContext(PlanningDockContext);
   if (!v) {
     throw new Error("usePlanningChatDock outside PlanningChatProvider");

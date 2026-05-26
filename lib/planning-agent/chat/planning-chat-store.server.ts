@@ -17,7 +17,7 @@ const PLANNING_HISTORY_MAX_USER_TURNS = 3;
 const PLANNING_HISTORY_MAX_ASSISTANT_TURNS = 3;
 const USER_CONTENT_CAP = 10_000;
 
-export async function clearAssistantProposalFlagsInThread(
+async function clearAssistantProposalFlagsInThread(
   threadId: string,
 ): Promise<void> {
   const tid = threadId.trim();
@@ -97,7 +97,7 @@ export async function getMostRecentAssistantProposal(
   return { id: row.id, content: row.content };
 }
 
-export async function nextMessageSeq(threadId: string): Promise<number> {
+async function nextMessageSeq(threadId: string): Promise<number> {
   const db = await getDb();
   const row = await db
     .select({
@@ -148,7 +148,9 @@ export async function updatePlanningMessageReplaySummary(
 export type PlanningChatMessageInsertBody = Omit<
   typeof planningChatMessages.$inferInsert,
   "threadId" | "seq"
->;
+> & {
+  id: string;
+};
 
 /** Model input for the current user utterance before it is persisted. */
 export function pendingUserOpenAiTurn(

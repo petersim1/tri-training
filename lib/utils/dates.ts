@@ -9,15 +9,6 @@ export const isValidIanaTimeZone = (tz: string): boolean => {
   }
 };
 
-export const todayLocalDayKey = (): string => {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
-};
-
-export const dayKeyFromParts = (y: number, m0: number, day: number): string => {
-  return `${y}-${String(m0 + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-};
-
 export const toIsoDate = (date: Date, tz: string) => {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(date);
 };

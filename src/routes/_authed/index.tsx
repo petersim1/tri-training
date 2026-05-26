@@ -42,7 +42,7 @@ function HomeRoute() {
   );
 }
 
-export const loadHomePageDataFn = async (
+const loadHomePageDataFn = async (
   queryClient: QueryClient,
 ): Promise<{
   calendarScope: CalendarScope;

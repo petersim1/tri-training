@@ -14,15 +14,3 @@ export function deriveReplaySummaryFromAssistant(full: string): string {
   }
   return `${t.slice(0, hardCap - 1).trim()}…`;
 }
-
-export function deriveReplaySummaryFromTool(
-  toolName: string,
-  payload: string,
-): string {
-  let s = `[tool:${toolName}] ${payload}`;
-  s = s.replace(/\s+/g, " ").trim();
-  if (s.length <= 520) {
-    return s;
-  }
-  return `${s.slice(0, 510)}…`;
-}

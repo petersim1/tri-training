@@ -6,7 +6,7 @@ import { coachingActions } from "@/server-fcts";
 /** Same athlete as Strava OAuth allowlist (`ALLOWED_STRAVA_ATHLETE_ID`). */
 export const PLANNING_CHAT_COACH_USER_ID = "88244635";
 
-export const COACHING_STATE_PATCH_MODEL = "gpt-4o-mini";
+const COACHING_STATE_PATCH_MODEL = "gpt-4o-mini";
 
 function nonEmptyArray(v: JsonValue): v is JsonValue[] {
   return Array.isArray(v) && v.length > 0;
@@ -21,7 +21,7 @@ function nonEmptyObject(v: JsonValue): v is Record<string, JsonValue> {
   );
 }
 
-export function coachingStateRowToPromptSnapshot(
+function coachingStateRowToPromptSnapshot(
   row: CoachingStateRow,
 ): Record<string, unknown> {
   return {
@@ -72,7 +72,7 @@ export function coachingStateSystemBlock(row: CoachingStateRow): string {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-export function buildCoachingStatePatchPrompt(input: {
+function buildCoachingStatePatchPrompt(input: {
   currentCoachingState: Record<string, unknown>;
   userMessage: string;
   assistantMessage: string;
@@ -123,7 +123,7 @@ function stripJsonFence(raw: string): string {
   return s;
 }
 
-export async function extractCoachingStatePatchJson(
+async function extractCoachingStatePatchJson(
   openai: OpenAI,
   opts: {
     currentCoachingState: Record<string, unknown>;

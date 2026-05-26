@@ -74,7 +74,6 @@ export const set = createServerFn({ method: "POST" })
         .values({
           id,
           dayKey: data.dayKey,
-          measuredAt: new Date(data.dayKey).toString(),
           weightLb: w,
           notes: null,
           createdAt: now,

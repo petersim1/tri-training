@@ -4,8 +4,8 @@ import {
   PLAN_KIND_VALUES,
   type PlanKind,
 } from "../constants/activities";
+import type { NewWorkoutEntryRow } from "../db/schema.server";
 import { isValidDayKey } from "../utils/dates";
-import type { PlannedWorkoutBulkItem } from "./bulk-planned-workouts";
 
 /** Example for the upload modal placeholder and “copy template”. */
 export const ACTIVITIES_PLANNED_MARKDOWN_TEMPLATE = `[2026-04-22]
@@ -166,7 +166,7 @@ function emptyDraft(kind: PlanKind, dayKey: string): Draft {
   };
 }
 
-function draftToItem(d: Draft): PlannedWorkoutBulkItem {
+function draftToItem(d: Draft): NewWorkoutEntryRow {
   return {
     kind: d.kind,
     dayKey: d.dayKey,
@@ -182,10 +182,10 @@ function draftToItem(d: Draft): PlannedWorkoutBulkItem {
 export function parseActivitiesMarkdownForBulkImport(
   markdown: string,
 ):
-  | { ok: true; items: PlannedWorkoutBulkItem[] }
+  | { ok: true; items: NewWorkoutEntryRow[] }
   | { ok: false; issues: MarkdownImportIssue[] } {
   const issues: MarkdownImportIssue[] = [];
-  const items: PlannedWorkoutBulkItem[] = [];
+  const items: NewWorkoutEntryRow[] = [];
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
 
   let currentDay: string | null = null;

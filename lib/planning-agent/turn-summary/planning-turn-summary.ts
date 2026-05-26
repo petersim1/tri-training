@@ -4,7 +4,7 @@ import type { PlanningChatMessageRow } from "@/lib/db/schema.server";
 import type { PersistedPlanningToolRoundJson } from "../tools/planning-tool-trace-metadata";
 import { deriveReplaySummaryFromAssistant } from "./replay-summary";
 
-export const PLANNING_TURN_SUMMARY_MODEL = "gpt-4o-mini";
+const PLANNING_TURN_SUMMARY_MODEL = "gpt-4o-mini";
 
 const TURN_SUMMARY_RECENT_PAIRS_CAP = 5;
 const TURN_SUMMARY_RECENT_PAIR_ROLE_CAP = 12_000;

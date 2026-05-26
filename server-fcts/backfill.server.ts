@@ -1,10 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { CompletedActivityKind } from "@/lib/constants/vendors";
 import { getDb } from "@/lib/db/index.server";
 import {
-  completedWorkouts,
-  type NewCompletedWorkout,
+  type NewVendorActivityRow,
   type NewWeightEntryRow,
+  vendorActivities,
   weightEntries,
 } from "@/lib/db/schema.server";
 import {
@@ -12,6 +11,7 @@ import {
   fetchAllHevyWorkouts,
 } from "@/lib/hevy/fetch-all";
 import { fetchAllStravaWorkouts } from "@/lib/strava/fetch-all";
+import { convertWeight } from "@/lib/utils/calculations";
 import type { BackfillReport } from "@/types/responses/activities";
 
 export const backfillLinkedWorkouts = createServerFn({
@@ -20,10 +20,10 @@ export const backfillLinkedWorkouts = createServerFn({
   const db = await getDb();
   const rows = await db
     .select({
-      vendor: completedWorkouts.vendor,
-      vendorId: completedWorkouts.vendorId,
+      vendor: vendorActivities.vendor,
+      vendorId: vendorActivities.vendorId,
     })
-    .from(completedWorkouts)
+    .from(vendorActivities)
     .all();
 
   const measurements = await db.select().from(weightEntries);
@@ -52,7 +52,7 @@ export const backfillLinkedWorkouts = createServerFn({
     fetchAllStravaWorkouts(),
   ]);
 
-  const workoutsCreate: NewCompletedWorkout[] = [];
+  const workoutsCreate: NewVendorActivityRow[] = [];
   const weightEntriesCreate: NewWeightEntryRow[] = [];
 
   for (const w of hevyWorkouts) {
@@ -65,8 +65,6 @@ export const backfillLinkedWorkouts = createServerFn({
         updatedAt: new Date(w.created_at),
         vendor: "hevy",
         vendorId: id,
-        activityKind: "lift",
-        isResolved: false,
         data: w,
       });
       existingHevyIds.add(w.id);
@@ -79,8 +77,7 @@ export const backfillLinkedWorkouts = createServerFn({
       weightEntriesCreate.push({
         id: crypto.randomUUID(),
         dayKey: m.date,
-        measuredAt: new Date(m.date).toISOString(),
-        weightLb: m.weight_kg,
+        weightLb: convertWeight(m.weight_kg, "kg", "lb"),
       });
       existingHevyMeasureEntries.add(m.date);
     }
@@ -96,10 +93,9 @@ export const backfillLinkedWorkouts = createServerFn({
         updatedAt: new Date(w.start_date),
         vendor: "strava",
         vendorId: id,
-        activityKind: w.sport_type.toLowerCase() as CompletedActivityKind,
-        isResolved: false,
         data: w,
       });
+      existingStravaIds.add(id);
     }
   }
 
@@ -107,7 +103,7 @@ export const backfillLinkedWorkouts = createServerFn({
     await db.insert(weightEntries).values([...weightEntriesCreate]);
   }
   if (workoutsCreate.length) {
-    await db.insert(completedWorkouts).values([...workoutsCreate]);
+    await db.insert(vendorActivities).values([...workoutsCreate]);
   }
 
   return report;

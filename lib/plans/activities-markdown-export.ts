@@ -1,4 +1,4 @@
-import type { PlannedWorkoutWithCompleted } from "../db/schema.server";
+import type { WorkoutEntryWithCompleted } from "../db/schema.server";
 import {
   completedWorkoutAverageHeartrateBpm,
   completedWorkoutDistanceM,
@@ -7,10 +7,10 @@ import {
 } from "./completed-workout-data";
 
 /** Indent for YAML-style sub-lines (matches `activities-markdown-import`). */
-export const ACTIVITIES_MARKDOWN_SUB_INDENT = "     ";
+const ACTIVITIES_MARKDOWN_SUB_INDENT = "     ";
 
 /** Activity `time:` line — same semantics as Activities markdown upload. */
-export function formatElapsedDurationMarkdown(totalSeconds: number): string {
+function formatElapsedDurationMarkdown(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
@@ -25,7 +25,7 @@ export function formatElapsedDurationMarkdown(totalSeconds: number): string {
 }
 
 /** `distance:` lines from stored metres (linked Strava sessions). */
-export function formatDistanceMetersMarkdown(meters: number): string {
+function formatDistanceMetersMarkdown(meters: number): string {
   if (!Number.isFinite(meters) || meters <= 0) {
     return "";
   }
@@ -46,7 +46,7 @@ export type CompletedSessionMarkdownRow = {
   liftExerciseLines: readonly string[];
 };
 
-export function completedSessionMarkdownLines(
+function completedSessionMarkdownLines(
   row: CompletedSessionMarkdownRow,
 ): string[] {
   const SUB = ACTIVITIES_MARKDOWN_SUB_INDENT;
@@ -140,12 +140,10 @@ export function groupedCompletedSessionsMarkdown(
   return chunks.join("\n").trimEnd();
 }
 
-function formatDistanceForExport(
-  p: PlannedWorkoutWithCompleted,
-): string | null {
-  const cw = p.completedWorkout;
-  if (cw) {
-    const dist = completedWorkoutDistanceM(cw);
+function formatDistanceForExport(p: WorkoutEntryWithCompleted): string | null {
+  const va = p.vendorActivity;
+  if (va) {
+    const dist = completedWorkoutDistanceM(va);
     if (dist != null && Number.isFinite(dist)) {
       const lbl = formatDistanceMetersMarkdown(dist);
       return lbl !== "" ? lbl : null;
@@ -162,9 +160,9 @@ function formatDistanceForExport(
   return null;
 }
 
-function formatTimeForExport(p: PlannedWorkoutWithCompleted): string | null {
-  if (p.completedWorkout) {
-    const sec = completedWorkoutMovingSeconds(p.completedWorkout);
+function formatTimeForExport(p: WorkoutEntryWithCompleted): string | null {
+  if (p.vendorActivity) {
+    const sec = completedWorkoutMovingSeconds(p.vendorActivity);
     if (sec != null && sec > 0) {
       return formatElapsedDurationMarkdown(sec);
     }
@@ -175,16 +173,16 @@ function formatTimeForExport(p: PlannedWorkoutWithCompleted): string | null {
   return null;
 }
 
-function formatNameForExport(p: PlannedWorkoutWithCompleted): string | null {
-  if (p.completedWorkout) {
-    const t = completedWorkoutTitle(p.completedWorkout);
+function formatNameForExport(p: WorkoutEntryWithCompleted): string | null {
+  if (p.vendorActivity) {
+    const t = completedWorkoutTitle(p.vendorActivity);
     return t?.trim() ? t : null;
   }
   const n = p.notes?.trim();
   return n ? n : null;
 }
 
-function exportActivityBlock(p: PlannedWorkoutWithCompleted): string[] {
+function exportActivityBlock(p: WorkoutEntryWithCompleted): string[] {
   const SUB = ACTIVITIES_MARKDOWN_SUB_INDENT;
   const lines: string[] = [`- ${p.kind}`];
   lines.push(`${SUB}- status: ${p.status}`);
@@ -196,7 +194,7 @@ function exportActivityBlock(p: PlannedWorkoutWithCompleted): string[] {
   if (time) {
     lines.push(`${SUB}- time: ${time}`);
   }
-  const cw = p.completedWorkout;
+  const cw = p.vendorActivity;
   if (cw) {
     const hr = completedWorkoutAverageHeartrateBpm(cw);
     if (hr != null && Number.isFinite(hr)) {
@@ -215,12 +213,12 @@ function exportActivityBlock(p: PlannedWorkoutWithCompleted): string[] {
  * Same shape as upload markdown, plus a required `status` sub-bullet on each activity.
  */
 export function buildActivitiesMarkdownExport(
-  rows: PlannedWorkoutWithCompleted[],
+  rows: WorkoutEntryWithCompleted[],
 ): string {
   if (rows.length === 0) {
     return "";
   }
-  const byDay = new Map<string, PlannedWorkoutWithCompleted[]>();
+  const byDay = new Map<string, WorkoutEntryWithCompleted[]>();
   for (const p of rows) {
     const dk = p.dayKey;
     const list = byDay.get(dk);

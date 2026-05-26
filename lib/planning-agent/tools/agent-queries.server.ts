@@ -1,9 +1,8 @@
 import { desc } from "drizzle-orm";
 import type { PlanKind } from "@/lib/constants/activities";
 import { getDb } from "@/lib/db/index.server";
-import { completedWorkouts } from "@/lib/db/schema.server";
+import { vendorActivities } from "@/lib/db/schema.server";
 import {
-  activityKindToPlanKind,
   completedWorkoutAverageHeartrateBpm,
   completedWorkoutDistanceM,
   completedWorkoutHevyLiftExerciseLinesPlanner,
@@ -11,6 +10,7 @@ import {
   completedWorkoutMovingSeconds,
   completedWorkoutStartIso,
 } from "@/lib/plans/completed-workout-data";
+import { rawActivityType, vendorActivityToPlanKind } from "@/lib/utils/vendors";
 import { activityActions } from "@/server-fcts";
 import type { ActivityListSchemaValues } from "@/types/requests/activities";
 import type { PlannerCompletedBrief } from "@/types/responses/chats";
@@ -62,8 +62,8 @@ export async function plannerListCompletedWorkouts(input: {
 
   const rows = await db
     .select()
-    .from(completedWorkouts)
-    .orderBy(desc(completedWorkouts.createdAt))
+    .from(vendorActivities)
+    .orderBy(desc(vendorActivities.createdAt))
     .limit(batch)
     .all();
 
@@ -81,7 +81,7 @@ export async function plannerListCompletedWorkouts(input: {
       continue;
     }
     const dk = tz ? completedWorkoutLocalDayKeyInTimeZone(r, tz) : null;
-    const inferredPlanKind = activityKindToPlanKind(r.activityKind);
+    const inferredPlanKind = vendorActivityToPlanKind(r);
     if (kindFilter !== "all" && inferredPlanKind !== kindFilter) {
       continue;
     }
@@ -94,11 +94,10 @@ export async function plannerListCompletedWorkouts(input: {
     list.push({
       id: r.id,
       vendor: r.vendor,
-      activityKind: r.activityKind,
+      activityKind: rawActivityType(r),
       inferredPlanKind,
       localDayKey: dk,
       isoStart: completedWorkoutStartIso(r),
-      isResolved: r.isResolved,
       distanceM: completedWorkoutDistanceM(r),
       movingSeconds: completedWorkoutMovingSeconds(r),
       avgHeartRateBpm: completedWorkoutAverageHeartrateBpm(r),
@@ -146,7 +145,7 @@ export async function plannerListPlannedWorkouts(input: {
       distance: p.distance,
       distanceUnits: p.distanceUnits,
       timeSeconds: p.timeSeconds,
-      hasLinkedSession: Boolean(p.completedWorkoutId),
+      hasLinkedSession: Boolean(p.vendorActivityId),
     });
     n++;
     if (n >= limit) {

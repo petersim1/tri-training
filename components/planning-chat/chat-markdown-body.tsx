@@ -108,9 +108,7 @@ function mdComponentsForTone(tone: Tone): Components {
       />
     ),
     pre: ({ children }) => (
-      <pre className={`${blockShell} font-mono [overflow-wrap:anywhere]`}>
-        {children}
-      </pre>
+      <pre className={`${blockShell} font-mono wrap-anywhere`}>{children}</pre>
     ),
     code: ({ className, children }) => {
       const cls = typeof className === "string" ? className : "";
@@ -122,14 +120,14 @@ function mdComponentsForTone(tone: Tone): Components {
       if (isBlockLike) {
         return (
           <code
-            className={`block whitespace-pre font-mono [overflow-wrap:anywhere] ${bodyText}`}
+            className={`block whitespace-pre font-mono wrap-anywhere ${bodyText}`}
           >
             {children}
           </code>
         );
       }
       return (
-        <code className={`font-mono [overflow-wrap:anywhere] ${inlineCode}`}>
+        <code className={`font-mono wrap-anywhere ${inlineCode}`}>
           {children}
         </code>
       );
@@ -185,7 +183,7 @@ export function ChatMarkdownBody(props: {
   }
 
   return (
-    <div className="-my-px min-w-0 break-words text-[13.75px] leading-snug [&_*]:max-w-none">
+    <div className="-my-px min-w-0 wrap-break-word text-[13.75px] leading-snug **:max-w-none">
       <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={components}>
         {props.text}
       </ReactMarkdown>

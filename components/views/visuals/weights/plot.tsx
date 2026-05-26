@@ -1,345 +1,276 @@
-import { area, line, scaleLinear, scaleTime, ticks } from "d3";
-import { useEffect, useMemo, useState } from "react";
+import * as d3 from "d3";
 import type { SessionChartRange } from "@/lib/constants/visuals";
+import {
+  monthLabel,
+  PAD_B,
+  PAD_L,
+  PAD_R,
+  PAD_T,
+  shortDateLabel,
+  VIEW_H,
+  VIEW_W,
+} from "@/lib/utils/plots";
 import type { VizResult } from "@/types/responses/activities";
 
-const PAD_L = 52;
-const PAD_R = 20;
-const PAD_T = 20;
-const PAD_B = 36;
-const VIEW_W = 1200;
-const VIEW_H = 280;
-const CHART_HEIGHT = 280;
+type EnrichedPoint = VizResult & { cx: number; cy: number };
 
-const sessionChartRangeLabel = (range: SessionChartRange): string => {
-  switch (range) {
-    case "3m":
-      return "Last 3 months";
-    case "6m":
-      return "Last 6 months";
-    case "12m":
-      return "Last 12 months";
-    case "ytd":
-      return "Year to date";
-    case "all":
-      return "All time";
-    default:
-      return "";
-  }
-};
+export const createViz = (
+  plotHolder: d3.Selection<null, unknown, null, undefined>,
+  points: VizResult[],
+  range: SessionChartRange,
+  onHover: (idx: number | null) => void,
+) => {
+  const sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
+  const values = sorted.map((p) => p.value);
 
-function monthLabel(d: Date) {
-  return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
-}
+  const now = new Date();
+  const xTo = now;
+  const xFrom = (() => {
+    if (range === "all") return new Date(`${sorted[0].date}T12:00:00`);
+    if (range === "ytd") return new Date(now.getFullYear(), 0, 1);
+    const months = range === "3m" ? 3 : range === "6m" ? 6 : 12;
+    return new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
+  })();
 
-function shortDateLabel(date: string) {
-  const d = new Date(`${date}T12:00:00`);
-  return Number.isNaN(d.getTime())
-    ? date
-    : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
+  const minW = Math.min(...values);
+  const maxW = Math.max(...values);
+  const padLb = Math.max(0.5, (maxW - minW) * 0.12 || 2);
+  const innerW = VIEW_W - PAD_L - PAD_R;
+  const innerH = VIEW_H - PAD_T - PAD_B;
 
-type Props = {
-  range: SessionChartRange;
-  points: VizResult[];
-  isLoading: boolean;
-};
+  const xScale = d3
+    .scaleTime()
+    .domain([xFrom, xTo])
+    .range([PAD_L, PAD_L + innerW]);
+  const yScale = d3
+    .scaleLinear()
+    .domain([minW - padLb, maxW + padLb])
+    .range([PAD_T + innerH, PAD_T]);
 
-export const WeightPlot: React.FC<Props> = ({ range, points, isLoading }) => {
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const allTicks = xScale.ticks(12);
+  const xTicks =
+    allTicks.length <= 3
+      ? allTicks
+      : [
+          allTicks[0],
+          allTicks[Math.floor(allTicks.length / 2)],
+          allTicks[allTicks.length - 1],
+        ];
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: clear hover on data change
-  useEffect(() => {
-    setHoverIdx(null);
-  }, [points]);
+  const showYear = xFrom.getFullYear() < xTo.getFullYear();
 
-  const geometry = useMemo(() => {
-    if (points.length === 0) return null;
-    const sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
-    const values = sorted.map((p) => p.value);
+  const enriched: EnrichedPoint[] = sorted.map((p) => ({
+    ...p,
+    cx: xScale(new Date(`${p.date}T12:00:00`)),
+    cy: yScale(p.value),
+  }));
 
-    const now = new Date();
-    const xTo = now;
-    const xFrom = (() => {
-      if (range === "all") return new Date(`${sorted[0].date}T12:00:00`);
-      if (range === "ytd") return new Date(now.getFullYear(), 0, 1);
-      const months = range === "3m" ? 3 : range === "6m" ? 6 : 12;
-      return new Date(
-        now.getFullYear(),
-        now.getMonth() - months,
-        now.getDate(),
+  const svg = plotHolder
+    .append("svg")
+    .attr("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`)
+    .style("max-height", "100%")
+    .style("max-width", "100%");
+
+  // Defs
+  const defs = svg.append("defs");
+  const grad = defs
+    .append("linearGradient")
+    .attr("id", "weight-area-fill")
+    .attr("x1", "0")
+    .attr("y1", "0")
+    .attr("x2", "0")
+    .attr("y2", "1");
+  grad
+    .append("stop")
+    .attr("offset", "0%")
+    .attr("stop-color", "rgb(16 185 129)")
+    .attr("stop-opacity", 0.22);
+  grad
+    .append("stop")
+    .attr("offset", "100%")
+    .attr("stop-color", "rgb(16 185 129)")
+    .attr("stop-opacity", 0.02);
+
+  // Y axis
+  svg
+    .append("g")
+    .attr("transform", `translate(${PAD_L}, 0)`)
+    .call(
+      d3
+        .axisLeft(yScale)
+        .ticks(5)
+        .tickFormat((v) => `${(+v).toFixed(1)}`),
+    )
+    .call((g) => g.select(".domain").remove())
+    .call((g) =>
+      g
+        .selectAll(".tick line")
+        .attr("x2", innerW)
+        .attr("stroke", "rgb(39 39 42)")
+        .attr("stroke-opacity", 0.5),
+    )
+    .call((g) =>
+      g
+        .selectAll(".tick text")
+        .attr("fill", "rgb(113 113 122)")
+        .attr("font-size", 11),
+    );
+
+  // Y axis label
+  svg
+    .append("text")
+    .attr("transform", `translate(12, ${VIEW_H / 2}) rotate(-90)`)
+    .attr("text-anchor", "middle")
+    .attr("fill", "rgb(82 82 91)")
+    .attr("font-size", 10)
+    .text("lb");
+
+  // X axis
+  svg
+    .append("g")
+    .attr("transform", `translate(0, ${VIEW_H - PAD_B})`)
+    .call(
+      d3
+        .axisBottom(xScale)
+        .tickValues(xTicks)
+        .tickFormat((d) => monthLabel(d as Date, showYear))
+        .tickSize(3),
+    )
+    .call((g) => g.select(".domain").remove())
+    .call((g) => g.selectAll(".tick line").attr("stroke", "rgb(63 63 70)"))
+    .call((g) =>
+      g
+        .selectAll(".tick text")
+        .attr("fill", "rgb(113 113 122)")
+        .attr("font-size", 10),
+    );
+
+  // Area
+  if (enriched.length >= 2) {
+    svg
+      .append("path")
+      .datum(enriched)
+      .attr("fill", "url(#weight-area-fill)")
+      .attr("stroke", "none")
+      .attr(
+        "d",
+        d3
+          .area<EnrichedPoint>()
+          .x((d) => d.cx)
+          .y0(PAD_T + innerH)
+          .y1((d) => d.cy),
       );
-    })();
+  }
 
-    const minW = Math.min(...values);
-    const maxW = Math.max(...values);
-    const padLb = Math.max(0.5, (maxW - minW) * 0.12 || 2);
+  // Line
+  svg
+    .append("path")
+    .datum(enriched)
+    .attr("fill", "none")
+    .attr("stroke", "rgb(52 211 153)")
+    .attr("stroke-width", 2)
+    .attr("stroke-linecap", "round")
+    .attr("stroke-linejoin", "round")
+    .attr("opacity", 0.95)
+    .attr(
+      "d",
+      d3
+        .line<EnrichedPoint>()
+        .x((d) => d.cx)
+        .y((d) => d.cy),
+    );
 
-    const innerW = VIEW_W - PAD_L - PAD_R;
-    const innerH = VIEW_H - PAD_T - PAD_B;
+  // Dots
+  svg
+    .append("g")
+    .selectAll("circle")
+    .data(enriched)
+    .join("circle")
+    .attr("cx", (d) => d.cx)
+    .attr("cy", (d) => d.cy)
+    .attr("r", 3)
+    .attr("fill", "rgb(24 24 27)")
+    .attr("stroke", "rgb(244 244 245)")
+    .attr("stroke-width", 1)
+    .attr("opacity", 0.6)
+    .attr("pointer-events", "none");
 
-    const xScale = scaleTime()
-      .domain([xFrom, xTo])
-      .range([PAD_L, PAD_L + innerW]);
+  // Hover line
+  const hoverLine = svg
+    .append("line")
+    .attr("stroke", "rgb(113 113 122)")
+    .attr("stroke-width", 1)
+    .attr("stroke-opacity", 0.45)
+    .attr("y1", PAD_T)
+    .attr("y2", VIEW_H - PAD_B)
+    .attr("pointer-events", "none")
+    .style("display", "none");
 
-    const yScale = scaleLinear()
-      .domain([minW - padLb, maxW + padLb])
-      .range([PAD_T + innerH, PAD_T]);
+  // Tooltip
+  const tooltip = svg
+    .append("g")
+    .attr("pointer-events", "none")
+    .style("display", "none");
+  const tooltipValue = tooltip
+    .append("text")
+    .attr("fill", "rgb(52 211 153)")
+    .attr("font-size", 12);
+  const tooltipDate = tooltip
+    .append("text")
+    .attr("fill", "rgb(161 161 170)")
+    .attr("font-size", 11);
 
-    const lineGen = line<VizResult>()
-      .x((p) => xScale(new Date(`${p.date}T12:00:00`)))
-      .y((p) => yScale(p.value));
+  // Scrubber
+  svg
+    .append("rect")
+    .attr("x", PAD_L)
+    .attr("y", PAD_T)
+    .attr("width", innerW)
+    .attr("height", innerH)
+    .attr("fill", "transparent")
+    .style("cursor", "crosshair")
+    .on("mousemove", (event) => {
+      const [mx] = d3.pointer(event);
+      let closest = 0;
+      let minDist = Infinity;
+      enriched.forEach((p, i) => {
+        const dist = Math.abs(p.cx - mx);
+        if (dist < minDist) {
+          minDist = dist;
+          closest = i;
+        }
+      });
+      const p = enriched[closest];
+      if (!p) return;
 
-    const areaGen = area<VizResult>()
-      .x((p) => xScale(new Date(`${p.date}T12:00:00`)))
-      .y0(PAD_T + innerH)
-      .y1((p) => yScale(p.value));
+      const anchor =
+        p.cx > VIEW_W - 120 ? "end" : p.cx < 120 ? "start" : "middle";
 
-    const lineD = lineGen(sorted) ?? "";
-    const areaD = sorted.length >= 2 ? (areaGen(sorted) ?? null) : null;
+      hoverLine.style("display", null).attr("x1", p.cx).attr("x2", p.cx);
 
-    const allTicks = xScale.ticks(12);
-    const xTicks =
-      allTicks.length <= 3
-        ? allTicks
-        : [
-            allTicks[0],
-            allTicks[Math.floor(allTicks.length / 2)],
-            allTicks[allTicks.length - 1],
-          ];
+      tooltip.style("display", null);
+      tooltipValue
+        .attr("x", p.cx)
+        .attr("y", PAD_T - 16)
+        .attr("text-anchor", anchor)
+        .text(`${p.value.toFixed(1)} lb`);
+      tooltipDate
+        .attr("x", p.cx)
+        .attr("y", PAD_T - 4)
+        .attr("text-anchor", anchor)
+        .text(shortDateLabel(p.date, showYear));
 
-    const yTicks = ticks(minW - padLb, maxW + padLb, 5);
+      svg
+        .selectAll("circle")
+        .attr("opacity", (_d, i) => (i === closest ? 1 : 0.6))
+        .attr("r", (_d, i) => (i === closest ? 3.75 : 3));
 
-    return {
-      sorted,
-      values,
-      innerW,
-      innerH,
-      xScale,
-      yScale,
-      lineD,
-      areaD,
-      yTicks,
-      xTicks,
-      n: sorted.length,
-    };
-  }, [points, range]);
-
-  return (
-    <div style={{ height: CHART_HEIGHT }}>
-      {isLoading ? (
-        <div
-          className="flex h-full items-center justify-center"
-          aria-busy="true"
-        >
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-500" />
-        </div>
-      ) : !geometry ? (
-        <div className="flex h-full items-center justify-center">
-          <p className="text-sm text-zinc-500">
-            No weight entries in {sessionChartRangeLabel(range)}. Log weight
-            from a day on the calendar, or widen the range.
-          </p>
-        </div>
-      ) : (
-        <svg
-          className="h-full w-full"
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-        >
-          <defs>
-            <linearGradient id="weight-area-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop
-                offset="0%"
-                stopColor="rgb(16 185 129)"
-                stopOpacity="0.22"
-              />
-              <stop
-                offset="100%"
-                stopColor="rgb(16 185 129)"
-                stopOpacity="0.02"
-              />
-            </linearGradient>
-          </defs>
-
-          {geometry.yTicks.map((lb) => {
-            const y = geometry.yScale(lb);
-            return (
-              <g key={`y-${lb}`}>
-                <line
-                  x1={PAD_L}
-                  y1={y}
-                  x2={VIEW_W - PAD_R}
-                  y2={y}
-                  stroke="rgb(39 39 42)"
-                  strokeWidth={1}
-                />
-                <text
-                  x={PAD_L - 8}
-                  y={y + 4}
-                  textAnchor="end"
-                  className="fill-zinc-500"
-                  fontSize={11}
-                >
-                  {lb.toFixed(1)}
-                </text>
-              </g>
-            );
-          })}
-          <text
-            x={12}
-            y={VIEW_H / 2}
-            transform={`rotate(-90 12 ${VIEW_H / 2})`}
-            textAnchor="middle"
-            className="fill-zinc-600"
-            fontSize={10}
-          >
-            lb
-          </text>
-
-          {geometry.areaD && (
-            <path
-              d={geometry.areaD}
-              fill="url(#weight-area-fill)"
-              stroke="none"
-            />
-          )}
-          {geometry.lineD && (
-            <path
-              d={geometry.lineD}
-              fill="none"
-              stroke="rgb(52 211 153)"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity={0.95}
-            />
-          )}
-
-          {geometry.xTicks.map((d) => {
-            const x = geometry.xScale(d);
-            if (x < PAD_L || x > VIEW_W - PAD_R) return null;
-            return (
-              <g key={d.toISOString()} pointerEvents="none">
-                <line
-                  x1={x}
-                  y1={VIEW_H - PAD_B}
-                  x2={x}
-                  y2={VIEW_H - PAD_B + 3}
-                  stroke="rgb(63 63 70)"
-                  strokeWidth={1}
-                />
-                <text
-                  x={x}
-                  y={VIEW_H - 10}
-                  textAnchor="middle"
-                  className="fill-zinc-500/70"
-                  fontSize={10}
-                >
-                  {monthLabel(d)}
-                </text>
-              </g>
-            );
-          })}
-
-          {hoverIdx != null && hoverIdx >= 0 && hoverIdx < geometry.n && (
-            <line
-              x1={geometry.xScale(
-                new Date(`${geometry.sorted[hoverIdx].date}T12:00:00`),
-              )}
-              x2={geometry.xScale(
-                new Date(`${geometry.sorted[hoverIdx].date}T12:00:00`),
-              )}
-              y1={PAD_T}
-              y2={VIEW_H - PAD_B}
-              stroke="rgb(113 113 122)"
-              strokeWidth={1}
-              strokeOpacity={0.45}
-              pointerEvents="none"
-            />
-          )}
-
-          {geometry.sorted.map((p, i) => {
-            const isHovered = hoverIdx === i;
-            return (
-              <circle
-                key={p.date}
-                cx={geometry.xScale(new Date(`${p.date}T12:00:00`))}
-                cy={geometry.yScale(p.value)}
-                r={isHovered ? 3.75 : 3}
-                fill="rgb(24 24 27)"
-                stroke="rgb(244 244 245)"
-                strokeWidth={1}
-                opacity={isHovered ? 1 : 0.6}
-                pointerEvents="none"
-              />
-            );
-          })}
-
-          {hoverIdx != null &&
-            hoverIdx >= 0 &&
-            hoverIdx < geometry.n &&
-            (() => {
-              const p = geometry.sorted[hoverIdx];
-              if (!p) return null;
-              const cx = geometry.xScale(new Date(`${p.date}T12:00:00`));
-              return (
-                <g pointerEvents="none">
-                  <text
-                    x={cx}
-                    y={PAD_T - 8}
-                    textAnchor="middle"
-                    className="fill-zinc-300"
-                    fontSize={11}
-                  >
-                    {shortDateLabel(p.date)}
-                  </text>
-                  <text
-                    x={cx}
-                    y={PAD_T + 6}
-                    textAnchor="middle"
-                    className="fill-emerald-400"
-                    fontSize={11}
-                  >
-                    {p.value.toFixed(1)} lb
-                  </text>
-                </g>
-              );
-            })()}
-
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: SVG chart scrubber */}
-          <rect
-            x={PAD_L}
-            y={PAD_T}
-            width={geometry.innerW}
-            height={geometry.innerH}
-            fill="transparent"
-            className="cursor-crosshair"
-            onMouseMove={(e) => {
-              const svg = e.currentTarget.ownerSVGElement;
-              const pt = svg?.createSVGPoint();
-              if (!pt) return;
-              pt.x = e.clientX;
-              pt.y = e.clientY;
-              const local = pt.matrixTransform(svg?.getScreenCTM()?.inverse());
-              let closest = 0;
-              let minDist = Infinity;
-              for (let i = 0; i < geometry.n; i++) {
-                const cx = geometry.xScale(
-                  new Date(`${geometry.sorted[i].date}T12:00:00`),
-                );
-                const d = Math.abs(cx - local.x);
-                if (d < minDist) {
-                  minDist = d;
-                  closest = i;
-                }
-              }
-              setHoverIdx(closest);
-            }}
-            onMouseLeave={() => setHoverIdx(null)}
-          />
-        </svg>
-      )}
-    </div>
-  );
+      onHover(closest);
+    })
+    .on("mouseleave", () => {
+      hoverLine.style("display", "none");
+      tooltip.style("display", "none");
+      svg.selectAll("circle").attr("opacity", 0.6).attr("r", 3);
+      onHover(null);
+    });
 };

@@ -1,8 +1,8 @@
 import { PencilEditIcon } from "@/components/assets";
 import { normalizePlanStatus } from "@/components/PlanStatusSelect";
 import type {
-  CompletedWorkoutRow,
-  PlannedWorkoutWithCompleted,
+  VendorActivityRow,
+  WorkoutEntryWithCompleted,
 } from "@/lib/db/schema.server";
 import { hevyWorkoutWebUrl, stravaActivityWebUrl } from "@/lib/hevy/links";
 import { formatPlannedCardioTargets } from "@/lib/plans/cardio-targets";
@@ -13,7 +13,7 @@ import {
 import { formatPlanDayKey } from "@/lib/utils/dates";
 
 const completedWorkoutOpenInVendor = (
-  cw: CompletedWorkoutRow,
+  cw: VendorActivityRow,
 ): {
   href: string;
   label: string;
@@ -28,7 +28,7 @@ const completedWorkoutOpenInVendor = (
 };
 
 export const ActivityElement: React.FC<{
-  workout: PlannedWorkoutWithCompleted;
+  workout: WorkoutEntryWithCompleted;
   onEdit?: () => void;
   hideDate?: boolean;
   hideNote?: boolean;
@@ -40,20 +40,17 @@ export const ActivityElement: React.FC<{
   hideNote = false,
   hideEdit = false,
 }) => {
-  const linked = Boolean(workout.completedWorkout);
-  const title =
-    linked && workout.completedWorkout
-      ? completedWorkoutTitle(workout.completedWorkout)
-      : null;
-  const brief =
-    linked && workout.completedWorkout
-      ? formatCompletedSessionBrief(workout.completedWorkout)
-      : null;
+  const title = workout.vendorActivity
+    ? completedWorkoutTitle(workout.vendorActivity)
+    : null;
+  const brief = workout.vendorActivity
+    ? formatCompletedSessionBrief(workout.vendorActivity)
+    : null;
   const planTargets = ["run", "bike", "swim"].includes(workout.kind)
     ? formatPlannedCardioTargets(workout)
     : null;
-  const vendorOpen = workout.completedWorkout
-    ? completedWorkoutOpenInVendor(workout.completedWorkout)
+  const vendorOpen = workout.vendorActivity
+    ? completedWorkoutOpenInVendor(workout.vendorActivity)
     : null;
   return (
     <div
@@ -94,7 +91,7 @@ export const ActivityElement: React.FC<{
             {workout.notes.trim()}
           </p>
         )}
-        {linked && workout.completedWorkout ? (
+        {workout.vendorActivity ? (
           <div className="rounded border border-emerald-900/35 bg-emerald-950/20 px-1.5 py-1 h-14">
             <div className="flex min-w-0 items-start justify-between gap-2">
               <div className="min-w-0 flex-1">

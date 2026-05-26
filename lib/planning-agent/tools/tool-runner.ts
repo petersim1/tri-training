@@ -183,7 +183,7 @@ export async function executePlanningTool(options: {
     case "list_planned_workouts": {
       const filters: ActivityListSchemaValues = {
         page: 0,
-        pageSize: 100,
+        pageSize: 20,
         kind: obj.kind as PlanKind,
         status: obj.status as PlanStatus,
         dateFrom: asStr(obj.since_day),
@@ -214,11 +214,11 @@ export async function executePlanningTool(options: {
           status: row.status,
           routineVendor: row.routineVendor,
           routineId: row.routineId,
-          completedWorkoutId: row.completedWorkoutId,
+          vendorActivityId: row.vendorActivityId,
           distance: row.distance,
           distanceUnits: row.distanceUnits,
           timeSeconds: row.timeSeconds,
-          has_linked_session: row.completedWorkoutId != null,
+          has_linked_session: row.vendorActivityId != null,
         },
       });
     }

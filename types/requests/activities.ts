@@ -12,13 +12,6 @@ import { dayKeySchema, idSchema, timezoneSchema } from "./shared";
 
 export type CalendarScope = "month" | "week";
 
-export const candidateLinkSchema = z.object({
-  ...timezoneSchema.shape,
-  planId: z.string(),
-});
-
-export type CandidateLinkSchemaValues = z.infer<typeof candidateLinkSchema>;
-
 export const calendarSchema = z.object({
   period: z.enum(["month", "week"]),
   anchor: z.iso.date(),
@@ -67,7 +60,7 @@ export type CreatePlanInput = z.infer<typeof createPlanSchema>;
 
 export const createFromCompletedSchema = z.object({
   dayKey: z.iso.date(),
-  completedWorkoutId: z.string(),
+  vendorActivityId: z.string(),
 });
 
 export type CreateFromCompletedInput = z.infer<

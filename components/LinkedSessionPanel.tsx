@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import type { CompletedWorkoutRow } from "@/lib/db/schema.server";
+import type { VendorActivityRow } from "@/lib/db/schema.server";
 import { hevyWorkoutWebUrl, stravaActivityWebUrl } from "@/lib/hevy/links";
 import {
   completedWorkoutTitle,
@@ -13,7 +13,7 @@ export function LinkedSessionPanel({
   onUnlinked,
 }: {
   planId: string;
-  completed: CompletedWorkoutRow;
+  completed: VendorActivityRow;
   onUnlinked: () => Promise<void>;
 }) {
   const unlinkMutation = useMutation({

@@ -9,22 +9,16 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { useFormReducer } from "@/hooks/useFormReducer";
 import { ACTIVITIES_PLANNED_MARKDOWN_TEMPLATE } from "@/lib/api/activities-markdown-import";
-import type { CompletedWorkoutRow } from "@/lib/db/schema.server";
-import {
-  hevyWebRootUrl,
-  hevyWorkoutWebUrl,
-  stravaActivityWebUrl,
-} from "@/lib/hevy/links";
-import {
-  activityKindToPlanKind,
-  completedWorkoutTitle,
-} from "@/lib/plans/completed-workout-data";
+import type { TypedVendorWorkoutRow } from "@/lib/db/schema.server";
+import { hevyWebRootUrl } from "@/lib/hevy/links";
+import { completedWorkoutTitle } from "@/lib/plans/completed-workout-data";
 import queryKeys from "@/lib/query-keys";
 import {
   browserTimeZone,
   formatPlanDayKey,
   toIsoDate,
 } from "@/lib/utils/dates";
+import { rawActivityType } from "@/lib/utils/vendors";
 import { activityActions, markdownActions } from "@/server-fcts";
 import type { ActivityListSchemaValues } from "@/types/requests/activities";
 import { LinkedSessionPanel } from "../LinkedSessionPanel";
@@ -38,19 +32,6 @@ import { ActivityFilters } from "../views/activities/filters";
 
 const STRAVA_ACTIVITIES_HOME = "https://www.strava.com/athlete/training";
 const MAIN_COLUMN = "mx-auto w-full max-w-6xl";
-
-function completedWorkoutOpenInVendor(cw: CompletedWorkoutRow): {
-  href: string;
-  label: string;
-} {
-  const isStrava = cw.vendor === "strava";
-  return {
-    href: isStrava
-      ? stravaActivityWebUrl(cw.vendorId)
-      : hevyWorkoutWebUrl(cw.vendorId),
-    label: isStrava ? "Open in Strava" : "Open in Hevy",
-  };
-}
 
 export const ActivitiesContent: React.FC<{
   initialQuery: ActivityListSchemaValues;
@@ -86,7 +67,7 @@ export const ActivitiesContent: React.FC<{
       setLinkAllError(null);
       setLinkAllInfo(null);
     },
-    onSuccess: (r) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.unlinkedActivities,
       });
@@ -491,7 +472,7 @@ export const ActivitiesContent: React.FC<{
               </div>
               <div className="space-y-4 border-t border-zinc-800/80 pt-3">
                 {editingPlan.status === "planned" &&
-                !editingPlan.completedWorkout ? (
+                !editingPlan.vendorActivity ? (
                   <>
                     <PlanDayKeyField
                       planId={editingPlan.id}
@@ -517,13 +498,13 @@ export const ActivitiesContent: React.FC<{
                   <PlanStatusSelect
                     planId={editingPlan.id}
                     status={editingPlan.status}
-                    disabled={Boolean(editingPlan.completedWorkout)}
+                    disabled={Boolean(editingPlan.vendorActivity)}
                     onUpdated={refreshAfterPlanChange}
                     className="block"
                   />
                 </div>
                 {["run", "bike", "swim"].includes(editingPlan.kind) &&
-                !editingPlan.completedWorkout ? (
+                !editingPlan.vendorActivity ? (
                   <PlanCardioTargetsField
                     planId={editingPlan.id}
                     kind={editingPlan.kind}
@@ -533,10 +514,10 @@ export const ActivitiesContent: React.FC<{
                     onUpdated={refreshAfterPlanChange}
                   />
                 ) : null}
-                {editingPlan.completedWorkout ? (
+                {editingPlan.vendorActivity ? (
                   <LinkedSessionPanel
                     planId={editingPlan.id}
-                    completed={editingPlan.completedWorkout}
+                    completed={editingPlan.vendorActivity}
                     onUnlinked={refreshAfterPlanChange}
                   />
                 ) : !["run", "bike", "swim"].includes(editingPlan.kind) ? (
@@ -623,8 +604,9 @@ export const ActivitiesContent: React.FC<{
               <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                 {(unresolvedQuery.data ?? []).map((cw) => {
                   const title = completedWorkoutTitle(cw) ?? "Session";
-                  const kindLabel =
-                    activityKindToPlanKind(cw.activityKind) ?? cw.activityKind;
+                  const kindLabel = rawActivityType(
+                    cw as TypedVendorWorkoutRow,
+                  );
                   return (
                     <li
                       key={cw.id}

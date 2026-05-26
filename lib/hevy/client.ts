@@ -1,4 +1,4 @@
-import type { HevyWorkoutSummary } from "./types";
+import type { HevyWorkout } from "./types";
 
 const BASE = "https://api.hevy.com/v1";
 
@@ -37,7 +37,7 @@ export async function hevyFetch<T>(
 /** Single workout `GET /v1/workouts/{id}`; `null` if not found. */
 export async function hevyFetchWorkoutById(
   workoutId: string,
-): Promise<HevyWorkoutSummary | null> {
+): Promise<HevyWorkout | null> {
   const id = workoutId.trim();
   if (!id) {
     return null;
@@ -57,5 +57,5 @@ export async function hevyFetchWorkoutById(
     const text = await res.text();
     throw new Error(`Hevy API ${res.status}: ${text}`);
   }
-  return res.json() as Promise<HevyWorkoutSummary>;
+  return res.json() as Promise<HevyWorkout>;
 }

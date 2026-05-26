@@ -1,4 +1,4 @@
-export type HevyWorkoutSummary = {
+export type HevyWorkout = {
   id: string;
   title: string;
   routine_id: string;
@@ -52,7 +52,7 @@ export type HevyRoutineFolderSummary = {
 };
 
 export type HevyBodyMeasurementSummary = {
-  date: string;
+  date: string; // YYYY-MM-DD
   weight_kg?: number;
   lean_mass_kg?: number;
   fat_percent?: number;

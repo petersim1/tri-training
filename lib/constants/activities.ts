@@ -8,7 +8,7 @@ export const PLAN_KIND_VALUES = [
 export type PlanKind = (typeof PLAN_KIND_VALUES)[number];
 
 /** Strava vs Hevy — `completed_workouts.vendor`, `planned_workouts.routine_vendor`, webhooks. */
-export const WORKOUT_VENDORS = ["strava", "hevy"] as const;
+const WORKOUT_VENDORS = ["strava", "hevy"] as const;
 export type WorkoutVendor = (typeof WORKOUT_VENDORS)[number];
 
 /** Planned workout / sport event lifecycle `status`. */
