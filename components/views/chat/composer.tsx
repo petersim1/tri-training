@@ -75,6 +75,7 @@ export const Composer = (props: {
   useEffect(() => {
     const tid = props.selectedThreadId?.trim() ?? "";
     if (tid !== "" && tid === activeStreamThreadRef.current) return;
+    shouldAutoScrollRef.current = true; // add this
     setDraft("");
     setStreaming("");
     setBusy(false);
@@ -274,6 +275,7 @@ export const Composer = (props: {
     <div className="flex min-h-0 flex-1 flex-col bg-[#131315]">
       <div
         ref={paneRef}
+        onScroll={onScroll}
         className="min-h-0 flex-1 overflow-y-auto px-4 py-4 text-[13.75px] leading-snug text-zinc-50"
       >
         <div className="flex flex-col gap-3 pb-2 pt-1">
