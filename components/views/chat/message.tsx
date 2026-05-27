@@ -7,6 +7,7 @@ import {
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { ChatProposal } from "@/types/db";
 
 type Tone = "user" | "assistant";
 
@@ -190,3 +191,81 @@ export function ChatMarkdownBody(props: {
     </div>
   );
 }
+
+type Props = {
+  bubble: "user" | "assistant";
+  text: string;
+  contextLine?: string | null;
+  proposal?: ChatProposal | null;
+  onProposalSubmit?: (approved: boolean) => Promise<void>;
+};
+
+export const MessageBubble: React.FC<Props> = ({
+  bubble,
+  text,
+  contextLine,
+  proposal,
+  onProposalSubmit,
+}) => {
+  const body =
+    text.trim() !== "" ? <ChatMarkdownBody tone={bubble} text={text} /> : null;
+  const showCtx = Boolean(contextLine?.trim());
+
+  return (
+    <div
+      className={
+        bubble === "user"
+          ? showCtx
+            ? "flex flex-col items-end gap-1 pl-10 pr-0.5"
+            : "flex justify-end pl-10 pr-0.5"
+          : "flex flex-col items-start gap-2 pr-9 pl-0.5"
+      }
+    >
+      <div
+        className={
+          bubble === "user"
+            ? "inline-block max-w-[min(19rem,calc(100vw-8rem))] rounded-[20px] rounded-br-md bg-emerald-600 px-[0.9rem] py-[0.65rem] text-[13.75px] font-normal leading-snug text-white shadow-[0_10px_30px_-12px_rgba(16,185,129,0.55)] ring-[0.5px] ring-emerald-300/55"
+            : "inline-block max-w-[min(21rem,calc(100vw-8rem))] rounded-[20px] rounded-bl-md border border-zinc-700/60 bg-zinc-800/94 px-[0.92rem] py-[0.65rem] text-[13.75px] font-normal leading-snug text-zinc-100 shadow-sm shadow-black/40"
+        }
+      >
+        {body}
+      </div>
+      {showCtx && (
+        <p className="max-w-[min(19rem,calc(100vw-8rem))] text-right text-[10px] leading-snug tracking-tight text-zinc-400">
+          {contextLine}
+        </p>
+      )}
+      {proposal && (
+        <div className="w-full max-w-[min(21rem,calc(100vw-8rem))] rounded-2xl border border-zinc-700/60 bg-zinc-900 px-3 py-2.5">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            Proposal
+          </p>
+          {proposal.status === "pending" ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => onProposalSubmit?.(true)}
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-emerald-500"
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                onClick={() => onProposalSubmit?.(false)}
+                className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-[12px] font-semibold text-zinc-200 hover:bg-zinc-700"
+              >
+                Reject
+              </button>
+            </div>
+          ) : (
+            <p
+              className={`text-[12px] font-semibold ${proposal.status === "approved" ? "text-emerald-400" : "text-zinc-500"}`}
+            >
+              {proposal.status === "approved" ? "✓ Accepted" : "✕ Rejected"}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};

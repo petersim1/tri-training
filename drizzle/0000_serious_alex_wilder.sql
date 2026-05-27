@@ -1,36 +1,32 @@
-CREATE TABLE `coaching_state` (
-	`id` text PRIMARY KEY NOT NULL,
-	`created_at` integer DEFAULT (unixepoch('now') * 1000) NOT NULL,
-	`updated_at` integer DEFAULT (unixepoch('now') * 1000) NOT NULL,
-	`constraints` text DEFAULT '[]' NOT NULL,
-	`preferences` text DEFAULT '{}' NOT NULL,
-	`discipline_state` text DEFAULT '{}' NOT NULL,
-	`periodization` text DEFAULT '{}' NOT NULL,
-	`flags` text DEFAULT '{}' NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE `planning_chat_messages` (
+CREATE TABLE `chat_messages` (
 	`id` text PRIMARY KEY NOT NULL,
 	`created_at` integer DEFAULT (unixepoch('now') * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch('now') * 1000) NOT NULL,
 	`thread_id` text NOT NULL,
-	`seq` integer NOT NULL,
 	`role` text NOT NULL,
 	`content` text NOT NULL,
 	`replay_summary` text,
-	`metadata` text,
+	`tools` text DEFAULT '[]',
 	`sport_event_id` text,
-	`is_proposal` integer DEFAULT false NOT NULL,
-	FOREIGN KEY (`thread_id`) REFERENCES `planning_chat_threads`(`id`) ON UPDATE no action ON DELETE cascade,
+	`proposals` text,
+	`is_coaching_state_update` integer DEFAULT 0 NOT NULL,
+	FOREIGN KEY (`thread_id`) REFERENCES `chat_threads`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`sport_event_id`) REFERENCES `sport_events`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE INDEX `planning_chat_messages_thread_seq` ON `planning_chat_messages` (`thread_id`,`seq`);--> statement-breakpoint
-CREATE TABLE `planning_chat_threads` (
+CREATE INDEX `ix_chat_messages_thread_id` ON `chat_messages` (`thread_id`);--> statement-breakpoint
+CREATE TABLE `chat_threads` (
 	`id` text PRIMARY KEY NOT NULL,
 	`created_at` integer DEFAULT (unixepoch('now') * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch('now') * 1000) NOT NULL,
 	`title` text
+);
+--> statement-breakpoint
+CREATE TABLE `coaching_state` (
+	`id` text PRIMARY KEY NOT NULL,
+	`created_at` integer DEFAULT (unixepoch('now') * 1000) NOT NULL,
+	`updated_at` integer DEFAULT (unixepoch('now') * 1000) NOT NULL,
+	`state` text DEFAULT '{"physicalState":[],"disciplineState":{},"preferences":[],"directives":[]}' NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `service_strava_tokens` (
@@ -110,7 +106,7 @@ CREATE INDEX `ix_workout_entries_day_key` ON `workout_entries` (`day_key`);
 
 INSERT INTO `sport_events` (`id`, `name`, `event_day_key`, `status`, `discipline`, `notes`, `targets`, `url`)
 VALUES (
-	'sport_event_seed_pat_griskus_olympic_ct_2026',
+	'6886d0ed-a50a-4874-b766-6dbc5f8a9646',
 	'Olympic Triathlon (CT)',
 	'2026-06-20',
 	'planned',

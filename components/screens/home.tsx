@@ -10,7 +10,10 @@ export const Home: React.FC<{
   initialCalendarScope: CalendarScope;
   initialChartSettings: SessionChartSettings;
 }> = ({ initialCalendarScope, initialChartSettings }) => {
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const tz = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    [],
+  );
   const today = useMemo(
     () => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date()),
     [tz],

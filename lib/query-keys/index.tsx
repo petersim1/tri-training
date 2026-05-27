@@ -32,6 +32,12 @@ const unlinkedActivities = ["unlinked"];
 
 const dayDetails = (day: string) => ["day-details", day];
 
+const chatThreads = ["chat-threads"] as const;
+
+const messagesQueryKey = (threadId: string | null): readonly unknown[] => {
+  return ["planningChat", "messages", threadId ?? "__none"] as const;
+};
+
 export default {
   activitiesList,
   calendarQueryKey,
@@ -39,4 +45,6 @@ export default {
   weightViz,
   unlinkedActivities,
   dayDetails,
+  chatThreads,
+  messagesQueryKey,
 };

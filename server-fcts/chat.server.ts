@@ -1,66 +1,80 @@
 import { createServerFn } from "@tanstack/react-start";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import z from "zod";
+import { getPlanningOpenAiClient } from "@/lib/chat/client";
+import { runCoachingStateSummary } from "@/lib/chat/coach/runner";
+import { handleApproval } from "@/lib/chat/main/approval";
+import type { ChatRunContext } from "@/lib/chat/main/dependency";
+import { persistTurn, runPlanningTurn } from "@/lib/chat/main/runner";
+import { runReplaySummary } from "@/lib/chat/replay/runner";
 import { getDb } from "@/lib/db/index.server";
 import {
-  type PlanningChatMessageRow,
-  type PlanningChatThreadRow,
-  planningChatMessages,
-  planningChatThreads,
+  type ChatMessageRow,
+  type ChatThreadRow,
+  chatMessages,
+  chatThreads,
+  coachingState,
+  type SportEventRow,
 } from "@/lib/db/schema.server";
+import type { ToolName } from "@/types/chats/tools";
+import { chatSchema, listMessagesSchema } from "@/types/requests/chat";
 import { idSchema } from "@/types/requests/shared";
+import type { ChatMessage } from "@/types/responses/chat";
+import { coachingActions, eventActions } from ".";
 
 export const getThread = createServerFn({ method: "GET" })
   .inputValidator(idSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<ChatThreadRow> => {
     const db = await getDb();
-    return db
+    const thread = await db
       .select()
-      .from(planningChatThreads)
-      .where(eq(planningChatThreads.id, data.id))
+      .from(chatThreads)
+      .where(eq(chatThreads.id, data.id))
       .get();
+
+    if (!thread) {
+      throw new Error("not found");
+    }
+    return thread;
   });
 
 export const listThreads = createServerFn({
   method: "GET",
-}).handler(async (): Promise<PlanningChatThreadRow[]> => {
+}).handler(async (): Promise<ChatThreadRow[]> => {
   const db = await getDb();
   return db
     .select()
-    .from(planningChatThreads)
-    .orderBy(desc(planningChatThreads.updatedAt))
+    .from(chatThreads)
+    .orderBy(desc(chatThreads.updatedAt))
     .all();
 });
 
 export const createThread = createServerFn({
   method: "POST",
-}).handler(async (): Promise<PlanningChatThreadRow> => {
+}).handler(async (): Promise<string> => {
   const db = await getDb();
-  const id = crypto.randomUUID();
-  const now = new Date();
-  const row: typeof planningChatThreads.$inferInsert = {
-    id,
-    title: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await db.insert(planningChatThreads).values(row).run();
-  const inserted = await db
-    .select()
-    .from(planningChatThreads)
-    .where(eq(planningChatThreads.id, id))
-    .get();
-  if (!inserted) {
+  const [row] = await db
+    .insert(chatThreads)
+    .values({})
+    .returning({ id: chatThreads.id });
+  if (!row) {
     throw new Error("Failed to create planning thread");
   }
-  return inserted;
+  const existing = await db
+    .select({ id: coachingState.id })
+    .from(coachingState)
+    .get();
+  if (!existing) {
+    await db.insert(coachingState).values({}).run();
+  }
+  return row.id;
 });
 
 export const listMessages = createServerFn({
   method: "POST",
 })
-  .inputValidator((d: { threadId: string }) => d)
-  .handler(async ({ data }): Promise<PlanningChatMessageRow[]> => {
+  .inputValidator(listMessagesSchema)
+  .handler(async ({ data }): Promise<ChatMessageRow[]> => {
     const tid = String(data.threadId ?? "").trim();
     if (!tid) {
       return [];
@@ -69,9 +83,9 @@ export const listMessages = createServerFn({
 
     return db
       .select()
-      .from(planningChatMessages)
-      .where(eq(planningChatMessages.threadId, tid))
-      .orderBy(asc(planningChatMessages.seq))
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, tid))
+      .orderBy(asc(chatMessages.createdAt))
       .all();
   });
 
@@ -86,10 +100,7 @@ export const deleteThread = createServerFn({
     }
 
     const db = await getDb();
-    await db
-      .delete(planningChatThreads)
-      .where(eq(planningChatThreads.id, tid))
-      .run();
+    await db.delete(chatThreads).where(eq(chatThreads.id, tid)).run();
     return { deleted: true };
   });
 
@@ -104,20 +115,121 @@ export const updateTitle = createServerFn({ method: "POST" })
     const db = await getDb();
     const row = await db
       .select()
-      .from(planningChatThreads)
-      .where(
-        and(
-          eq(planningChatThreads.id, data.id),
-          isNull(planningChatThreads.title),
-        ),
-      )
+      .from(chatThreads)
+      .where(and(eq(chatThreads.id, data.id), isNull(chatThreads.title)))
       .get();
 
     if (row) {
       const title = data.title.trim().slice(0, 96).replace(/\s+/g, " ");
       await db
-        .update(planningChatThreads)
+        .update(chatThreads)
         .set({ title, updatedAt: new Date() })
-        .where(eq(planningChatThreads.id, data.id));
+        .where(eq(chatThreads.id, data.id));
     }
+  });
+
+export const chat = createServerFn({ method: "POST" })
+  .inputValidator(chatSchema)
+  .handler(async ({ data }) => {
+    console.log("started");
+    if (data.type === "approval") {
+      await handleApproval(data.threadId, data.approved);
+      return;
+    }
+
+    const thread = await getThread({ data: { id: data.threadId } });
+    const coachingState = await coachingActions.get();
+
+    console.log("got thread and coach");
+
+    let event: SportEventRow | undefined;
+    if (data.eventId) {
+      const ev = await eventActions.get({ data: { id: data.eventId } });
+      if (!ev) {
+        throw new Error("unknown_sport_event");
+      }
+      event = ev;
+    }
+    console.log("got event");
+
+    const client = getPlanningOpenAiClient(process.env.OPENAI_KEY as string);
+
+    console.log("initialized client");
+
+    const ctx: ChatRunContext = {
+      runStart: new Date(),
+      dayKey: data.dayKey,
+      thread,
+      coachingState,
+      event,
+      round: 0,
+      maxRounds: 10,
+      toolsCalled: [],
+      availableTools: new Set<ToolName>([
+        "list_workouts",
+        "get_workout",
+        "create_workout",
+        "update_workout",
+        "delete_workout",
+      ]),
+    };
+
+    const db = await getDb();
+
+    const messages = await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, thread.id))
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(6)
+      .all();
+
+    console.log("got messages");
+
+    const stream = new ReadableStream<ChatMessage>({
+      async start(controller) {
+        const emit = (chunk: ChatMessage) => {
+          controller.enqueue(chunk);
+        };
+
+        let assistantText = "";
+        try {
+          assistantText = await runPlanningTurn(
+            client,
+            ctx,
+            messages,
+            data.message,
+            emit,
+          );
+        } catch (e) {
+          emit({
+            type: "error",
+            message: e instanceof Error ? e.message : "failed",
+          });
+        } finally {
+          if (ctx.proposals) {
+            emit({ type: "approval" });
+          }
+          emit({ type: "done" });
+
+          // fire and forget after stream closes
+          void persistTurn(ctx, data.message, assistantText)
+            .then((sysMessage) => {
+              runReplaySummary(client, ctx, messages, data.message, sysMessage);
+              runCoachingStateSummary(
+                client,
+                ctx,
+                messages,
+                data.message,
+                sysMessage,
+              );
+            })
+            .catch(console.error);
+
+          controller.close();
+        }
+      },
+    });
+
+    return stream;
   });

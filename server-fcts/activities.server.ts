@@ -42,7 +42,7 @@ import {
   updatePlanSchema,
   vizSchema,
 } from "@/types/requests/activities";
-import { timezoneSchema } from "@/types/requests/shared";
+import { idSchema, timezoneSchema } from "@/types/requests/shared";
 import type {
   CalendarPageItem,
   LinkAllResponse,
@@ -357,8 +357,8 @@ export const linkAll = createServerFn({ method: "POST" })
 
 /** Server-fn registration only — DB implementation lives in `planner-db-operations.ts` (not client-bundled). */
 export const get = createServerFn({ method: "GET" })
-  .inputValidator((d: { id: string }) => d)
-  .handler(async ({ data }): Promise<WorkoutEntryWithCompleted | null> => {
+  .inputValidator(idSchema)
+  .handler(async ({ data }): Promise<WorkoutEntryWithCompleted> => {
     const db = await getDb();
     const row = await db
       .select({
@@ -373,7 +373,7 @@ export const get = createServerFn({ method: "GET" })
       .where(eq(workoutEntries.id, data.id))
       .get();
     if (!row) {
-      return null;
+      throw new Error("not found");
     }
     return row;
   });
@@ -561,7 +561,7 @@ export const update = createServerFn({ method: "POST" })
   });
 
 export const deletePlan = createServerFn({ method: "POST" })
-  .inputValidator((d: { id: string }) => d)
+  .inputValidator(idSchema)
   .handler(async ({ data }) => {
     const db = await getDb();
     const plan = await db

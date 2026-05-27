@@ -1,84 +1,11 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "558fec19-65cc-4aa1-9f23-703090f2e507",
+  "id": "9edff6e5-3715-4e90-8d23-8ddb00af3310",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "coaching_state": {
-      "name": "coaching_state",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('now') * 1000)"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('now') * 1000)"
-        },
-        "constraints": {
-          "name": "constraints",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
-        },
-        "preferences": {
-          "name": "preferences",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'{}'"
-        },
-        "discipline_state": {
-          "name": "discipline_state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'{}'"
-        },
-        "periodization": {
-          "name": "periodization",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'{}'"
-        },
-        "flags": {
-          "name": "flags",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'{}'"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "planning_chat_messages": {
-      "name": "planning_chat_messages",
+    "chat_messages": {
+      "name": "chat_messages",
       "columns": {
         "id": {
           "name": "id",
@@ -110,13 +37,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "seq": {
-          "name": "seq",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "role": {
           "name": "role",
           "type": "text",
@@ -138,12 +58,13 @@
           "notNull": false,
           "autoincrement": false
         },
-        "metadata": {
-          "name": "metadata",
+        "tools": {
+          "name": "tools",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "'[]'"
         },
         "sport_event_id": {
           "name": "sport_event_id",
@@ -152,30 +73,36 @@
           "notNull": false,
           "autoincrement": false
         },
-        "is_proposal": {
-          "name": "is_proposal",
+        "proposals": {
+          "name": "proposals",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "is_coaching_state_update": {
+          "name": "is_coaching_state_update",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": false
+          "default": 0
         }
       },
       "indexes": {
-        "planning_chat_messages_thread_seq": {
-          "name": "planning_chat_messages_thread_seq",
+        "ix_chat_messages_thread_id": {
+          "name": "ix_chat_messages_thread_id",
           "columns": [
-            "thread_id",
-            "seq"
+            "thread_id"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "planning_chat_messages_thread_id_planning_chat_threads_id_fk": {
-          "name": "planning_chat_messages_thread_id_planning_chat_threads_id_fk",
-          "tableFrom": "planning_chat_messages",
-          "tableTo": "planning_chat_threads",
+        "chat_messages_thread_id_chat_threads_id_fk": {
+          "name": "chat_messages_thread_id_chat_threads_id_fk",
+          "tableFrom": "chat_messages",
+          "tableTo": "chat_threads",
           "columnsFrom": [
             "thread_id"
           ],
@@ -185,9 +112,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "planning_chat_messages_sport_event_id_sport_events_id_fk": {
-          "name": "planning_chat_messages_sport_event_id_sport_events_id_fk",
-          "tableFrom": "planning_chat_messages",
+        "chat_messages_sport_event_id_sport_events_id_fk": {
+          "name": "chat_messages_sport_event_id_sport_events_id_fk",
+          "tableFrom": "chat_messages",
           "tableTo": "sport_events",
           "columnsFrom": [
             "sport_event_id"
@@ -203,8 +130,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "planning_chat_threads": {
-      "name": "planning_chat_threads",
+    "chat_threads": {
+      "name": "chat_threads",
       "columns": {
         "id": {
           "name": "id",
@@ -235,6 +162,47 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "coaching_state": {
+      "name": "coaching_state",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch('now') * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch('now') * 1000)"
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'{\"physicalState\":[],\"disciplineState\":{},\"preferences\":[],\"directives\":[]}'"
         }
       },
       "indexes": {},

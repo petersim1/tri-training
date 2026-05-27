@@ -1,8 +1,7 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 
 import { LogoutButton } from "@/components/LogoutButton";
-
-import { PlanningChatProvider } from "@/components/planning-chat/PlanningAssistantDock";
+import { PlanningChatProvider } from "@/providers/chat";
 
 export const Route = createFileRoute("/_authed")({
   component: AuthedLayout,

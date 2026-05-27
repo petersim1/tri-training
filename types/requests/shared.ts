@@ -17,13 +17,13 @@ export const timezoneSchema = z.object({
 export type TimeZoneSchemaValues = z.infer<typeof timezoneSchema>;
 
 export const idSchema = z.object({
-  id: z.string(),
+  id: z.uuid().describe("uuid of relevant attribute"),
 });
 
 export type IdSchemaValues = z.infer<typeof idSchema>;
 
 export const dayKeySchema = z.object({
-  dayKey: z.iso.date(),
+  dayKey: z.iso.date().describe("date key field YYYY-MM-DD"),
 });
 
 export type DayKeySchemaValues = z.infer<typeof dayKeySchema>;

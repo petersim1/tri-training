@@ -8,6 +8,12 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import type {
+  ChatProposal,
+  CoachingStateSchemaValues,
+  ReplaySummaryStoredSchemaValues,
+  ToolCallSchemaValues,
+} from "@/types/db";
+import type {
   CardioDistanceUnit,
   PlanKind,
   PlanStatus,
@@ -145,8 +151,8 @@ export const webhookDeliveries = sqliteTable("webhook_deliveries", {
 
 export type WebhookDeliveryRow = typeof webhookDeliveries.$inferSelect;
 
-export const planningChatThreads = sqliteTable(
-  "planning_chat_threads",
+export const chatThreads = sqliteTable(
+  "chat_threads",
   {
     ...pkUUIDField,
     ...baseTimestamps,
@@ -155,33 +161,38 @@ export const planningChatThreads = sqliteTable(
   () => [],
 );
 
-export type PlanningChatThreadRow = typeof planningChatThreads.$inferSelect;
+export type ChatThreadRow = typeof chatThreads.$inferSelect;
+export type NewChatThreadRow = typeof chatThreads.$inferInsert;
 
-export const planningChatMessages = sqliteTable(
-  "planning_chat_messages",
+export const chatMessages = sqliteTable(
+  "chat_messages",
   {
     ...pkUUIDField,
     ...baseTimestamps,
     threadId: text("thread_id")
       .notNull()
-      .references(() => planningChatThreads.id, { onDelete: "cascade" }),
-    seq: integer("seq").notNull(),
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
     role: text("role").notNull().$type<"user" | "assistant">(),
     content: text("content").notNull(),
-    replaySummary: text("replay_summary"),
-    metadata: text("metadata", { mode: "json" }).$type<JsonValue>(),
+    replaySummary: text("replay_summary", {
+      mode: "json",
+    }).$type<ReplaySummaryStoredSchemaValues>(),
+    tools: text("tools", { mode: "json" })
+      .$type<ToolCallSchemaValues[]>()
+      .default(sql`'[]'`),
     sportEventId: text("sport_event_id").references(() => sportEvents.id, {
       onDelete: "set null",
     }),
     /** Latest assistant message that holds the pending calendar proposal (cross-turn retrieval). */
-    isProposal: integer("is_proposal", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    proposals: text("proposals", { mode: "json" }).$type<ChatProposal>(),
+    isCoachingStateUpdate: integer("is_coaching_state_update")
+      .default(0)
+      .notNull(),
   },
-  (t) => [index("planning_chat_messages_thread_seq").on(t.threadId, t.seq)],
+  (t) => [index("ix_chat_messages_thread_id").on(t.threadId)],
 );
 
-export type PlanningChatMessageRow = typeof planningChatMessages.$inferSelect;
+export type ChatMessageRow = typeof chatMessages.$inferSelect;
 
 /**
  * Persisted interpreted coaching truths for planning chat (one row per athlete; `id` = stable user/athlete key).
@@ -190,29 +201,16 @@ export type PlanningChatMessageRow = typeof planningChatMessages.$inferSelect;
 export const coachingState = sqliteTable("coaching_state", {
   ...pkUUIDField,
   ...baseTimestamps,
-  constraints: text("constraints", { mode: "json" })
+  state: text("state", { mode: "json" })
     .notNull()
-    .$type<JsonValue[]>()
-    .default(sql`'[]'`),
-  preferences: text("preferences", { mode: "json" })
-    .notNull()
-    .$type<JsonValue>()
-    .default(sql`'{}'`),
-  disciplineState: text("discipline_state", { mode: "json" })
-    .notNull()
-    .$type<JsonValue>()
-    .default(sql`'{}'`),
-  periodization: text("periodization", { mode: "json" })
-    .notNull()
-    .$type<JsonValue>()
-    .default(sql`'{}'`),
-  flags: text("flags", { mode: "json" })
-    .notNull()
-    .$type<JsonValue>()
-    .default(sql`'{}'`),
+    .$type<CoachingStateSchemaValues>()
+    .default(
+      sql`'{"physicalState":[],"disciplineState":{},"preferences":[],"directives":[]}'`,
+    ),
 });
 
 export type CoachingStateRow = typeof coachingState.$inferSelect;
+export type NewCoachingStateRow = typeof coachingState.$inferInsert;
 
 /** Future goals / races (e.g. A-race dates) surfaced to planning assistant. */
 export const sportEvents = sqliteTable(
