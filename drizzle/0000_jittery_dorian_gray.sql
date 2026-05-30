@@ -102,15 +102,3 @@ CREATE TABLE `workout_entries` (
 );
 --> statement-breakpoint
 CREATE INDEX `ix_workout_entries_day_key` ON `workout_entries` (`day_key`);
-
-INSERT INTO `sport_events` (`id`, `name`, `event_day_key`, `status`, `discipline`, `notes`, `targets`, `url`)
-VALUES (
-	'6886d0ed-a50a-4874-b766-6dbc5f8a9646',
-	'Olympic Triathlon (CT)',
-	'2026-06-20',
-	'planned',
-	'multi',
-	NULL,
-	'[{"activity":"swim","distance":1,"distance_units":"mi"},{"activity":"bike","distance":24,"distance_units":"mi"},{"activity":"run","distance":6.2,"distance_units":"mi"}]',
-	'https://www.patgriskus.com/register'
-);
