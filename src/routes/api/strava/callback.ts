@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { deleteCookie, getCookie } from "@tanstack/react-start/server";
 import { STRAVA_OAUTH_STATE_COOKIE, STRAVA_TOKENS_COOKIE } from "@/lib/cookies";
 import { ALLOWED_STRAVA_ATHLETE_ID } from "@/lib/strava/allowed-athlete";
-import { stravaRedirectUri } from "@/lib/strava/oauth";
-import { cookieActions, vendorActions } from "@/server-fcts";
+import { cookieActions } from "@/server-fcts/cookies";
+import { vendorActions } from "@/server-fcts/vendors";
 
 const TOKEN_URL = "https://www.strava.com/oauth/token";
 const STRAVA_ATHLETE_URL = "https://www.strava.com/api/v3/athlete";
@@ -120,7 +120,7 @@ export const Route = createFileRoute("/api/strava/callback")({
             return redirectLogin(origin, "config", "config");
           }
 
-          const redirectUri = stravaRedirectUri();
+          const redirectUri = `${origin}/api/strava/callback"`;
           log("token_exchange", {
             redirectUri,
             tokenUrl: TOKEN_URL,

@@ -1,5 +1,5 @@
 import { createStart } from "@tanstack/react-start";
-import { requireSessionFnMiddleware } from "../lib/auth/require-session-fn-middleware";
+import { requireSessionFnMiddleware } from "./lib/auth/require-session-fn-middleware";
 
 /**
  * Registered by the TanStack Start Vite plugin as `#tanstack-start-entry` (default file: `src/start.ts`).

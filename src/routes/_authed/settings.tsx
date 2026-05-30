@@ -2,7 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useState } from "react";
-import { backfillActions, cookieActions, vendorActions } from "@/server-fcts";
+import { backfillActions } from "@/server-fcts/backfill";
+import { cookieActions } from "@/server-fcts/cookies";
+import { vendorActions } from "@/server-fcts/vendors";
 
 export const Route = createFileRoute("/_authed/settings")({
   loader: async () => {
@@ -23,13 +25,14 @@ function SettingsPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const runStartOAuth = useServerFn(vendorActions.startStravaOAuth);
+  const backfill = useServerFn(backfillActions.backfillLinkedWorkouts);
   const [stravaOAuthMsg, setStravaOAuthMsg] = useState<string | null>(null);
   const [stravaOAuthPending, setStravaOAuthPending] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
   const [backfillErr, setBackfillErr] = useState<string | null>(null);
 
   const backfillMutation = useMutation({
-    mutationFn: () => backfillActions.backfillLinkedWorkouts(),
+    mutationFn: () => backfill(),
     onMutate: () => {
       setBackfillMsg(null);
       setBackfillErr(null);
@@ -75,7 +78,7 @@ function SettingsPage() {
     stravaOAuthMsg === "ok" ? (
       <p className="text-sm text-emerald-400">Strava linked successfully.</p>
     ) : stravaOAuthMsg ? (
-      <p className="break-words text-sm text-red-400">
+      <p className="wrap-break-word text-sm text-red-400">
         Strava OAuth: {stravaOAuthMsg}
       </p>
     ) : null;

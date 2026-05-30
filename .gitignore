@@ -17,6 +17,9 @@
 /out/
 /.output/
 
+# scripts
+/scripts
+
 # production
 /build
 

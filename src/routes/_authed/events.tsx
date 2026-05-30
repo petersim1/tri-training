@@ -17,7 +17,7 @@ import {
 } from "@/lib/constants/events";
 import type { SportEventRow } from "@/lib/db/schema.server";
 import { formatTargetDurationSec } from "@/lib/plans/cardio-targets";
-import { eventActions } from "@/server-fcts";
+import { eventActions } from "@/server-fcts/events";
 
 const QUERY_KEY = ["sportEvents"] as const;
 

@@ -6,7 +6,7 @@ import {
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { ActivitiesContent } from "@/components/screens/activities";
 import queryKeys from "@/lib/query-keys";
-import { activityActions } from "@/server-fcts";
+import { activityActions } from "@/server-fcts/activities";
 import {
   type ActivityListSchemaValues,
   activityListSchema,

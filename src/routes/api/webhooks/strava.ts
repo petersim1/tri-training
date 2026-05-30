@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { webhookActions } from "@/server-fcts";
+import { webhookActions } from "@/server-fcts/webhooks";
 import type { StravaWebhookEvent } from "@/types/requests/webhooks";
 
 export const Route = createFileRoute("/api/webhooks/strava")({
@@ -27,11 +27,13 @@ export const Route = createFileRoute("/api/webhooks/strava")({
       POST: async ({ request }) => {
         const rawBody = await request.text();
         await webhookActions.logWebhookDelivery({
-          source: "strava",
-          idempotencyKey: null,
-          payloadJson: rawBody,
-          outcome: "ignored",
-          detail: "received",
+          data: {
+            source: "strava",
+            idempotencyKey: null,
+            payloadJson: rawBody,
+            outcome: "ignored",
+            detail: "received",
+          },
         });
 
         let body: unknown;
@@ -64,7 +66,9 @@ export const Route = createFileRoute("/api/webhooks/strava")({
         const idempotencyKey = `strava:${sub}:${oid}:${aspect}:${et}`;
 
         try {
-          const result = await webhookActions.processStravaWebhookEvent(ev);
+          const result = await webhookActions.processStravaWebhookEvent({
+            data: ev,
+          });
           if (result.duplicate) {
             return new Response(null, { status: 200 });
           }
@@ -74,20 +78,24 @@ export const Route = createFileRoute("/api/webhooks/strava")({
               ? "ignored"
               : "ok";
           await webhookActions.logWebhookDelivery({
-            source: "strava",
-            idempotencyKey,
-            payloadJson,
-            outcome,
-            detail,
+            data: {
+              source: "strava",
+              idempotencyKey,
+              payloadJson,
+              outcome,
+              detail,
+            },
           });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           await webhookActions.logWebhookDelivery({
-            source: "strava",
-            idempotencyKey,
-            payloadJson,
-            outcome: "error",
-            detail: msg.slice(0, 500),
+            data: {
+              source: "strava",
+              idempotencyKey,
+              payloadJson,
+              outcome: "error",
+              detail: msg.slice(0, 500),
+            },
           });
           return new Response(JSON.stringify({ error: msg }), {
             status: 500,

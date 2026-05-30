@@ -1,7 +1,8 @@
+import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useCallback, useEffect, useState } from "react";
-import { vendorActions } from "@/server-fcts";
+import { useEffect, useState } from "react";
+import { vendorActions } from "@/server-fcts/vendors";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -10,7 +11,6 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const runStartOAuth = useServerFn(vendorActions.startStravaOAuth);
   const [stravaOAuthMsg, setStravaOAuthMsg] = useState<string | null>(null);
-  const [oauthPending, setOAuthPending] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -21,22 +21,19 @@ function LoginPage() {
     }
   }, []);
 
-  const onStravaClick = useCallback(async () => {
-    console.log("CLICKED");
-    setOAuthPending(true);
-    try {
-      const r = await runStartOAuth();
-      if (!r.ok) {
+  const loginMutation = useMutation({
+    mutationFn: () => runStartOAuth(),
+    onSuccess: (d) => {
+      if (!d.ok) {
         setStravaOAuthMsg("misconfigured");
         return;
       }
-      window.location.assign(r.authorizeUrl);
-    } catch {
+      window.location.assign(d.authorizeUrl);
+    },
+    onError: () => {
       setStravaOAuthMsg("oauth_start_failed");
-    } finally {
-      setOAuthPending(false);
-    }
-  }, [runStartOAuth]);
+    },
+  });
 
   const stravaBanner =
     stravaOAuthMsg === "forbidden" ? (
@@ -63,11 +60,13 @@ function LoginPage() {
         {stravaBanner}
         <button
           type="button"
-          disabled={oauthPending}
-          onClick={() => void onStravaClick()}
+          disabled={loginMutation.isPending}
+          onClick={() => loginMutation.mutate()}
           className="inline-block rounded bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-60"
         >
-          {oauthPending ? "Continuing to Strava…" : "Sign in with Strava"}
+          {loginMutation.isPending
+            ? "Continuing to Strava…"
+            : "Sign in with Strava"}
         </button>
       </div>
     </main>

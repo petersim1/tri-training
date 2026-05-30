@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { webhookActions } from "@/server-fcts";
+import { webhookActions } from "@/server-fcts/webhooks";
 
 export const Route = createFileRoute("/api/webhooks/hevy")({
   server: {
@@ -7,11 +7,13 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
       POST: async ({ request }) => {
         const rawBody = await request.text();
         await webhookActions.logWebhookDelivery({
-          source: "hevy",
-          idempotencyKey: null,
-          payloadJson: rawBody,
-          outcome: "ignored",
-          detail: "received",
+          data: {
+            source: "hevy",
+            idempotencyKey: null,
+            payloadJson: rawBody,
+            outcome: "ignored",
+            detail: "received",
+          },
         });
 
         const secret = process.env.HEVY_WEBHOOK_BEARER_SECRET?.trim();
@@ -76,24 +78,28 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
 
         try {
           const result = await webhookActions.processHevyWorkoutWebhook({
-            workoutId,
+            data: { workoutId },
           });
           await webhookActions.logWebhookDelivery({
-            source: "hevy",
-            idempotencyKey: null,
-            payloadJson,
-            outcome: "ok",
-            detail: result.detail,
+            data: {
+              source: "hevy",
+              idempotencyKey: null,
+              payloadJson,
+              outcome: "ok",
+              detail: result.detail,
+            },
           });
           return new Response(null, { status: 200 });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           await webhookActions.logWebhookDelivery({
-            source: "hevy",
-            idempotencyKey: null,
-            payloadJson,
-            outcome: "error",
-            detail: msg.slice(0, 500),
+            data: {
+              source: "hevy",
+              idempotencyKey: null,
+              payloadJson,
+              outcome: "error",
+              detail: msg.slice(0, 500),
+            },
           });
           return new Response(JSON.stringify({ error: msg }), {
             status: 500,

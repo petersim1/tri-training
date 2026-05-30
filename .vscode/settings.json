@@ -3,7 +3,7 @@
   "editor.codeActionsOnSave": {
     "source.biome": "explicit",
     "source.fixAll.biome": "explicit",
-    "source.organizeImports.biome": "explicit",
+    "source.organizeImports.biome": "explicit"
   },
   "editor.defaultFormatter": "biomejs.biome",
   "[javascript]": {
@@ -23,5 +23,6 @@
   },
   "[jsonc]": {
     "editor.defaultFormatter": "biomejs.biome"
-  }
+  },
+  "workbench.editor.focusRecentEditorAfterClose": false
 }
