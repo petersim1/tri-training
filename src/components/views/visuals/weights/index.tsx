@@ -1,6 +1,6 @@
 // activity-metrics-chart.tsx
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import * as d3 from "d3";
+import { select } from "d3";
 import type React from "react";
 import { useEffect, useRef } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
@@ -23,7 +23,7 @@ export const WeightTrendChart: React.FC<Props> = ({ sessionChart }) => {
   });
 
   useEffect(() => {
-    const svg = d3.select(ref.current);
+    const svg = select(ref.current);
     svg.selectAll("*").remove();
     if (points.length > 0) {
       createViz(svg, points, sessionChart.range, () => {});

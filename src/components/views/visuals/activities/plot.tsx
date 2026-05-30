@@ -1,4 +1,11 @@
-import * as d3 from "d3";
+import {
+  axisBottom,
+  axisLeft,
+  line,
+  pointer,
+  scaleLinear,
+  scaleTime,
+} from "d3";
 import type {
   SessionChartMetric,
   SessionChartRange,
@@ -71,15 +78,13 @@ export const createViz = (
   const innerW = VIEW_W - PAD_L - PAD_R;
   const innerH = VIEW_H - PAD_T - PAD_B;
 
-  const xScale = d3
-    .scaleTime()
+  const xScale = scaleTime()
     .domain([xFrom, xTo])
     .range([PAD_L, PAD_L + innerW]);
   const values = points.map((p) => p.value);
 
   const yMax = Math.max(...values, 1e-6);
-  const yScale = d3
-    .scaleLinear()
+  const yScale = scaleLinear()
     .domain([0, yMax])
     .range([PAD_T + innerH, PAD_T]);
   const barW = Math.min(
@@ -126,8 +131,7 @@ export const createViz = (
     .append("g")
     .attr("transform", `translate(${PAD_L}, 0)`)
     .call(
-      d3
-        .axisLeft(yScale)
+      axisLeft(yScale)
         .ticks(5)
         .tickFormat((v) => formatValue(+v, metric)),
     )
@@ -151,8 +155,7 @@ export const createViz = (
     .append("g")
     .attr("transform", `translate(0, ${VIEW_H - PAD_B})`)
     .call(
-      d3
-        .axisBottom(xScale)
+      axisBottom(xScale)
         .tickValues(xTicks)
         .tickFormat((d) => monthLabel(d as Date, showYear))
         .tickSize(3),
@@ -180,8 +183,7 @@ export const createViz = (
       .attr("pointer-events", "none")
       .attr(
         "d",
-        d3
-          .line<EnrichedPoint>()
+        line<EnrichedPoint>()
           .x((d) => d.cx)
           .y((d) => d.cy),
       );
@@ -252,7 +254,7 @@ export const createViz = (
     .attr("fill", "transparent")
     .style("cursor", "crosshair")
     .on("mousemove", (event) => {
-      const [mx] = d3.pointer(event);
+      const [mx] = pointer(event);
       let closest = 0;
       let minDist = Infinity;
       enriched.forEach((p, i) => {

@@ -1,6 +1,6 @@
 // activity-metrics-chart.tsx
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import * as d3 from "d3";
+import { select } from "d3";
 import { useEffect, useRef } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
 import queryKeys from "@/lib/query-keys";
@@ -62,7 +62,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
   });
 
   useEffect(() => {
-    const svg = d3.select(ref.current);
+    const svg = select(ref.current);
     svg.selectAll("*").remove();
     if (sessionChart.stacked) {
       if (stackedPoints.length > 0) {
