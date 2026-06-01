@@ -57,16 +57,17 @@ export const stackedVizSchema = z.object({
 
 export type StackedVizSchemaValues = z.infer<typeof stackedVizSchema>;
 
-export const createPlanSchema = z
-  .object({
-    ...dayKeySchema.shape,
-    kind: z.enum(PLAN_KIND_VALUES),
-    notes: z.string().nullable().optional(),
-    distance: z.number().gt(0).nullable().optional(),
-    distanceUnits: z.enum(CARDIO_DISTANCE_UNITS).nullable().optional(),
-    timeSeconds: z.number().int().gt(0).nullable().optional(),
-    routineId: z.string().nullable().optional(),
-  })
+export const createPlanBaseSchema = z.object({
+  ...dayKeySchema.shape,
+  kind: z.enum(PLAN_KIND_VALUES),
+  notes: z.string().nullable().optional(),
+  distance: z.number().gt(0).nullable().optional(),
+  distanceUnits: z.enum(CARDIO_DISTANCE_UNITS).nullable().optional(),
+  timeSeconds: z.number().int().gt(0).nullable().optional(),
+  routineId: z.string().nullable().optional(),
+});
+
+export const createPlanSchema = createPlanBaseSchema
   .refine(
     (data) => {
       if (data.distance != null) return data.distanceUnits != null;
@@ -95,18 +96,19 @@ export type CreateFromCompletedInput = z.infer<
   typeof createFromCompletedSchema
 >;
 
-export const updatePlanSchema = z
-  .object({
-    ...idSchema.shape,
-    ...dayKeySchema.partial().shape,
-    notes: z.string().nullable().optional(),
-    kind: z.enum(PLAN_KIND_VALUES).optional(),
-    status: z.enum(PLAN_STATUS_VALUES).optional(),
-    routineId: z.string().nullable().optional(),
-    distance: z.number().nullable().optional(),
-    distanceUnits: z.enum(CARDIO_DISTANCE_UNITS).nullable().optional(),
-    timeSeconds: z.number().int().nullable().optional(),
-  })
+export const updatePlanBaseSchema = z.object({
+  ...idSchema.shape,
+  ...dayKeySchema.partial().shape,
+  notes: z.string().nullable().optional(),
+  kind: z.enum(PLAN_KIND_VALUES).optional(),
+  status: z.enum(PLAN_STATUS_VALUES).optional(),
+  routineId: z.string().nullable().optional(),
+  distance: z.number().nullable().optional(),
+  distanceUnits: z.enum(CARDIO_DISTANCE_UNITS).nullable().optional(),
+  timeSeconds: z.number().int().nullable().optional(),
+});
+
+export const updatePlanSchema = updatePlanBaseSchema
   .refine(
     (data) => {
       if (data.distance != null) return data.distanceUnits != null;

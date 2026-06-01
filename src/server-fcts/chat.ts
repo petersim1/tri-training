@@ -43,11 +43,12 @@ const listThreads = createServerFn({
   method: "GET",
 }).handler(async (): Promise<ChatThreadRow[]> => {
   const db = await getDb();
-  return db
+  const threads = await db
     .select()
     .from(chatThreads)
     .orderBy(desc(chatThreads.updatedAt))
     .all();
+  return threads;
 });
 
 const createThread = createServerFn({

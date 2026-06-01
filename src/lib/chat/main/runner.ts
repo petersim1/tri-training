@@ -53,6 +53,8 @@ export const runPlanningTurn = async (
 
   let assistantText = "";
 
+  console.log("runner for query", currentMessage);
+
   while (ctx.round < MAX_ROUNDS) {
     console.log("starting turn", ctx.round);
     const toolAcc = new Map<number, PartialToolCall>();
@@ -65,6 +67,7 @@ export const runPlanningTurn = async (
       stream: true,
       temperature: 0.2,
     });
+    console.log("gathered stream");
 
     for await (const chunk of streamResp) {
       const delta = chunk.choices[0]?.delta;
@@ -105,6 +108,7 @@ export const runPlanningTurn = async (
         tc.name as ToolName,
         JSON.parse(tc.arguments),
       );
+      console.log("tool result");
       messages.push({
         role: "tool",
         tool_call_id: tc.id,

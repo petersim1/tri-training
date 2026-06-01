@@ -1,9 +1,14 @@
-import { type QueryClient, useQuery } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowSendIcon } from "@/components/assets";
 import type { ChatMessageRow } from "@/lib/db/schema.server";
 import queryKeys from "@/lib/query-keys";
+import { useChat } from "@/providers/chat";
 import { chatActions } from "@/server-fcts/chat";
 import { eventActions } from "@/server-fcts/events";
 import type { ChatMessage } from "@/types/responses/chat";
@@ -41,12 +46,9 @@ const lastSportEventIdFromMessages = (msgs: ChatMessageRow[]): string => {
   return "";
 };
 
-export const Composer = (props: {
-  timeZone: string;
-  selectedThreadId: string | null;
-  assignThread: (id: string) => void;
-  qc: QueryClient;
-}) => {
+export const Composer: React.FC<{ timeZone: string }> = ({ timeZone }) => {
+  const qc = useQueryClient();
+  const { createThreadAsync, selectThreadId, selectedThreadId } = useChat();
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState("");
   const [busy, setBusy] = useState(false);
@@ -63,7 +65,6 @@ export const Composer = (props: {
   const shouldAutoScrollRef = useRef(true);
 
   const runListSportEvents = useServerFn(eventActions.list);
-  const runCreateThread = useServerFn(chatActions.createThread);
 
   const onScroll = () => {
     const el = paneRef.current;
@@ -74,7 +75,7 @@ export const Composer = (props: {
 
   // Reset on thread switch, but not mid-stream
   useEffect(() => {
-    const tid = props.selectedThreadId?.trim() ?? "";
+    const tid = selectedThreadId ?? "";
     if (tid !== "" && tid === activeStreamThreadRef.current) return;
     shouldAutoScrollRef.current = true; // add this
     setDraft("");
@@ -88,17 +89,17 @@ export const Composer = (props: {
     if (!tid) setSportEventContextId("");
     abortRef.current?.abort();
     abortRef.current = null;
-  }, [props.selectedThreadId]);
+  }, [selectedThreadId]);
 
   const messagesQuery = useQuery({
-    queryKey: queryKeys.messagesQueryKey(props.selectedThreadId),
+    queryKey: queryKeys.messagesQueryKey(selectedThreadId),
     queryFn: () =>
-      props.selectedThreadId
+      selectedThreadId
         ? chatActions.listMessages({
-            data: { threadId: props.selectedThreadId },
+            data: { threadId: selectedThreadId },
           })
         : [],
-    enabled: props.selectedThreadId !== null,
+    enabled: selectedThreadId !== null,
     staleTime: 15_000,
   });
 
@@ -139,19 +140,14 @@ export const Composer = (props: {
 
   // Sync picker to last user message event when thread changes
   useEffect(() => {
-    const tid = props.selectedThreadId?.trim() ?? "";
+    const tid = selectedThreadId?.trim() ?? "";
     if (!tid || busy || !messagesQuery.isFetched) return;
     if (tid === prevThreadIdRef.current && pickerDirtyRef.current) return;
     prevThreadIdRef.current = tid;
     setSportEventContextId(
       lastSportEventIdFromMessages(messagesQuery.data ?? []),
     );
-  }, [
-    props.selectedThreadId,
-    messagesQuery.isFetched,
-    messagesQuery.data,
-    busy,
-  ]);
+  }, [selectedThreadId, messagesQuery.isFetched, messagesQuery.data, busy]);
 
   // Scroll to bottom
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll pane
@@ -187,7 +183,7 @@ export const Composer = (props: {
             setError(value.message);
             setOptimisticText(null);
           }
-          queueMicrotask(() => invalidateCoach(props.qc, threadId));
+          queueMicrotask(() => invalidateCoach(qc, threadId));
           setStreaming("");
           setOptimisticText(null);
           break;
@@ -213,16 +209,14 @@ export const Composer = (props: {
     setDraft("");
     setPendingApproval(false);
 
-    let threadId = props.selectedThreadId?.trim() ?? null;
+    let threadId = selectedThreadId?.trim() ?? null;
 
     try {
       if (!threadId) {
-        threadId = await runCreateThread();
-        void props.qc.invalidateQueries({ queryKey: queryKeys.chatThreads });
+        threadId = await createThreadAsync();
       }
 
       activeStreamThreadRef.current = threadId;
-      props.assignThread(threadId);
 
       const stream = await chatActions.chat({
         data: {
@@ -248,7 +242,7 @@ export const Composer = (props: {
   };
 
   const submitApproval = async (approved: boolean) => {
-    const tid = props.selectedThreadId?.trim();
+    const tid = selectedThreadId?.trim();
     if (!tid) return;
     setPendingApproval(false);
     setBusy(true);
@@ -256,11 +250,11 @@ export const Composer = (props: {
       await chatActions.chat({
         data: { type: "approval", approved, threadId: tid, dayKey: today() },
       });
-      props.qc.invalidateQueries({ queryKey: ["calendar"] });
-      props.qc.invalidateQueries({ queryKey: ["activities"] });
-      props.qc.invalidateQueries({ queryKey: ["weight-viz"] });
-      props.qc.invalidateQueries({ queryKey: ["activity-viz"] });
-      queueMicrotask(() => invalidateCoach(props.qc, tid));
+      qc.invalidateQueries({ queryKey: ["calendar"] });
+      qc.invalidateQueries({ queryKey: ["activities"] });
+      qc.invalidateQueries({ queryKey: ["weight-viz"] });
+      qc.invalidateQueries({ queryKey: ["activity-viz"] });
+      queueMicrotask(() => invalidateCoach(qc, tid));
     } catch (e) {
       setError(e instanceof Error ? e.message : "approval_failed");
     } finally {

@@ -1,50 +1,25 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { ChatHistoryOutlineIcon, PlusIcon } from "@/components/assets";
-import queryKeys from "@/lib/query-keys";
-import { usePlanningChatDock } from "@/providers/chat";
-import { chatActions } from "@/server-fcts/chat";
+import { useChat } from "@/providers/chat";
 import { Composer } from "./composer";
 import { displayChatHeading } from "./displays";
 import { ThreadsHistoryPane } from "./history";
 
 export const Panel = () => {
   const [panelView, setPanelView] = useState<"chat" | "history">("chat");
-  const { selectedThreadId, selectThreadId, setOpen } = usePlanningChatDock();
+  const {
+    selectedThreadId,
+    selectThreadId,
+    setOpen,
+    threadsQuery,
+    deleteThread,
+  } = useChat();
   const qc = useQueryClient();
   const tz = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
     [],
   );
-
-  const threadsQuery = useQuery({
-    queryKey: queryKeys.chatThreads,
-    queryFn: () => chatActions.listThreads(),
-    staleTime: 8000,
-  });
-
-  const deleteThread = useMutation({
-    mutationFn: (threadId: string) =>
-      chatActions.deleteThread({ data: { threadId } }),
-    onSuccess: (res, threadId) => {
-      if (res.deleted) {
-        if (selectedThreadId === threadId) {
-          selectThreadId(null);
-        }
-        void qc.invalidateQueries({ queryKey: queryKeys.chatThreads });
-        const tid = threadId?.trim();
-        if (tid) {
-          void qc.invalidateQueries({
-            queryKey: queryKeys.messagesQueryKey(tid),
-          });
-        }
-        void qc.invalidateQueries({
-          predicate: ({ queryKey }) =>
-            queryKey.length > 0 && queryKey[0] === "activities",
-        });
-      }
-    },
-  });
 
   function startNewChat() {
     selectThreadId(null);
@@ -152,12 +127,7 @@ export const Panel = () => {
             </div>
           </header>
 
-          <Composer
-            timeZone={tz}
-            selectedThreadId={selectedThreadId}
-            assignThread={(id) => selectThreadId(id)}
-            qc={qc}
-          />
+          <Composer timeZone={tz} />
         </>
       )}
     </div>
