@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChatHistoryOutlineIcon, PlusIcon } from "@/components/assets";
 import { useChat } from "@/providers/chat";
 import { Composer } from "./composer";
@@ -14,10 +14,6 @@ export const Panel = () => {
     threadsQuery,
     deleteThread,
   } = useChat();
-  const tz = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
-    [],
-  );
 
   function startNewChat() {
     selectThreadId(null);
@@ -125,7 +121,7 @@ export const Panel = () => {
             </div>
           </header>
 
-          <Composer timeZone={tz} />
+          <Composer />
         </>
       )}
     </div>

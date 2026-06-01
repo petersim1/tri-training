@@ -46,9 +46,9 @@ const lastSportEventIdFromMessages = (msgs: ChatMessageRow[]): string => {
   return "";
 };
 
-export const Composer: React.FC<{ timeZone: string }> = ({ timeZone }) => {
+export const Composer: React.FC = () => {
   const qc = useQueryClient();
-  const { createThreadAsync, selectThreadId, selectedThreadId } = useChat();
+  const { createThreadAsync, selectedThreadId } = useChat();
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState("");
   const [busy, setBusy] = useState(false);
