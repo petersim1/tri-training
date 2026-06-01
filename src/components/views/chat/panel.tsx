@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { ChatHistoryOutlineIcon, PlusIcon } from "@/components/assets";
 import { useChat } from "@/providers/chat";
@@ -15,7 +14,6 @@ export const Panel = () => {
     threadsQuery,
     deleteThread,
   } = useChat();
-  const qc = useQueryClient();
   const tz = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
     [],
