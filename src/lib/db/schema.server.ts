@@ -11,7 +11,6 @@ import type {
   ChatProposal,
   CoachingStateSchemaValues,
   ReplaySummaryStoredSchemaValues,
-  ToolCallSchemaValues,
 } from "@/types/db";
 import type {
   CardioDistanceUnit,
@@ -171,19 +170,19 @@ export const chatMessages = sqliteTable(
     threadId: text("thread_id")
       .notNull()
       .references(() => chatThreads.id, { onDelete: "cascade" }),
-    role: text("role").notNull().$type<"user" | "assistant">(),
+    role: text("role").notNull().$type<"user" | "assistant" | "tool">(),
+    seq: integer("seq").notNull(),
+    round: integer("round").notNull(),
     content: text("content").notNull(),
     replaySummary: text("replay_summary", {
       mode: "json",
     }).$type<ReplaySummaryStoredSchemaValues>(),
-    tools: text("tools", { mode: "json" })
-      .$type<ToolCallSchemaValues[]>()
-      .default(sql`'[]'`),
     sportEventId: text("sport_event_id").references(() => sportEvents.id, {
       onDelete: "set null",
     }),
+    isSuccess: integer("is_success").notNull().default(1),
     /** Latest assistant message that holds the pending calendar proposal (cross-turn retrieval). */
-    proposals: text("proposals", { mode: "json" }).$type<ChatProposal>(),
+    proposal: text("proposal", { mode: "json" }).$type<ChatProposal>(),
     isCoachingStateUpdate: integer("is_coaching_state_update")
       .default(0)
       .notNull(),
@@ -192,6 +191,7 @@ export const chatMessages = sqliteTable(
 );
 
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
+export type NewChatMessageRow = typeof chatMessages.$inferInsert;
 
 /**
  * Persisted interpreted coaching truths for planning chat (one row per athlete; `id` = stable user/athlete key).

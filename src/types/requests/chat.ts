@@ -3,6 +3,8 @@ import { dayKeySchema } from "./shared";
 
 export const listMessagesSchema = z.object({
   threadId: z.uuid(),
+  limit: z.number().int().positive().optional(),
+  orderBy: z.enum(["asc", "desc"]).default("asc"),
 });
 
 export const chatSchema = z

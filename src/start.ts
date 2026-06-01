@@ -1,5 +1,6 @@
 import { createStart } from "@tanstack/react-start";
 import { requireSessionFnMiddleware } from "./lib/auth/require-session-fn-middleware";
+import { logMessage } from "./lib/utils";
 
 /**
  * Registered by the TanStack Start Vite plugin as `#tanstack-start-entry` (default file: `src/start.ts`).
@@ -9,10 +10,11 @@ import { requireSessionFnMiddleware } from "./lib/auth/require-session-fn-middle
  * Debugging: middleware and any `console.*` inside it run in the **Node process** (the terminal where
  * you run `vite dev` / `vite preview` / production server), not in the browser DevTools console.
  */
+logMessage("[start]");
 export const startInstance = createStart(() => ({
   requestMiddleware: [requireSessionFnMiddleware],
 }));
 
 if (import.meta.env.DEV) {
-  console.info("[start] src/start.ts loaded (SSR server)");
+  logMessage("[start] src/start.ts loaded (SSR server)");
 }

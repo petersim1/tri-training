@@ -31,8 +31,11 @@ Ask yourself: "Would this still matter in two weeks?" If no, do not add it.
 - Do not remove unless explicitly contradicted
 
 ### directives
-- Add only concrete, ongoing instructions that should shape future plans ("3-4 pool sessions per week", "include yoga weekly")
-- Do not add instructions that were fulfilled in this conversation ("add a bike ride today")
+- Add only instructions the athlete wants applied across ALL future plans, not just the current request
+- A directive must be something the athlete would expect to see in every training week going forward
+- "Include tempo work in this week's sessions" is NOT a directive — it's a one-time request
+- "Always include tempo work in my training" IS a directive
+- Do not add instructions that are scoped to a specific date range, workout, or session
 - Resolve directives that have been explicitly superseded or cancelled
 - Do not duplicate active directives
 

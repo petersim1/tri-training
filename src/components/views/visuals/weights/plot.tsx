@@ -9,14 +9,9 @@ import {
 } from "d3";
 import type { SessionChartRange } from "@/lib/constants/visuals";
 import {
+  type ChartDimensions,
   monthLabel,
-  PAD_B,
-  PAD_L,
-  PAD_R,
-  PAD_T,
   shortDateLabel,
-  VIEW_H,
-  VIEW_W,
 } from "@/lib/utils/plots";
 import type { VizResult } from "@/types/responses/activities";
 
@@ -24,6 +19,7 @@ type EnrichedPoint = VizResult & { cx: number; cy: number };
 
 export const createViz = (
   plotHolder: d3.Selection<null, unknown, null, undefined>,
+  dimensions: ChartDimensions,
   points: VizResult[],
   range: SessionChartRange,
   onHover: (idx: number | null) => void,
@@ -43,26 +39,20 @@ export const createViz = (
   const minW = Math.min(...values);
   const maxW = Math.max(...values);
   const padLb = Math.max(0.5, (maxW - minW) * 0.12 || 2);
-  const innerW = VIEW_W - PAD_L - PAD_R;
-  const innerH = VIEW_H - PAD_T - PAD_B;
+  const innerW = dimensions.viewW - dimensions.pad.l - dimensions.pad.r;
+  const innerH = dimensions.viewH - dimensions.pad.t - dimensions.pad.b;
 
   const xScale = scaleTime()
     .domain([xFrom, xTo])
-    .range([PAD_L, PAD_L + innerW]);
+    .range([dimensions.pad.l, dimensions.pad.l + innerW]);
   const yScale = scaleLinear()
     .domain([minW - padLb, maxW + padLb])
-    .range([PAD_T + innerH, PAD_T]);
+    .range([dimensions.pad.t + innerH, dimensions.pad.t]);
 
-  const allTicks = xScale.ticks(12);
-  const xTicks =
-    allTicks.length <= 3
-      ? allTicks
-      : [
-          allTicks[0],
-          allTicks[Math.floor(allTicks.length / 2)],
-          allTicks[allTicks.length - 1],
-        ];
-
+  const xTicks = Array.from({ length: dimensions.nTicks.x }, (_, i) => {
+    const t = i / (dimensions.nTicks.x - 1);
+    return new Date(xFrom.getTime() + t * (xTo.getTime() - xFrom.getTime()));
+  });
   const showYear = xFrom.getFullYear() < xTo.getFullYear();
 
   const enriched: EnrichedPoint[] = sorted.map((p) => ({
@@ -73,7 +63,7 @@ export const createViz = (
 
   const svg = plotHolder
     .append("svg")
-    .attr("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`)
+    .attr("viewBox", `0 0 ${dimensions.viewW} ${dimensions.viewH}`)
     .style("max-height", "100%")
     .style("max-width", "100%");
 
@@ -100,7 +90,7 @@ export const createViz = (
   // Y axis
   svg
     .append("g")
-    .attr("transform", `translate(${PAD_L}, 0)`)
+    .attr("transform", `translate(${dimensions.pad.l}, 0)`)
     .call(
       axisLeft(yScale)
         .ticks(5)
@@ -118,22 +108,22 @@ export const createViz = (
       g
         .selectAll(".tick text")
         .attr("fill", "rgb(113 113 122)")
-        .attr("font-size", 11),
+        .attr("font-size", dimensions.fontSize.axis),
     );
 
   // Y axis label
   svg
     .append("text")
-    .attr("transform", `translate(12, ${VIEW_H / 2}) rotate(-90)`)
+    .attr("transform", `translate(12, ${dimensions.viewH / 2}) rotate(-90)`)
     .attr("text-anchor", "middle")
     .attr("fill", "rgb(82 82 91)")
-    .attr("font-size", 10)
+    .attr("font-size", dimensions.fontSize.label)
     .text("lb");
 
   // X axis
   svg
     .append("g")
-    .attr("transform", `translate(0, ${VIEW_H - PAD_B})`)
+    .attr("transform", `translate(0, ${dimensions.viewH - dimensions.pad.b})`)
     .call(
       axisBottom(xScale)
         .tickValues(xTicks)
@@ -146,7 +136,7 @@ export const createViz = (
       g
         .selectAll(".tick text")
         .attr("fill", "rgb(113 113 122)")
-        .attr("font-size", 10),
+        .attr("font-size", dimensions.fontSize.axis),
     );
 
   // Area
@@ -160,7 +150,7 @@ export const createViz = (
         "d",
         area<EnrichedPoint>()
           .x((d) => d.cx)
-          .y0(PAD_T + innerH)
+          .y0(dimensions.pad.t + innerH)
           .y1((d) => d.cy),
       );
   }
@@ -203,8 +193,8 @@ export const createViz = (
     .attr("stroke", "rgb(113 113 122)")
     .attr("stroke-width", 1)
     .attr("stroke-opacity", 0.45)
-    .attr("y1", PAD_T)
-    .attr("y2", VIEW_H - PAD_B)
+    .attr("y1", dimensions.pad.t)
+    .attr("y2", dimensions.viewH - dimensions.pad.b)
     .attr("pointer-events", "none")
     .style("display", "none");
 
@@ -216,17 +206,17 @@ export const createViz = (
   const tooltipValue = tooltip
     .append("text")
     .attr("fill", "rgb(52 211 153)")
-    .attr("font-size", 12);
+    .attr("font-size", dimensions.fontSize.tooltip);
   const tooltipDate = tooltip
     .append("text")
     .attr("fill", "rgb(161 161 170)")
-    .attr("font-size", 11);
+    .attr("font-size", dimensions.fontSize.tooltip);
 
   // Scrubber
   svg
     .append("rect")
-    .attr("x", PAD_L)
-    .attr("y", PAD_T)
+    .attr("x", dimensions.pad.l)
+    .attr("y", dimensions.pad.t)
     .attr("width", innerW)
     .attr("height", innerH)
     .attr("fill", "transparent")
@@ -246,19 +236,19 @@ export const createViz = (
       if (!p) return;
 
       const anchor =
-        p.cx > VIEW_W - 120 ? "end" : p.cx < 120 ? "start" : "middle";
+        p.cx > dimensions.viewW - 120 ? "end" : p.cx < 120 ? "start" : "middle";
 
       hoverLine.style("display", null).attr("x1", p.cx).attr("x2", p.cx);
 
       tooltip.style("display", null);
       tooltipValue
         .attr("x", p.cx)
-        .attr("y", PAD_T - 16)
+        .attr("y", dimensions.pad.t - 16)
         .attr("text-anchor", anchor)
         .text(`${p.value.toFixed(1)} lb`);
       tooltipDate
         .attr("x", p.cx)
-        .attr("y", PAD_T - 4)
+        .attr("y", dimensions.pad.t - 4)
         .attr("text-anchor", anchor)
         .text(shortDateLabel(p.date, showYear));
 

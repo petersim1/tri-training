@@ -5,14 +5,9 @@ import type {
 } from "@/lib/constants/visuals";
 import { DEFAULT_VIZ_UNIT } from "@/lib/utils/calculations";
 import {
+  type ChartDimensions,
   monthLabel,
-  PAD_B,
-  PAD_L,
-  PAD_R,
-  PAD_T,
   shortDateLabel,
-  VIEW_H,
-  VIEW_W,
 } from "@/lib/utils/plots";
 import type { StackedVizResult } from "@/types/responses/activities";
 
@@ -45,6 +40,7 @@ const rangeToDateBounds = (range: string): { from: Date; to: Date } | null => {
 
 export const createStackedViz = (
   plotHolder: d3.Selection<null, unknown, null, undefined>,
+  dimensions: ChartDimensions,
   points: StackedVizResult[],
   metric: SessionChartMetric,
   range: SessionChartRange,
@@ -60,12 +56,12 @@ export const createStackedViz = (
       ? new Date(`${points[points.length - 1].date}T12:00:00`)
       : new Date());
 
-  const innerW = VIEW_W - PAD_L - PAD_R;
-  const innerH = VIEW_H - PAD_T - PAD_B;
+  const innerW = dimensions.viewW - dimensions.pad.l - dimensions.pad.r;
+  const innerH = dimensions.viewH - dimensions.pad.t - dimensions.pad.b;
 
   const xScale = scaleTime()
     .domain([xFrom, xTo])
-    .range([PAD_L, PAD_L + innerW]);
+    .range([dimensions.pad.l, dimensions.pad.l + innerW]);
 
   const yMax = Math.max(
     ...points.map((p) =>
@@ -75,48 +71,43 @@ export const createStackedViz = (
   );
   const yScale = scaleLinear()
     .domain([0, yMax])
-    .range([PAD_T + innerH, PAD_T]);
+    .range([dimensions.pad.t + innerH, dimensions.pad.t]);
 
   const barW = Math.min(
     10,
     Math.max(2, (innerW / Math.max(points.length, 1)) * 0.5),
   );
 
-  const allMonthTicks = xScale.ticks(12);
-  const xTicks =
-    allMonthTicks.length <= 3
-      ? allMonthTicks
-      : [
-          allMonthTicks[0],
-          allMonthTicks[Math.floor(allMonthTicks.length / 2)],
-          allMonthTicks[allMonthTicks.length - 1],
-        ];
+  const xTicks = Array.from({ length: dimensions.nTicks.x }, (_, i) => {
+    const t = i / (dimensions.nTicks.x - 1);
+    return new Date(xFrom.getTime() + t * (xTo.getTime() - xFrom.getTime()));
+  });
 
   const showYear = xFrom.getFullYear() < xTo.getFullYear();
 
   const svg = plotHolder
     .append("svg")
-    .attr("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`)
+    .attr("viewBox", `0 0 ${dimensions.viewW} ${dimensions.viewH}`)
     .style("max-height", "100%")
     .style("max-width", "100%");
 
   // Y axis label
   svg
     .append("text")
-    .attr("transform", `translate(12, ${VIEW_H / 2}) rotate(-90)`)
+    .attr("transform", `translate(12, ${dimensions.viewH / 2}) rotate(-90)`)
     .attr("text-anchor", "middle")
     .attr("fill", "rgb(82 82 91)")
-    .attr("font-size", 10)
+    .attr("font-size", dimensions.fontSize.label)
     .attr("pointer-events", "none")
     .text(DEFAULT_VIZ_UNIT[metric]);
 
   // Y axis
   svg
     .append("g")
-    .attr("transform", `translate(${PAD_L}, 0)`)
+    .attr("transform", `translate(${dimensions.pad.l}, 0)`)
     .call(
       axisLeft(yScale)
-        .ticks(5)
+        .ticks(dimensions.nTicks.y)
         .tickFormat((v) => formatValue(+v, metric)),
     )
     .call((g) => g.select(".domain").remove())
@@ -131,13 +122,13 @@ export const createStackedViz = (
       g
         .selectAll(".tick text")
         .attr("fill", "rgb(113 113 122)")
-        .attr("font-size", 11),
+        .attr("font-size", dimensions.fontSize.axis),
     );
 
   // X axis
   svg
     .append("g")
-    .attr("transform", `translate(0, ${VIEW_H - PAD_B})`)
+    .attr("transform", `translate(0, ${dimensions.viewH - dimensions.pad.b})`)
     .call(
       axisBottom(xScale)
         .tickValues(xTicks)
@@ -150,7 +141,7 @@ export const createStackedViz = (
       g
         .selectAll(".tick text")
         .attr("fill", "rgb(113 113 122)")
-        .attr("font-size", 10),
+        .attr("font-size", dimensions.fontSize.axis),
     );
 
   // Stacked bars — fixed order: run bottom, bike middle, swim top
@@ -183,8 +174,8 @@ export const createStackedViz = (
   // Legend
   const legendG = svg.append("g").attr("pointer-events", "none");
   STACK_ORDER.forEach((kind, i) => {
-    const lx = PAD_L + i * 40;
-    const ly = PAD_T - PAD_T / 2;
+    const lx = dimensions.pad.l + i * (40 + dimensions.fontSize.label);
+    const ly = dimensions.pad.t - dimensions.pad.t / 2;
     legendG
       .append("rect")
       .attr("x", lx)
@@ -198,15 +189,15 @@ export const createStackedViz = (
       .attr("x", lx + 12)
       .attr("y", ly)
       .attr("fill", "rgb(113 113 122)")
-      .attr("font-size", 10)
+      .attr("font-size", dimensions.fontSize.label)
       .text(kind.charAt(0).toUpperCase() + kind.slice(1));
   });
 
   // Hover line
   const hoverLine = svg
     .append("line")
-    .attr("y1", PAD_T)
-    .attr("y2", VIEW_H - PAD_B)
+    .attr("y1", dimensions.pad.t)
+    .attr("y2", dimensions.viewH - dimensions.pad.b)
     .attr("stroke", "rgb(113 113 122)")
     .attr("stroke-width", 1)
     .attr("stroke-opacity", 0.45)
@@ -221,8 +212,8 @@ export const createStackedViz = (
 
   svg
     .append("rect")
-    .attr("x", PAD_L)
-    .attr("y", PAD_T)
+    .attr("x", dimensions.pad.l)
+    .attr("y", dimensions.pad.t)
     .attr("width", innerW)
     .attr("height", innerH)
     .attr("fill", "transparent")
@@ -250,10 +241,10 @@ export const createStackedViz = (
 
       const textEl = tooltip
         .append("text")
-        .attr("x", VIEW_W - PAD_R)
-        .attr("y", PAD_T - PAD_T / 2)
+        .attr("x", dimensions.viewW - dimensions.pad.r)
+        .attr("y", dimensions.pad.t - dimensions.pad.t / 2)
         .attr("text-anchor", "end")
-        .attr("font-size", 11);
+        .attr("font-size", dimensions.fontSize.tooltip);
 
       STACK_ORDER.filter((k) => (p.values[k] ?? 0) > 0).forEach((k) => {
         const val = p.values[k];

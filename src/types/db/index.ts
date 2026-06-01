@@ -37,7 +37,7 @@ export type WorkoutOp = CreateWorkoutOp | UpdateWorkoutOp | DeleteWorkoutOp;
 
 export type ChatProposal = {
   status: "pending" | "approved" | "rejected";
-  items: WorkoutOp[];
+  item: WorkoutOp;
 };
 
 // discriminated union of the available operations that require explicit approval.

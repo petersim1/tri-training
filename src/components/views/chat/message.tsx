@@ -7,7 +7,7 @@ import {
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ChatProposal } from "@/types/db";
+import type { ChatMessageItem } from "@/types/responses/chats";
 
 type Tone = "user" | "assistant";
 
@@ -196,7 +196,7 @@ type Props = {
   bubble: "user" | "assistant";
   text: string;
   contextLine?: string | null;
-  proposal?: ChatProposal | null;
+  proposalSet?: ChatMessageItem["proposalSet"];
   onProposalSubmit?: (approved: boolean) => Promise<void>;
 };
 
@@ -204,7 +204,7 @@ export const MessageBubble: React.FC<Props> = ({
   bubble,
   text,
   contextLine,
-  proposal,
+  proposalSet,
   onProposalSubmit,
 }) => {
   const body =
@@ -235,37 +235,49 @@ export const MessageBubble: React.FC<Props> = ({
           {contextLine}
         </p>
       )}
-      {proposal && (
-        <div className="w-full max-w-[min(21rem,calc(100vw-8rem))] rounded-2xl border border-zinc-700/60 bg-zinc-900 px-3 py-2.5">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-            Proposal
-          </p>
-          {proposal.status === "pending" ? (
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => onProposalSubmit?.(true)}
-                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-emerald-500"
-              >
-                Accept
-              </button>
-              <button
-                type="button"
-                onClick={() => onProposalSubmit?.(false)}
-                className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-[12px] font-semibold text-zinc-200 hover:bg-zinc-700"
-              >
-                Reject
-              </button>
+      {proposalSet &&
+        proposalSet.length > 0 &&
+        (() => {
+          const status = proposalSet[0].status;
+          const ops = [...new Set(proposalSet.map((p) => p.op))];
+
+          return (
+            <div className="w-full max-w-[min(21rem,calc(100vw-8rem))] rounded-2xl border border-zinc-700/60 bg-zinc-900 px-3 py-2.5">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                  Proposal
+                </p>
+                <p className="text-[10px] text-zinc-500 capitalize">
+                  {ops.join(" · ")}
+                </p>
+              </div>
+              {status === "pending" ? (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onProposalSubmit?.(true)}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-emerald-500"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onProposalSubmit?.(false)}
+                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-[12px] font-semibold text-zinc-200 hover:bg-zinc-700"
+                  >
+                    Reject
+                  </button>
+                </div>
+              ) : (
+                <p
+                  className={`text-[12px] font-semibold ${status === "approved" ? "text-emerald-400" : "text-zinc-500"}`}
+                >
+                  {status === "approved" ? "✓ Accepted" : "✕ Rejected"}
+                </p>
+              )}
             </div>
-          ) : (
-            <p
-              className={`text-[12px] font-semibold ${proposal.status === "approved" ? "text-emerald-400" : "text-zinc-500"}`}
-            >
-              {proposal.status === "approved" ? "✓ Accepted" : "✕ Rejected"}
-            </p>
-          )}
-        </div>
-      )}
+          );
+        })()}
     </div>
   );
 };

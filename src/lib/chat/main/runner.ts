@@ -2,8 +2,8 @@ import type OpenAI from "openai";
 import type { ChatCompletionChunk } from "openai/src/resources.js";
 import type { ToolName } from "@/types/chats/tools";
 import type { ChatMessage } from "@/types/responses/chat";
-import { getDb } from "../../db/index.server";
-import { type ChatMessageRow, chatMessages } from "../../db/schema.server";
+import type { ChatMessageItem } from "@/types/responses/chats";
+import type { NewChatMessageRow } from "../../db/schema.server";
 import type { ChatRunContext } from "./dependency";
 import { buildTools, prepareWithPrompt } from "./prepare";
 import { buildSystemPrompt } from "./prompt";
@@ -44,21 +44,19 @@ const finalizeToolCalls = (
 export const runPlanningTurn = async (
   client: OpenAI,
   ctx: ChatRunContext,
-  priorMessages: ChatMessageRow[],
+  priorMessages: ChatMessageItem[],
   currentMessage: string,
   emit: (chunk: ChatMessage) => void,
-): Promise<string> => {
+): Promise<NewChatMessageRow[]> => {
   const prompt = buildSystemPrompt(ctx);
   const messages = prepareWithPrompt(priorMessages, currentMessage, prompt);
 
-  let assistantText = "";
+  const dbMessages: NewChatMessageRow[] = [];
 
-  console.log("runner for query", currentMessage);
-
-  while (ctx.round < MAX_ROUNDS) {
-    console.log("starting turn", ctx.round);
+  let round = 0;
+  while (round < MAX_ROUNDS) {
+    const now = new Date();
     const toolAcc = new Map<number, PartialToolCall>();
-    let contentBuf = "";
 
     const streamResp = await client.chat.completions.create({
       model: PLANNING_CHAT_MODEL,
@@ -67,15 +65,25 @@ export const runPlanningTurn = async (
       stream: true,
       temperature: 0.2,
     });
-    console.log("gathered stream");
 
+    let contentChunk = "";
+    let finishReason:
+      | "tool_calls"
+      | "length"
+      | "stop"
+      | "content_filter"
+      | "function_call"
+      | null = null;
     for await (const chunk of streamResp) {
-      const delta = chunk.choices[0]?.delta;
-      if (!delta) continue;
+      const choice = chunk.choices[0];
+      if (!choice) continue;
+
+      finishReason = choice.finish_reason;
+      const delta = choice.delta;
 
       if (delta.content) {
-        contentBuf += delta.content;
-        emit({ type: "delta", text: delta.content });
+        contentChunk += delta.content;
+        emit({ type: "delta", text: contentChunk });
       }
 
       if (delta.tool_calls) {
@@ -83,72 +91,68 @@ export const runPlanningTurn = async (
       }
     }
 
-    assistantText += contentBuf;
-
-    const toolCalls = finalizeToolCalls(toolAcc);
-
-    if (toolCalls.length === 0) break; // end_turn — no tool calls, we're done
-
-    // push assistant message with tool calls
-    messages.push({
-      role: "assistant",
-      content: contentBuf || null,
-      tool_calls: toolCalls.map((tc) => ({
-        id: tc.id,
-        type: "function" as const,
-        function: { name: tc.name, arguments: tc.arguments },
-      })),
-    });
-
-    // execute tools and push results
-    for (const tc of toolCalls) {
-      console.log("CALLING TOOL", tc.name, tc.arguments);
-      const result = await executeTool(
-        ctx,
-        tc.name as ToolName,
-        JSON.parse(tc.arguments),
-      );
-      console.log("tool result");
-      messages.push({
-        role: "tool",
-        tool_call_id: tc.id,
-        content: result,
-      });
-    }
-
-    ctx.round++;
-  }
-
-  return assistantText;
-};
-
-export const persistTurn = async (
-  ctx: ChatRunContext,
-  userMessage: string,
-  assistantText: string,
-): Promise<ChatMessageRow> => {
-  const db = await getDb();
-  const [, sysMessage] = await db
-    .insert(chatMessages)
-    .values([
-      {
-        createdAt: ctx.runStart,
-        updatedAt: ctx.runStart,
-        threadId: ctx.thread.id,
-        role: "user",
-        content: userMessage,
-        sportEventId: ctx.event?.id,
-      },
-      {
+    if (finishReason === "stop") {
+      dbMessages.push({
+        createdAt: now,
+        updatedAt: now,
         threadId: ctx.thread.id,
         role: "assistant",
-        content: assistantText,
-        sportEventId: ctx.event?.id,
-        tools: ctx.toolsCalled,
-        proposals: ctx.proposals,
-      },
-    ])
-    .returning();
+        seq: ctx.seq,
+        round: round,
+        content: contentChunk,
+      });
+      break;
+    }
+    if (finishReason === "tool_calls") {
+      // we occassionally get some weird preamble, that we cannot differentiate from a final result.
+      // we don't store the preamble, but we do stream it. This will just tell the client to reset.
+      emit({ type: "reset" });
+      const toolCalls = finalizeToolCalls(toolAcc);
+      messages.push({
+        role: "assistant",
+        content: null,
+        tool_calls: toolCalls.map((tc) => ({
+          id: tc.id,
+          type: "function" as const,
+          function: { name: tc.name, arguments: tc.arguments },
+        })),
+      });
 
-  return sysMessage;
+      for (const tc of toolCalls) {
+        const { success, content, proposal } = await executeTool(
+          ctx,
+          tc.name as ToolName,
+          JSON.parse(tc.arguments),
+        );
+        if (proposal) {
+          ctx.hasProposal = true;
+        }
+        dbMessages.push({
+          createdAt: now,
+          updatedAt: now,
+          threadId: ctx.thread.id,
+          role: "tool",
+          seq: ctx.seq,
+          round: round,
+          content: JSON.stringify({ name: tc.name, args: tc.arguments }),
+          isSuccess: Number(success),
+          proposal: proposal
+            ? {
+                status: "pending",
+                item: proposal,
+              }
+            : null,
+        });
+
+        messages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content,
+        });
+      }
+    }
+    round++;
+  }
+
+  return dbMessages;
 };

@@ -1,4 +1,5 @@
 import type { SessionChartRange } from "@/lib/constants/visuals";
+import { cn } from "@/lib/utils";
 
 const RANGE_OPTIONS: { value: SessionChartRange; label: string }[] = [
   { value: "3m", label: "3 mo" },
@@ -11,18 +12,16 @@ const RANGE_OPTIONS: { value: SessionChartRange; label: string }[] = [
 type Props = {
   range: SessionChartRange;
   onRangeChange: (range: SessionChartRange) => void;
-  className?: string;
 };
 
 /** Shared date preset for activity + weight charts (same `sessionChart.range` in the DB). */
-export function ChartRangeToolbar({
-  range,
-  onRangeChange,
-  className = "",
-}: Props) {
+export function ChartRangeToolbar({ range, onRangeChange }: Props) {
   return (
     <fieldset
-      className={`m-0 flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-zinc-800/90 bg-zinc-950 px-3 py-2.5 shadow-sm ${className}`}
+      className={cn(
+        "m-0 flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm",
+        "px-3 py-0.5 md:py-2.5",
+      )}
     >
       <legend className="sr-only">Chart date range</legend>
       <div className="flex flex-wrap gap-2">

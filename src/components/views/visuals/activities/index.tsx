@@ -4,7 +4,7 @@ import { select } from "d3";
 import { useEffect, useRef } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
 import queryKeys from "@/lib/query-keys";
-import { VIEW_H, VIEW_W } from "@/lib/utils/plots";
+import type { ChartDimensions } from "@/lib/utils/plots";
 import { activityActions } from "@/server-fcts/activities";
 import { createStackedViz } from "../stacked/plot";
 import { ActivityMetricsChartHeader } from "./header";
@@ -13,11 +13,13 @@ import { createViz } from "./plot";
 type Props = {
   sessionChart: SessionChartSettings;
   onSessionChartPatch: (patch: Partial<SessionChartSettings>) => void;
+  dimensions: ChartDimensions;
 };
 
 export const ActivityMetricsChart: React.FC<Props> = ({
   sessionChart,
   onSessionChartPatch,
+  dimensions,
 }) => {
   const ref = useRef(null);
 
@@ -68,6 +70,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
       if (stackedPoints.length > 0) {
         createStackedViz(
           svg,
+          dimensions,
           stackedPoints,
           sessionChart.metric,
           sessionChart.range,
@@ -78,6 +81,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
       if (points.length > 0) {
         createViz(
           svg,
+          dimensions,
           points,
           sessionChart.metric,
           sessionChart.range,
@@ -85,7 +89,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
         );
       }
     }
-  }, [points, stackedPoints, sessionChart]);
+  }, [points, stackedPoints, sessionChart, dimensions]);
 
   const isLoading = isVizLoading || isStackLoading;
 
@@ -98,7 +102,10 @@ export const ActivityMetricsChart: React.FC<Props> = ({
         sessionChart={sessionChart}
         onSessionChartPatch={onSessionChartPatch}
       />
-      <div className="w-full" style={{ aspectRatio: `${VIEW_W}/${VIEW_H}` }}>
+      <div
+        className="w-full"
+        style={{ aspectRatio: `${dimensions.viewW}/${dimensions.viewH}` }}
+      >
         {isLoading && (
           <div className="flex h-full items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-500" />

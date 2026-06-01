@@ -1,7 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
+import { getDimensions } from "@/lib/utils/plots";
 import { cookieActions } from "@/server-fcts/cookies";
 import { ActivityMetricsChart } from "./activities";
 import { ChartRangeToolbar } from "./toolbar";
@@ -14,8 +15,22 @@ export const Visualizer: React.FC<{
     cookieActions.setSessionChartSettings,
   );
 
+  const holderRef = useRef(null);
+
   const [sessionChartSettings, setSessionChartSettings] =
     useState(initialChartSettings);
+
+  const [dimensions, setDimensions] = useState(getDimensions(650));
+
+  useEffect(() => {
+    if (!holderRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const { width } = entries[0].contentRect;
+      setDimensions(getDimensions(width));
+    });
+    observer.observe(holderRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const patchSessionChartMutation = useMutation({
     mutationFn: async (patch: SessionChartSettings) =>
@@ -29,7 +44,7 @@ export const Visualizer: React.FC<{
   };
 
   return (
-    <section className="flex flex-col gap-2">
+    <section className="flex flex-col gap-2 pb-20" ref={holderRef}>
       <ChartRangeToolbar
         range={sessionChartSettings.range}
         onRangeChange={(r) => handlePlotChange({ range: r })}
@@ -37,8 +52,12 @@ export const Visualizer: React.FC<{
       <ActivityMetricsChart
         sessionChart={sessionChartSettings}
         onSessionChartPatch={handlePlotChange}
+        dimensions={dimensions}
       />
-      <WeightTrendChart sessionChart={sessionChartSettings} />
+      <WeightTrendChart
+        sessionChart={sessionChartSettings}
+        dimensions={dimensions}
+      />
     </section>
   );
 };

@@ -1,5 +1,6 @@
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { drizzle } from "drizzle-orm/libsql";
+import { logMessage } from "../utils";
 import * as schema from "./schema.server";
 
 const globalForDb = globalThis as unknown as {
@@ -23,7 +24,7 @@ export async function getDb(): Promise<LibSQLDatabase<typeof schema>> {
         throw new Error(
           "DATABASE_TURSO_AUTH_TOKEN is required when DATABASE_TURSO_DATABASE_URL is set",
         );
-      console.log("using turso");
+      logMessage("using turso");
       globalForDb.db = drizzle({
         schema,
         connection: { url: tursoUrl, authToken: tursoToken },

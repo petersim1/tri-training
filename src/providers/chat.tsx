@@ -37,6 +37,8 @@ export type PlanningDockContextValue = {
     unknown
   >;
   createThreadAsync: () => Promise<string>;
+  curView: "chat" | "history";
+  setCurView: React.Dispatch<React.SetStateAction<"chat" | "history">>;
 };
 
 export const PlanningDockContext =
@@ -68,9 +70,11 @@ export const PlanningChatProvider = ({ children }: { children: ReactNode }) => {
   const deleteThreadFn = useServerFn(chatActions.deleteThread);
   const createThreadFn = useServerFn(chatActions.createThread);
   const [open, setOpenState] = useState(false);
+  const [curView, setCurView] = useState<"chat" | "history">("chat");
   const [selectedThreadId, selectThreadId] = useState<string | null>(null);
 
   const justDeletedRef = useRef(false);
+  const hasInitialized = useRef(false);
 
   const threadsQuery = useQuery({
     queryKey: queryKeys.chatThreads,
@@ -111,33 +115,23 @@ export const PlanningChatProvider = ({ children }: { children: ReactNode }) => {
   });
 
   useEffect(() => {
-    if (justDeletedRef.current) {
-      justDeletedRef.current = false;
-      return;
-    }
-    if (
-      selectedThreadId ||
-      !threadsQuery.data?.length ||
-      threadsQuery.isPending
-    )
-      return;
+    // treat this PURELY as an initial mount rendering. After that, it'll be completely controlled.
+    if (hasInitialized.current) return;
+    if (threadsQuery.isPending || !threadsQuery.data) return;
+
+    hasInitialized.current = true;
+
     const recentChat = window.localStorage.getItem("recent_chat");
-    let isSet = false;
-    if (recentChat) {
-      const exists = threadsQuery.data.some((c) => c.id === recentChat);
-      if (exists) {
-        selectThreadId(recentChat);
-        isSet = true;
-      } else {
-        window.localStorage.removeItem("recent_chat");
+    if (recentChat && threadsQuery.data.some((c) => c.id === recentChat)) {
+      selectThreadId(recentChat);
+    } else {
+      window.localStorage.removeItem("recent_chat");
+      if (threadsQuery.data.length > 0) {
+        selectThreadId(threadsQuery.data[0].id);
+        window.localStorage.setItem("recent_chat", threadsQuery.data[0].id);
       }
     }
-    if (!isSet) {
-      console.log("setting here");
-      window.localStorage.setItem("recent_chat", threadsQuery.data[0].id);
-      selectThreadId(threadsQuery.data[0].id);
-    }
-  }, [selectedThreadId, threadsQuery.data, threadsQuery.isPending]);
+  }, [threadsQuery.isPending, threadsQuery.data]);
 
   useEffect(() => {
     if (!open) {
@@ -163,6 +157,8 @@ export const PlanningChatProvider = ({ children }: { children: ReactNode }) => {
       threadsQuery,
       deleteThread,
       createThreadAsync,
+      curView,
+      setCurView,
     }),
     [open, selectedThreadId, threadsQuery, deleteThread],
   );

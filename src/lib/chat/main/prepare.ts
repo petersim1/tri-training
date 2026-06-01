@@ -1,11 +1,11 @@
 import type { ChatCompletionMessageParam } from "openai/resources";
-import type { ChatMessageRow } from "@/lib/db/schema.server";
 import type { ToolName, TypedChatCompletionTool } from "@/types/chats/tools";
+import type { ChatMessageItem } from "@/types/responses/chats";
 import { formatReplaySummary } from "../utils";
 import { PLANNING_TOOLS } from "./tools/descriptions";
 
 const prepareMessageHistory = (
-  pastMessages: ChatMessageRow[],
+  pastMessages: ChatMessageItem[],
   message: string,
 ): ChatCompletionMessageParam[] => {
   const out: ChatCompletionMessageParam[] = [];
@@ -16,7 +16,10 @@ const prepareMessageHistory = (
         role: m.role,
         content:
           m.role === "assistant" && m.replaySummary
-            ? formatReplaySummary(m.replaySummary) // use summary for older assistant messages
+            ? formatReplaySummary(m.replaySummary) +
+              (m.proposalSet?.length && m.proposalSet[0].status !== "pending"
+                ? `\n[Proposal ${m.proposalSet[0].status}: ${[...new Set(m.proposalSet.map((p) => p.op))].join(", ")}]`
+                : "")
             : m.content,
       });
     });
@@ -30,7 +33,7 @@ const prepareMessageHistory = (
 };
 
 export const prepareWithPrompt = (
-  pastMessages: ChatMessageRow[],
+  pastMessages: ChatMessageItem[],
   message: string,
   prompt: string,
 ): ChatCompletionMessageParam[] => {

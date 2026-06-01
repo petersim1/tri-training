@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/index.server";
 import { chatMessages, workoutEntries } from "@/lib/db/schema.server";
 
@@ -8,82 +8,77 @@ export const handleApproval = async (
 ): Promise<boolean> => {
   const db = await getDb();
 
-  const row = await db
-    .select({ proposals: chatMessages.proposals, id: chatMessages.id })
+  // get the most recent seq
+  const latestSeq = await db
+    .select({ seq: chatMessages.seq })
+    .from(chatMessages)
+    .where(eq(chatMessages.threadId, threadId))
+    .orderBy(desc(chatMessages.seq))
+    .limit(1)
+    .get();
+
+  if (!latestSeq) throw new Error("no messages found");
+
+  // get all tool rows with proposals for that seq
+  const rows = await db
+    .select({ id: chatMessages.id, proposal: chatMessages.proposal })
     .from(chatMessages)
     .where(
       and(
         eq(chatMessages.threadId, threadId),
-        eq(chatMessages.role, "assistant"),
+        eq(chatMessages.seq, latestSeq.seq),
+        eq(chatMessages.role, "tool"),
+        isNotNull(chatMessages.proposal),
       ),
     )
-    .orderBy(desc(chatMessages.createdAt))
-    .limit(1)
-    .get();
-  if (!row) {
-    throw new Error("not found");
-  }
-  const proposals = row.proposals;
-  if (!proposals) {
-    throw new Error("last message was not a proposal.");
-  }
-  if (!proposals.items.length) {
-    throw new Error("no proposal items.");
-  }
-  if (proposals.status !== "pending") {
-    throw new Error("last proposal was already acted on.");
-  }
+    .all();
 
-  if (!isApproved) {
-    proposals.status = "rejected";
-    await db
-      .update(chatMessages)
-      .set({ proposals })
-      .where(eq(chatMessages.id, row.id))
-      .run();
-    return false;
-  }
+  if (!rows.length) throw new Error("no proposals found for latest seq");
 
-  for (const proposal of proposals.items) {
-    if (proposal.op === "delete") {
-      const { id } = proposal;
-      console.log("approved deletion of", id);
-      await db.delete(workoutEntries).where(eq(workoutEntries.id, id));
-    }
-    if (proposal.op === "update") {
-      const { id, op, ...fields } = proposal;
-      console.log("approved update of", id);
-      await db
-        .update(workoutEntries)
-        .set({
-          ...(!!fields.notes && { notes: fields.notes }),
-          ...(!!fields.dayKey && { dayKey: fields.dayKey }),
-          ...(!!fields.kind && { kind: fields.kind }),
-          ...(!!fields.status && { status: fields.status }),
-          ...(!!fields.distance && { distance: fields.distance }),
-          ...(!!fields.distanceUnits && {
-            distanceUnits: fields.distanceUnits,
-          }),
-          ...(fields.timeSeconds && {
-            timeSeconds: fields.timeSeconds,
-          }),
-        })
-        .where(eq(workoutEntries.id, id));
-    }
+  if (isApproved) {
+    for (const row of rows) {
+      if (!row.proposal) continue;
+      const proposal = row.proposal;
+      const item = proposal.item;
 
-    if (proposal.op === "create") {
-      const { op, ...fields } = proposal;
-      console.log("approved creation of workout", fields);
-      await db.insert(workoutEntries).values(fields);
+      if (item.op === "delete") {
+        await db.delete(workoutEntries).where(eq(workoutEntries.id, item.id));
+      }
+      if (item.op === "update") {
+        const { id, op, ...fields } = item;
+        await db
+          .update(workoutEntries)
+          .set({
+            ...(!!fields.notes && { notes: fields.notes }),
+            ...(!!fields.dayKey && { dayKey: fields.dayKey }),
+            ...(!!fields.kind && { kind: fields.kind }),
+            ...(!!fields.status && { status: fields.status }),
+            ...(!!fields.distance && { distance: fields.distance }),
+            ...(!!fields.distanceUnits && {
+              distanceUnits: fields.distanceUnits,
+            }),
+            ...(fields.timeSeconds && {
+              timeSeconds: fields.timeSeconds,
+            }),
+          })
+          .where(eq(workoutEntries.id, id));
+      }
+      if (item.op === "create") {
+        const { op, ...fields } = item;
+        await db.insert(workoutEntries).values(fields);
+      }
     }
   }
 
-  proposals.status = "approved";
+  const ids = rows.map((r) => r.id);
+  const newStatus = isApproved ? "approved" : "rejected";
+
   await db
     .update(chatMessages)
-    .set({ proposals })
-    .where(eq(chatMessages.id, row.id))
-    .run();
+    .set({
+      proposal: sql`json_set(proposal, '$.status', ${newStatus})`,
+    })
+    .where(inArray(chatMessages.id, ids));
 
   return true;
 };

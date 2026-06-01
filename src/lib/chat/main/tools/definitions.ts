@@ -5,7 +5,7 @@ import type {
 import { convertDistance, convertTime } from "@/lib/utils/calculations";
 import { activityActions } from "@/server-fcts/activities";
 import type { ToolName } from "@/types/chats/tools";
-import type { ToolCallSchemaValues } from "@/types/db";
+import type { ToolCallSchemaValues, WorkoutOp } from "@/types/db";
 import {
   activityListSchema,
   createPlanSchema,
@@ -14,11 +14,17 @@ import {
 import { idSchema } from "@/types/requests/shared";
 import type { ChatRunContext } from "../dependency";
 
+type ToolResponse = {
+  content: string;
+  success: boolean;
+  proposal?: WorkoutOp;
+};
+
 export const executeTool = async (
   ctx: ChatRunContext,
   name: ToolName,
   args: ToolCallSchemaValues["args"],
-): Promise<string> => {
+): Promise<ToolResponse> => {
   switch (name) {
     case "create_workout":
       return createWorkoutTool(ctx, args);
@@ -31,104 +37,69 @@ export const executeTool = async (
     case "list_workouts":
       return listWorkoutTool(ctx, args);
     default:
-      return "invalid tool name";
+      return { success: false, content: "invalid tool name" };
   }
 };
 
 const createWorkoutTool = async (
   ctx: ChatRunContext,
   args: ToolCallSchemaValues["args"],
-): Promise<string> => {
+): Promise<ToolResponse> => {
   // ONLY serves to stage the change.
   const parsed = createPlanSchema.safeParse(args);
   if (!parsed.success) {
-    console.error(parsed.error);
-    ctx.toolsCalled.push({ name: "create_workout", args, success: false });
-    return JSON.stringify({ ok: false, error: parsed.error.message });
+    return { content: parsed.error.message, success: false };
   }
 
-  if (!ctx.proposals) {
-    ctx.proposals = {
-      status: "pending",
-      items: [],
-    };
-  }
-
-  ctx.proposals.items.push({
-    op: "create",
-    ...parsed.data,
-  });
-
-  ctx.toolsCalled.push({ name: "create_workout", args, success: true });
-
-  return JSON.stringify({
-    ok: true,
-    staged: true,
-    note: "Proposal staged — awaiting athlete approval before any DB write occurs.",
-  });
+  return {
+    success: true,
+    content:
+      "Proposal staged — awaiting athlete approval before any DB write occurs.",
+    proposal: {
+      op: "create",
+      ...parsed.data,
+    },
+  };
 };
 
 const deleteWorkoutTool = async (
   ctx: ChatRunContext,
   args: ToolCallSchemaValues["args"],
-): Promise<string> => {
+): Promise<ToolResponse> => {
   const parsed = idSchema.safeParse(args);
   if (!parsed.success) {
-    console.error(parsed.error);
-    ctx.toolsCalled.push({ name: "delete_workout", args, success: false });
-    return JSON.stringify({ ok: false, error: parsed.error.message });
+    return { success: false, content: parsed.error.message };
   }
 
-  if (!ctx.proposals) {
-    ctx.proposals = {
-      status: "pending",
-      items: [],
-    };
-  }
-
-  ctx.proposals.items.push({
-    op: "delete",
-    ...parsed.data,
-  });
-  ctx.toolsCalled.push({ name: "delete_workout", args, success: true });
-
-  return JSON.stringify({
-    ok: true,
-    staged: true,
-    note: "Proposal staged — awaiting athlete approval before any DB delete occurs.",
-  });
+  return {
+    success: false,
+    content:
+      "Proposal staged — awaiting athlete approval before any DB delete occurs.",
+    proposal: {
+      op: "delete",
+      ...parsed.data,
+    },
+  };
 };
 
 const updateWorkoutTool = async (
   ctx: ChatRunContext,
   args: ToolCallSchemaValues["args"],
-): Promise<string> => {
+): Promise<ToolResponse> => {
   const parsed = updatePlanSchema.safeParse(args);
   if (!parsed.success) {
-    console.error(parsed.error);
-    ctx.toolsCalled.push({ name: "update_workout", args, success: false });
-    return JSON.stringify({ ok: false, error: parsed.error.message });
+    return { success: false, content: parsed.error.message };
   }
 
-  if (!ctx.proposals) {
-    ctx.proposals = {
-      status: "pending",
-      items: [],
-    };
-  }
-
-  ctx.proposals.items.push({
-    op: "update",
-    ...parsed.data,
-  });
-
-  ctx.toolsCalled.push({ name: "update_workout", args, success: true });
-
-  return JSON.stringify({
-    ok: true,
-    staged: true,
-    note: "Proposal staged — awaiting athlete approval before any DB update occurs.",
-  });
+  return {
+    success: true,
+    content:
+      "Proposal staged — awaiting athlete approval before any DB update occurs.",
+    proposal: {
+      op: "update",
+      ...parsed.data,
+    },
+  };
 };
 
 const formatWorkoutForModel = (row: WorkoutEntryWithCompleted): string => {
@@ -191,31 +162,30 @@ const formatWorkoutForModel = (row: WorkoutEntryWithCompleted): string => {
 const getWorkoutTool = async (
   ctx: ChatRunContext,
   args: ToolCallSchemaValues["args"],
-): Promise<string> => {
+): Promise<ToolResponse> => {
   const parsed = idSchema.safeParse(args);
   if (!parsed.success) {
-    console.error(parsed.error);
-    ctx.toolsCalled.push({ name: "get_workout", args, success: false });
-    return JSON.stringify({ ok: false, error: parsed.error.message });
+    return { success: false, content: parsed.error.message };
   }
 
   const workout = await activityActions.get({ data: parsed.data });
-  ctx.toolsCalled.push({ name: "get_workout", args, success: true });
 
-  return formatWorkoutForModel(workout);
+  return { success: true, content: formatWorkoutForModel(workout) };
 };
 
 const listWorkoutTool = async (
   ctx: ChatRunContext,
   args: ToolCallSchemaValues["args"],
-): Promise<string> => {
+): Promise<ToolResponse> => {
   const parsed = activityListSchema.safeParse(args);
   if (!parsed.success) {
-    ctx.toolsCalled.push({ name: "list_workouts", args, success: false });
-    return JSON.stringify({ ok: false, error: parsed.error.message });
+    return { success: false, content: parsed.error.message };
   }
 
   const workouts = await activityActions.list({ data: parsed.data });
-  ctx.toolsCalled.push({ name: "list_workouts", args, success: true });
-  return workouts.rows.map((w) => formatWorkoutForModel(w)).join("\n\n");
+
+  return {
+    success: true,
+    content: workouts.rows.map((w) => formatWorkoutForModel(w)).join("\n\n"),
+  };
 };

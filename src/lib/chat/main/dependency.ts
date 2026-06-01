@@ -4,9 +4,10 @@ import type {
   SportEventRow,
 } from "@/lib/db/schema.server";
 import type { ToolName } from "@/types/chats/tools";
-import type { ChatProposal, ToolCallSchemaValues } from "@/types/db";
 
 export type ChatRunContext = {
+  seq: number;
+
   runStart: Date;
   // Generic
   dayKey: string;
@@ -20,15 +21,12 @@ export type ChatRunContext = {
   // Training context (injected upfront)
   coachingState: CoachingStateRow;
 
+  // whether >= 1 proposal exists by the end of all turns.
+  hasProposal: boolean;
+
   // Tool availability — dynamic based on state
   availableTools: Set<ToolName>;
 
-  toolsCalled: ToolCallSchemaValues[];
-
-  // Dynamically injected according to certain tools, which we'll store on the sys message for next turn.
-  proposals?: ChatProposal;
-
   // Round tracking, for a single call.
-  round: number;
   maxRounds: number;
 };

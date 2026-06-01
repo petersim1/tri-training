@@ -66,7 +66,7 @@ export const ActivityMetricsChartHeader: React.FC<Props> = ({
                 "bg-emerald-600/25 text-emerald-200 ring-1 ring-emerald-500/40",
             )}
           >
-            <PlanActivityKindIcon kind={k} />
+            <PlanActivityKindIcon kind={k} className="size-4" />
           </button>
         ))}
         <button

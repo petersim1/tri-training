@@ -1,4 +1,5 @@
 import type { SVGProps } from "react";
+import { cn } from "@/lib/utils";
 
 type WeightIconProps = SVGProps<SVGSVGElement> & { title?: string };
 type PlanActivityKind = "swim" | "lift" | "run" | "bike" | "recovery";
@@ -28,12 +29,20 @@ const activityIconSvgProps = {
   "aria-hidden": true,
 } as const;
 
-export const PlanActivityKindIcon = ({ kind }: { kind: string }) => {
+export const PlanActivityKindIcon = ({
+  kind,
+  className,
+}: {
+  kind: string;
+  className?: string;
+}) => {
   const k = normalizePlanActivityKind(kind);
+
+  const { className: svgClassName, ...rest } = activityIconSvgProps;
 
   if (k === "swim") {
     return (
-      <svg {...activityIconSvgProps}>
+      <svg {...rest} className={cn(svgClassName, className)}>
         <path d="m2 10 2.456-3.684a.7.7 0 0 1 1.106-.013l2.39 3.413a.7.7 0 0 0 1.096-.001l2.402-3.432a.7.7 0 0 1 1.098 0l2.402 3.432a.7.7 0 0 0 1.098 0l2.389-3.413a.7.7 0 0 1 1.106.013L22 10" />
         <path d="m2 18.002 2.456-3.684a.7.7 0 0 1 1.106-.013l2.39 3.413a.7.7 0 0 0 1.097 0l2.402-3.432a.7.7 0 0 1 1.098 0l2.402 3.432a.7.7 0 0 0 1.098 0l2.389-3.413a.7.7 0 0 1 1.106.013L22 18.002" />
       </svg>
@@ -42,7 +51,7 @@ export const PlanActivityKindIcon = ({ kind }: { kind: string }) => {
 
   if (k === "lift") {
     return (
-      <svg {...activityIconSvgProps}>
+      <svg {...rest} className={cn(svgClassName, className)}>
         <path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z" />
         <path d="m2.5 21.5 1.4-1.4" />
         <path d="m20.1 3.9 1.4-1.4" />
@@ -54,7 +63,7 @@ export const PlanActivityKindIcon = ({ kind }: { kind: string }) => {
 
   if (k === "run") {
     return (
-      <svg {...activityIconSvgProps}>
+      <svg {...rest} className={cn(svgClassName, className)}>
         <path d="m15 10.42 4.8-5.07" />
         <path d="M19 18h3" />
         <path d="M9.5 22L21.414 9.415A2 2 0 0 0 21.2 6.4l-5.61-4.208A1 1 0 0 0 14 3v2a2 2 0 0 1-1.394 1.906L8.677 8.053A1 1 0 0 0 8 9c-.155 6.393-2.082 9-4 9a2 2 0 0 0 0 4h14" />
@@ -64,7 +73,7 @@ export const PlanActivityKindIcon = ({ kind }: { kind: string }) => {
 
   if (k === "bike") {
     return (
-      <svg {...activityIconSvgProps}>
+      <svg {...rest} className={cn(svgClassName, className)}>
         <circle cx="18.5" cy="17.5" r="3.5" />
         <circle cx="5.5" cy="17.5" r="3.5" />
         <circle cx="15" cy="5" r="1" />
@@ -75,7 +84,7 @@ export const PlanActivityKindIcon = ({ kind }: { kind: string }) => {
 
   if (k === "recovery") {
     return (
-      <svg {...activityIconSvgProps}>
+      <svg {...rest} className={cn(svgClassName, className)}>
         <path d="M14.5714 15.0036L15.4286 16.8486C15.4286 16.8486 19.2857 17.6678 19.2857 19.6162C19.2857 21 17.5714 21 17.5714 21H13L10.75 19.75" />
         <path d="M9.42864 15.0036L8.5715 16.8486C8.5715 16.8486 4.71436 17.6678 4.71436 19.6162C4.71436 21 6.42864 21 6.42864 21H8.50007L10.7501 19.75L13.5001 18" />
         <path d="M3 15.9261C3 15.9261 5.14286 15.4649 6.42857 15.0036C7.71429 8.54595 11.5714 9.00721 12 9.00721C12.4286 9.00721 16.2857 8.54595 17.5714 15.0036C18.8571 15.4649 21 15.9261 21 15.9261" />
@@ -85,7 +94,7 @@ export const PlanActivityKindIcon = ({ kind }: { kind: string }) => {
   }
 
   return (
-    <svg {...activityIconSvgProps}>
+    <svg {...rest} className={cn(svgClassName, className)}>
       <circle cx="12" cy="12" r="3.5" />
     </svg>
   );

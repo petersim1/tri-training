@@ -11,6 +11,9 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
+  optimizeDeps: {
+    exclude: ["d3"],
+  },
   plugins: [
     tanstackStart({
       srcDirectory: "src",

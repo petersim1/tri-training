@@ -5,15 +5,19 @@ import type React from "react";
 import { useEffect, useRef } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
 import queryKeys from "@/lib/query-keys";
-import { VIEW_H, VIEW_W } from "@/lib/utils/plots";
+import type { ChartDimensions } from "@/lib/utils/plots";
 import { weightActions } from "@/server-fcts/weights";
 import { createViz } from "./plot";
 
 type Props = {
   sessionChart: SessionChartSettings;
+  dimensions: ChartDimensions;
 };
 
-export const WeightTrendChart: React.FC<Props> = ({ sessionChart }) => {
+export const WeightTrendChart: React.FC<Props> = ({
+  sessionChart,
+  dimensions,
+}) => {
   const ref = useRef(null);
 
   const { data: points = [], isLoading } = useQuery({
@@ -26,16 +30,19 @@ export const WeightTrendChart: React.FC<Props> = ({ sessionChart }) => {
     const svg = select(ref.current);
     svg.selectAll("*").remove();
     if (points.length > 0) {
-      createViz(svg, points, sessionChart.range, () => {});
+      createViz(svg, dimensions, points, sessionChart.range, () => {});
     }
-  }, [points, sessionChart.range]);
+  }, [points, sessionChart.range, dimensions]);
 
   return (
     <section
       aria-label="Weights chart"
       className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950 shadow-sm"
     >
-      <div className="w-full" style={{ aspectRatio: `${VIEW_W}/${VIEW_H}` }}>
+      <div
+        className="w-full"
+        style={{ aspectRatio: `${dimensions.viewW}/${dimensions.viewH}` }}
+      >
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-500" />
