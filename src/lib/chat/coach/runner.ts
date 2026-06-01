@@ -3,6 +3,7 @@ import type OpenAI from "openai";
 import { getDb } from "@/lib/db/index.server";
 import { type ChatMessageRow, coachingState } from "@/lib/db/schema.server";
 import { coachingStateSchema } from "@/types/db";
+import type { ChatMessageItem } from "@/types/responses/chats";
 import type { ChatRunContext } from "../main/dependency";
 import { prepareWithPrompt } from "./prepare";
 import { buildSummarizerSystemPrompt } from "./prompt";
@@ -12,7 +13,7 @@ const COACHING_CHAT_MODEL = "gpt-4o";
 export const runCoachingStateSummary = async (
   client: OpenAI,
   ctx: ChatRunContext,
-  priorMessages: ChatMessageRow[],
+  priorMessages: ChatMessageItem[],
   newUserMessage: string,
   newAssistantMessage: ChatMessageRow,
 ) => {

@@ -1,9 +1,9 @@
 import type { EasyInputMessage } from "openai/resources/responses/responses";
-import type { ChatMessageRow } from "@/lib/db/schema.server";
+import type { ChatMessageItem } from "@/types/responses/chats";
 import { formatReplaySummary } from "../utils";
 
 const prepareMessageHistory = (
-  pastMessages: ChatMessageRow[],
+  pastMessages: ChatMessageItem[],
   message: string,
 ): EasyInputMessage[] => {
   const out: EasyInputMessage[] = [];
@@ -14,7 +14,10 @@ const prepareMessageHistory = (
         role: m.role,
         content:
           m.role === "assistant" && m.replaySummary
-            ? formatReplaySummary(m.replaySummary) // use summary for older assistant messages
+            ? formatReplaySummary(m.replaySummary) +
+              (m.proposalSet?.length && m.proposalSet[0].status !== "pending"
+                ? `\n[Proposal ${m.proposalSet[0].status}: ${[...new Set(m.proposalSet.map((p) => p.op))].join(", ")}]`
+                : "")
             : m.content,
       });
     });
@@ -28,7 +31,7 @@ const prepareMessageHistory = (
 };
 
 export const prepareWithPrompt = (
-  pastMessages: ChatMessageRow[],
+  pastMessages: ChatMessageItem[],
   userMessage: string,
   assistantResponse: string,
   prompt: string,
