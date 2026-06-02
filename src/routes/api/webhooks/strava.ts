@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { webhookActions } from "@/server-fcts/webhooks";
+import { webhookServerFns } from "@/server-fcts/webhooks.server";
 import type { StravaWebhookEvent } from "@/types/requests/webhooks";
 
 export const Route = createFileRoute("/api/webhooks/strava")({
@@ -26,14 +26,12 @@ export const Route = createFileRoute("/api/webhooks/strava")({
       },
       POST: async ({ request }) => {
         const rawBody = await request.text();
-        await webhookActions.logWebhookDelivery({
-          data: {
-            source: "strava",
-            idempotencyKey: null,
-            payloadJson: rawBody,
-            outcome: "ignored",
-            detail: "received",
-          },
+        await webhookServerFns.logWebhookDelivery({
+          source: "strava",
+          idempotencyKey: null,
+          payloadJson: rawBody,
+          outcome: "ignored",
+          detail: "received",
         });
 
         let body: unknown;
@@ -66,9 +64,7 @@ export const Route = createFileRoute("/api/webhooks/strava")({
         const idempotencyKey = `strava:${sub}:${oid}:${aspect}:${et}`;
 
         try {
-          const result = await webhookActions.processStravaWebhookEvent({
-            data: ev,
-          });
+          const result = await webhookServerFns.processStravaWebhook(ev);
           if (result.duplicate) {
             return new Response(null, { status: 200 });
           }
@@ -77,25 +73,21 @@ export const Route = createFileRoute("/api/webhooks/strava")({
             detail.includes("ignored") || detail.includes("duplicate")
               ? "ignored"
               : "ok";
-          await webhookActions.logWebhookDelivery({
-            data: {
-              source: "strava",
-              idempotencyKey,
-              payloadJson,
-              outcome,
-              detail,
-            },
+          await webhookServerFns.logWebhookDelivery({
+            source: "strava",
+            idempotencyKey,
+            payloadJson,
+            outcome,
+            detail,
           });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          await webhookActions.logWebhookDelivery({
-            data: {
-              source: "strava",
-              idempotencyKey,
-              payloadJson,
-              outcome: "error",
-              detail: msg.slice(0, 500),
-            },
+          await webhookServerFns.logWebhookDelivery({
+            source: "strava",
+            idempotencyKey,
+            payloadJson,
+            outcome: "error",
+            detail: msg.slice(0, 500),
           });
           return new Response(JSON.stringify({ error: msg }), {
             status: 500,

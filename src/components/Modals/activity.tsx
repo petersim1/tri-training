@@ -28,6 +28,7 @@ import type { DayItem } from "@/types/responses/activities";
 import { PlusIcon } from "../assets";
 import { Field, Input, Label, Select, Textarea } from "../Forms";
 import { ActivityElement } from "../views/activities/element";
+import { Modal, ModalContent } from ".";
 
 export const ActivityModal: React.FC<{
   dayKey: string;
@@ -60,19 +61,8 @@ export const ActivityModal: React.FC<{
     data?.activities.find((a) => a.id === SelectedPlanId) ?? null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
-      <button
-        type="button"
-        aria-label="Close dialog"
-        className="absolute inset-0 cursor-default border-0 bg-black/60 p-0"
-        onClick={onClose}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="day-dialog-title"
-        className="relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-4 shadow-xl"
-      >
+    <Modal onClose={onClose}>
+      <ModalContent>
         {isLoading ? (
           <div className="flex h-40 items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-500" />
@@ -102,8 +92,8 @@ export const ActivityModal: React.FC<{
             onBack={() => setStep("summary")}
           />
         ) : null}
-      </div>
-    </div>
+      </ModalContent>
+    </Modal>
   );
 };
 
@@ -612,7 +602,7 @@ const AddModal: React.FC<{
           <Label>Notes</Label>
           <Textarea
             name="notes"
-            rows={2}
+            rows={3}
             placeholder="Optional"
             value={formReducer.formState.values.notes ?? ""}
             onChange={(e) => formReducer.setField("notes", e.target.value)}
@@ -637,7 +627,7 @@ const AddModal: React.FC<{
   );
 };
 
-const WorkoutModal: React.FC<{
+export const WorkoutModal: React.FC<{
   dayKey: string;
   plan: WorkoutEntryWithCompleted;
   onClose: () => void;
@@ -952,7 +942,7 @@ const WorkoutModal: React.FC<{
           <Label>Notes</Label>
           <Textarea
             name="notes"
-            rows={2}
+            rows={3}
             placeholder="Optional"
             value={formReducer.formState.values.notes ?? ""}
             onChange={(e) => formReducer.setField("notes", e.target.value)}

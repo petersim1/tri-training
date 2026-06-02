@@ -91,13 +91,13 @@ export const CalendarToggle: React.FC<{
   }, [period, anchor, timeZone]);
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2">
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => setAnchor(calStep(-1))}
           aria-label={period === "week" ? "Previous week" : "Previous month"}
-          className="touch-manipulation rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
+          className="touch-manipulation rounded border border-zinc-700 px-2.5 py-1 sm:px-3 sm:py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
         >
           ←
         </button>
@@ -108,14 +108,16 @@ export const CalendarToggle: React.FC<{
           type="button"
           onClick={() => setAnchor(calStep(1))}
           aria-label={period === "week" ? "Next week" : "Next month"}
-          className="touch-manipulation rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
+          className="touch-manipulation rounded border border-zinc-700 px-2.5 py-1 sm:px-3 sm:py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
         >
           →
         </button>
+      </div>
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => setAnchor(today)}
-          className="touch-manipulation rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
+          className="touch-manipulation rounded border border-zinc-700 px-2.5 py-1 sm:px-3 sm:py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
         >
           Today
         </button>
@@ -131,7 +133,8 @@ export const CalendarToggle: React.FC<{
                 : "hover:bg-zinc-900/80"
             }`}
           >
-            Month
+            <span className="hidden sm:block">Month</span>
+            <span className="block sm:hidden">M</span>
           </button>
           <button
             type="button"
@@ -144,7 +147,8 @@ export const CalendarToggle: React.FC<{
                 : "hover:bg-zinc-900/80"
             }`}
           >
-            Week
+            <span className="hidden sm:block">Week</span>
+            <span className="block sm:hidden">W</span>
           </button>
         </div>
       </div>

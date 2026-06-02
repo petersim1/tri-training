@@ -1,17 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  getTableColumns,
-  gte,
-  inArray,
-  isNull,
-  lte,
-} from "drizzle-orm";
-import type { PlanKind, PlanStatus } from "@/lib/constants/activities";
+import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import {
   type SessionChartSettings,
   VALID_CUMULATIVE,
@@ -55,6 +43,7 @@ import type {
   StackedVizResult,
   VizResult,
 } from "@/types/responses/activities";
+import { activityServerFns } from "./activities.server";
 import { cookieActions } from "./cookies";
 
 const calendar = createServerFn({ method: "GET" })
@@ -113,59 +102,7 @@ const calendar = createServerFn({ method: "GET" })
 const list = createServerFn({ method: "GET" })
   .inputValidator(activityListSchema)
   .handler(async ({ data }): Promise<PlannedWorkoutsPageResult> => {
-    const wheres = [];
-    if (data.kind) {
-      wheres.push(eq(workoutEntries.kind, data.kind as PlanKind));
-    }
-    if (data.status) {
-      wheres.push(eq(workoutEntries.status, data.status as PlanStatus));
-    }
-    if (data.dateFrom) {
-      wheres.push(gte(workoutEntries.dayKey, data.dateFrom));
-    }
-    if (data.dateTo) {
-      wheres.push(lte(workoutEntries.dayKey, data.dateTo));
-    }
-
-    const whereClause = and(...wheres);
-
-    const db = await getDb();
-
-    const offset = data.page * data.pageSize;
-
-    const [countFilteredRow] = await db
-      .select({ n: count() })
-      .from(workoutEntries)
-      .where(whereClause)
-      .all();
-    const totalPages = Math.ceil(
-      Number(countFilteredRow?.n ?? 0) / data.pageSize,
-    );
-
-    const rows = await db
-      .select({
-        ...getTableColumns(workoutEntries),
-        va: vendorActivities,
-      })
-      .from(workoutEntries)
-      .leftJoin(
-        vendorActivities,
-        eq(workoutEntries.vendorActivityId, vendorActivities.id),
-      )
-      .where(whereClause)
-      .orderBy(desc(workoutEntries.dayKey))
-      .limit(data.pageSize)
-      .offset(offset)
-      .all();
-
-    const mapped = rows.map((r) => {
-      const { va, ...plan } = r;
-      const vendorActivity: VendorActivityRow | null =
-        va?.id != null ? va : null;
-      return { ...plan, vendorActivity };
-    });
-
-    return { rows: mapped, totalPages };
+    return activityServerFns.list(data);
   });
 
 const viz = createServerFn({ method: "GET" })
@@ -477,23 +414,7 @@ const linkAll = createServerFn({ method: "POST" })
 const get = createServerFn({ method: "GET" })
   .inputValidator(idSchema)
   .handler(async ({ data }): Promise<WorkoutEntryWithCompleted> => {
-    const db = await getDb();
-    const row = await db
-      .select({
-        ...getTableColumns(workoutEntries),
-        vendorActivity: vendorActivities,
-      })
-      .from(workoutEntries)
-      .leftJoin(
-        vendorActivities,
-        eq(workoutEntries.vendorActivityId, vendorActivities.id),
-      )
-      .where(eq(workoutEntries.id, data.id))
-      .get();
-    if (!row) {
-      throw new Error("not found");
-    }
-    return row;
+    return activityServerFns.get(data);
   });
 
 const create = createServerFn({ method: "POST" })

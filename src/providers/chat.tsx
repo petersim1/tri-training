@@ -55,7 +55,7 @@ export const PlanningChrome: React.FC = () => {
         aria-haspopup="dialog"
         aria-label="Open plan coach chat"
         onClick={toggle}
-        className="fixed bottom-8 right-4 z-60 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-950/55 ring ring-emerald-500/40 hover:bg-emerald-500 md:bottom-12 md:right-8"
+        className="fixed bottom-8 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-950/55 ring ring-emerald-500/40 hover:bg-emerald-500 md:bottom-12 md:right-8"
       >
         <ChatBubbleIcon className="size-7" />
       </button>

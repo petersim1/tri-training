@@ -1,6 +1,5 @@
 import { redirect } from "@tanstack/react-router";
 import { createMiddleware } from "@tanstack/react-start";
-import { logMessage } from "../utils";
 import { getSessionOk } from "../utils/session.server";
 
 function normalizePathname(pathname: string): string {
@@ -51,7 +50,6 @@ function isServerFnHttpRequest(request: Request, pathname: string): boolean {
 /** Global `requestMiddleware` in `start.ts`: require a session for page/document routes only. */
 export const requireSessionFnMiddleware = createMiddleware().server(
   async ({ next, pathname, request }) => {
-    logMessage("middleware hit for", pathname);
     if (isServerFnHttpRequest(request, pathname)) {
       return next();
     }

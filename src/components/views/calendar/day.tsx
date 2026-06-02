@@ -70,7 +70,7 @@ export const CalendarDayItem: React.FC<CalendarDayProps> = ({
       className={cn(
         "relative flex min-w-0 flex-col overflow-hidden bg-zinc-950",
         isLoading && "calendar-cell-loading",
-        layout === "week" && "h-18",
+        layout === "week" && "h-16 sm:h-18",
         layout === "month" && "h-16 lg:h-18",
         isHighlighted
           ? "z-4 ring-2 ring-sky-500/80 ring-inset"

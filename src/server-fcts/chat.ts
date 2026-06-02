@@ -3,9 +3,9 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import z from "zod";
 import { getPlanningOpenAiClient } from "@/lib/chat/client";
 import { runCoachingStateSummary } from "@/lib/chat/coach/runner";
-import { handleApproval } from "@/lib/chat/main/approval";
+import { handleApproval } from "@/lib/chat/main/approval.server";
 import type { ChatRunContext } from "@/lib/chat/main/dependency";
-import { persistTurn } from "@/lib/chat/main/post-processing";
+import { persistTurn } from "@/lib/chat/main/post-processing.server";
 import { runPlanningTurn } from "@/lib/chat/main/runner";
 import { runReplaySummary } from "@/lib/chat/replay/runner";
 import { getDb } from "@/lib/db/index.server";
@@ -23,7 +23,7 @@ import { chatSchema, listMessagesSchema } from "@/types/requests/chat";
 import { idSchema } from "@/types/requests/shared";
 import type { ChatMessage } from "@/types/responses/chat";
 import type { ChatMessageItem } from "@/types/responses/chats";
-import { coachingActions } from "./coaching";
+import { coachingServerFns } from "./coaching.server";
 import { eventActions } from "./events";
 
 const getThread = createServerFn({ method: "GET" })
@@ -182,15 +182,20 @@ const updateTitle = createServerFn({ method: "POST" })
 
 const chat = createServerFn({ method: "POST" })
   .inputValidator(chatSchema)
-  .handler(async ({ data }) => {
-    logMessage(data);
+  .handler(async ({ data }): Promise<ReadableStream<ChatMessage>> => {
+    logMessage("Chat", data.dayKey, data.threadId, data.type);
     if (data.type === "approval") {
       await handleApproval(data.threadId, data.approved);
-      return;
+      return new ReadableStream<ChatMessage>({
+        start(controller) {
+          controller.enqueue({ type: "done" });
+          controller.close();
+        },
+      });
     }
 
     const thread = await getThread({ data: { id: data.threadId } });
-    const coachingState = await coachingActions.get();
+    const coachingState = await coachingServerFns.get();
 
     let event: SportEventRow | undefined;
     if (data.eventId) {

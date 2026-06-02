@@ -17,11 +17,36 @@
   body {
     @apply min-h-dvh bg-zinc-950 text-zinc-100 antialiased;
   }
+
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="search"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px; /* prevent auto-zoom on mobile */
+  }
+}
+
+@theme {
+  --animate-appear: appear 0.2s ease-out forwards;
 }
 
 @keyframes shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+@keyframes appear {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 100%;
+    transform: translateY(0px);
   }
 }
 

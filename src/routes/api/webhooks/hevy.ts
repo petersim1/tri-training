@@ -1,19 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { webhookActions } from "@/server-fcts/webhooks";
+import { webhookServerFns } from "@/server-fcts/webhooks.server";
 
 export const Route = createFileRoute("/api/webhooks/hevy")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const rawBody = await request.text();
-        await webhookActions.logWebhookDelivery({
-          data: {
-            source: "hevy",
-            idempotencyKey: null,
-            payloadJson: rawBody,
-            outcome: "ignored",
-            detail: "received",
-          },
+        await webhookServerFns.logWebhookDelivery({
+          source: "hevy",
+          idempotencyKey: null,
+          payloadJson: rawBody,
+          outcome: "ignored",
+          detail: "received",
         });
 
         const secret = process.env.HEVY_WEBHOOK_BEARER_SECRET?.trim();
@@ -77,29 +75,23 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
             : rawBody;
 
         try {
-          const result = await webhookActions.processHevyWorkoutWebhook({
-            data: { workoutId },
-          });
-          await webhookActions.logWebhookDelivery({
-            data: {
-              source: "hevy",
-              idempotencyKey: null,
-              payloadJson,
-              outcome: "ok",
-              detail: result.detail,
-            },
+          const result = await webhookServerFns.processHevyWebhook(workoutId);
+          await webhookServerFns.logWebhookDelivery({
+            source: "hevy",
+            idempotencyKey: null,
+            payloadJson,
+            outcome: "ok",
+            detail: result.detail,
           });
           return new Response(null, { status: 200 });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          await webhookActions.logWebhookDelivery({
-            data: {
-              source: "hevy",
-              idempotencyKey: null,
-              payloadJson,
-              outcome: "error",
-              detail: msg.slice(0, 500),
-            },
+          await webhookServerFns.logWebhookDelivery({
+            source: "hevy",
+            idempotencyKey: null,
+            payloadJson,
+            outcome: "error",
+            detail: msg.slice(0, 500),
           });
           return new Response(JSON.stringify({ error: msg }), {
             status: 500,

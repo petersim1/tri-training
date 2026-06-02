@@ -20,7 +20,7 @@ type WithError = { isError?: boolean };
 const errorClass =
   "border-rose-500/70 focus:border-rose-500/70 focus:ring-rose-500/25";
 const baseClass =
-  "w-full text-sm rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1 text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/70 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50";
+  "w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1 text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/70 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50";
 
 export const Input: React.FC<
   React.InputHTMLAttributes<HTMLInputElement> & WithError
@@ -46,7 +46,7 @@ export const Textarea: React.FC<
   React.TextareaHTMLAttributes<HTMLTextAreaElement> & WithError
 > = ({ className, isError, ...props }) => (
   <textarea
-    className={cn(baseClass, "text-sm", isError && errorClass, className)}
+    className={cn(baseClass, isError && errorClass, className)}
     {...props}
   />
 );

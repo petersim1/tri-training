@@ -1,9 +1,9 @@
-import { getDb } from "../../db/index.server";
+import { getDb } from "@/lib/db/index.server";
 import {
   type ChatMessageRow,
   chatMessages,
   type NewChatMessageRow,
-} from "../../db/schema.server";
+} from "@/lib/db/schema.server";
 import type { ChatRunContext } from "./dependency";
 
 export const persistTurn = async (

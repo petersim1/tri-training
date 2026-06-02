@@ -72,7 +72,8 @@ const loadHomePageDataFn = async (
       sessionChartSettings.agg,
       sessionChartSettings.proportional,
     ),
-    queryFn: () => activityActions.viz({ data: { ...sessionChartSettings } }),
+    queryFn: () =>
+      activityActions.vizStacked({ data: { ...sessionChartSettings } }),
   });
 
   queryClient.prefetchQuery({

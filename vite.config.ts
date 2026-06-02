@@ -21,7 +21,7 @@ export default defineConfig({
         behavior: "error",
       },
     }),
-    nitro(),
+    nitro({ preset: "vercel" }),
     viteReact(),
     tailwindcss(),
   ],

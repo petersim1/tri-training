@@ -3,7 +3,7 @@ import type {
   WorkoutEntryWithCompleted,
 } from "@/lib/db/schema.server";
 import { convertDistance, convertTime } from "@/lib/utils/calculations";
-import { activityActions } from "@/server-fcts/activities";
+import { activityServerFns } from "@/server-fcts/activities.server";
 import type { ToolName } from "@/types/chats/tools";
 import type { ToolCallSchemaValues, WorkoutOp } from "@/types/db";
 import {
@@ -71,6 +71,11 @@ const deleteWorkoutTool = async (
     return { success: false, content: parsed.error.message };
   }
 
+  const workoutExists = await activityServerFns.exists(parsed.data);
+  if (!workoutExists) {
+    return { success: false, content: "This is an invalid workout id." };
+  }
+
   return {
     success: false,
     content:
@@ -89,6 +94,11 @@ const updateWorkoutTool = async (
   const parsed = updatePlanSchema.safeParse(args);
   if (!parsed.success) {
     return { success: false, content: parsed.error.message };
+  }
+
+  const workoutExists = await activityServerFns.exists({ id: parsed.data.id });
+  if (!workoutExists) {
+    return { success: false, content: "This is an invalid workout id." };
   }
 
   return {
@@ -168,9 +178,12 @@ const getWorkoutTool = async (
     return { success: false, content: parsed.error.message };
   }
 
-  const workout = await activityActions.get({ data: parsed.data });
-
-  return { success: true, content: formatWorkoutForModel(workout) };
+  try {
+    const workout = await activityServerFns.get(parsed.data);
+    return { success: true, content: formatWorkoutForModel(workout) };
+  } catch {
+    return { success: false, content: "This workout does not exist" };
+  }
 };
 
 const listWorkoutTool = async (
@@ -182,7 +195,7 @@ const listWorkoutTool = async (
     return { success: false, content: parsed.error.message };
   }
 
-  const workouts = await activityActions.list({ data: parsed.data });
+  const workouts = await activityServerFns.list(parsed.data);
 
   return {
     success: true,
