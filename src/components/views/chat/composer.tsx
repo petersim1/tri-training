@@ -1,8 +1,4 @@
-import {
-  type QueryClient,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -27,24 +23,6 @@ import { MessageBubble } from "./message";
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
-const syncMessages = async (
-  qc: QueryClient,
-  threadId: string,
-): Promise<void> => {
-  const newMessages = await chatActions.listMessages({
-    data: { threadId, orderBy: "desc", limit: 2 },
-  });
-  const queryKey = queryKeys.messagesQueryKey(threadId);
-  qc.setQueryData(queryKey, (old: ChatMessageItem[] | undefined) => {
-    if (!old) return old;
-    const existingIds = new Set(old.map((m) => m.id));
-    const incoming = newMessages
-      .filter((m) => !existingIds.has(m.id))
-      .reverse();
-    return [...old, ...incoming];
-  });
-};
-
 const lastSportEventIdFromMessages = (msgs: ChatMessageRow[]): string => {
   for (let i = msgs.length - 1; i >= 0; i--) {
     if (msgs[i].role === "user") return (msgs[i].sportEventId ?? "").trim();
@@ -68,7 +46,6 @@ export const Composer: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [sportEventContextId, setSportEventContextId] = useState("");
   const [optimisticText, setOptimisticText] = useState<string | null>(null);
-  const [pendingApproval, setPendingApproval] = useState(false);
 
   const chatFn = useServerFn(chatActions.chat);
 
@@ -98,7 +75,6 @@ export const Composer: React.FC = () => {
     setBusy(false);
     setError(null);
     setOptimisticText(null);
-    setPendingApproval(false);
     pickerDirtyRef.current = false;
     prevThreadIdRef.current = "";
     if (!tid) setSportEventContextId("");
@@ -115,6 +91,7 @@ export const Composer: React.FC = () => {
           })
         : [],
     enabled: selectedThreadId !== null,
+    staleTime: Infinity,
   });
 
   const sportEventsQuery = useQuery({
@@ -185,19 +162,30 @@ export const Composer: React.FC = () => {
           setStreaming(value.text);
         }
         if (value.type === "approval") {
-          setPendingApproval(true);
+          // setPendingApproval(true);
         }
         if (value.type === "reset") {
           setStreaming("");
+        }
+        if (value.type === "message") {
+          console.log(value.message);
+          qc.setQueryData(
+            queryKeys.messagesQueryKey(threadId),
+            (old: ChatMessageItem[] | undefined) => {
+              if (!old) return old;
+              if (old.some((m) => m.id === value.message.id)) return old;
+              return [...old, value.message];
+            },
+          );
+          if (value.message.role === "user") setOptimisticText(null);
+          if (value.message.role === "assistant") setStreaming("");
         }
         if (value.type === "done" || value.type === "error") {
           if (value.type === "error") {
             setError(value.message);
             setOptimisticText(null);
+            setStreaming("");
           }
-          queueMicrotask(() => syncMessages(qc, threadId).catch(console.error));
-          setStreaming("");
-          setOptimisticText(null);
           break;
         }
       }
@@ -219,7 +207,6 @@ export const Composer: React.FC = () => {
     setOptimisticText(text);
     setStreaming("");
     setDraft("");
-    setPendingApproval(false);
 
     let threadId = selectedThreadId?.trim() ?? null;
 
@@ -256,7 +243,6 @@ export const Composer: React.FC = () => {
   const submitApproval = async (approved: boolean) => {
     const tid = selectedThreadId?.trim();
     if (!tid) return;
-    setPendingApproval(false);
     setBusy(true);
     try {
       await chatActions.chat({
@@ -292,7 +278,7 @@ export const Composer: React.FC = () => {
 
   const attachedEvent =
     sportEventsSorted.find((e) => e.id === sportEventContextId) ?? null;
-  const canSend = !!draft.trim() && !busy && !pendingApproval;
+  const canSend = !!draft.trim() && !busy;
 
   const currentThread =
     selectedThreadId === null
@@ -416,7 +402,6 @@ export const Composer: React.FC = () => {
                   }
                 }}
                 placeholder="Message"
-                disabled={pendingApproval}
                 className="max-h-[min(38vh,11rem)] min-h-12.5 w-full shrink-0 resize-none rounded-[1.15rem] border border-zinc-700 bg-zinc-900/97 px-[0.9rem] py-2 text-[13.75px] leading-snug text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50"
               />
             </div>

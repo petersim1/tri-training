@@ -254,21 +254,28 @@ const chat = createServerFn({ method: "POST" })
           if (ctx.hasProposal) {
             emit({ type: "approval" });
           }
-          emit({ type: "done" });
 
-          // fire and forget after stream closes
-          void persistTurn(ctx, data.message, dbMessagesStore)
-            .then((sysMessage) => {
-              runReplaySummary(client, ctx, messages, data.message, sysMessage);
-              runCoachingStateSummary(
-                client,
-                ctx,
-                messages,
-                data.message,
-                sysMessage,
-              );
-            })
-            .catch(console.error);
+          try {
+            const [userDbMessage, sysDbMessage] = await persistTurn(
+              ctx,
+              data.message,
+              dbMessagesStore,
+            );
+            emit({ type: "message", message: userDbMessage });
+            emit({ type: "message", message: sysDbMessage });
+            runReplaySummary(client, ctx, messages, data.message, sysDbMessage);
+            runCoachingStateSummary(
+              client,
+              ctx,
+              messages,
+              data.message,
+              sysDbMessage,
+            );
+          } catch (e) {
+            console.error(e);
+          }
+
+          emit({ type: "done" });
 
           controller.close();
         }

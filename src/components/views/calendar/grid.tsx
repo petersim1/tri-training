@@ -10,7 +10,7 @@ import { activityActions } from "@/server-fcts/activities";
 import type { CalendarScope } from "@/types/requests/activities";
 import { type CalendarCell, CalendarDayItem } from "./day";
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export const CalendarGrid: React.FC<{
   period: CalendarScope;
