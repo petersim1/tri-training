@@ -53,6 +53,7 @@ export const stackedVizSchema = z.object({
   agg: z.enum(CHART_AGG_VALUES).optional(),
   metric: z.enum(CHART_METRIC_VALUES).optional(),
   proportional: z.boolean().optional(),
+  cumulative: z.boolean().optional(),
 });
 
 export type StackedVizSchemaValues = z.infer<typeof stackedVizSchema>;

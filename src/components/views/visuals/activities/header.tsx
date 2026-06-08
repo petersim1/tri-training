@@ -84,7 +84,7 @@ export const ActivityMetricsChartHeader: React.FC<Props> = ({
           <LayersIcon className="size-3" />
         </button>
       </div>
-      <div className="flex gap-2 items-center">
+      <div className="flex gap-2 items-center flex-wrap">
         <div className="hidden sm:flex border border-zinc-800/80 rounded-lg">
           {METRIC_TABS.map(([value, label]) => {
             const enabled = validMetrics.includes(value);
@@ -173,13 +173,16 @@ export const ActivityMetricsChartHeader: React.FC<Props> = ({
             </option>
           ))}
         </Select>
-        {stacked ? (
+        {stacked && (
           <button
             type="button"
             aria-pressed={Boolean(proportional)}
             title="Stack proportionally"
             onClick={() => {
-              onSessionChartPatch({ proportional: !proportional });
+              onSessionChartPatch({
+                proportional: !proportional,
+                cumulative: false,
+              });
             }}
             className={cn(
               "rounded-md border px-2 py-0.5 text-[11px] font-medium",
@@ -191,36 +194,38 @@ export const ActivityMetricsChartHeader: React.FC<Props> = ({
           >
             Proportional
           </button>
-        ) : (
-          <button
-            type="button"
-            aria-pressed={Boolean(cumulativeOk && cumulative)}
-            disabled={!cumulativeOk}
-            title={
-              cumulativeOk
-                ? undefined
-                : kind === "lift"
-                  ? "Switch to Volume for cumulative totals."
-                  : "Not available for pace or efficiency."
-            }
-            onClick={() => {
-              if (cumulativeOk)
-                onSessionChartPatch({ cumulative: !cumulative });
-            }}
-            className={cn(
-              "rounded-md border px-2 py-0.5 text-[11px] font-medium",
-              !cumulativeOk && "border-zinc-800/70 text-zinc-600 opacity-60",
-              cumulativeOk &&
-                cumulative &&
-                "border-emerald-500/45 bg-emerald-600/15 text-emerald-200",
-              cumulativeOk &&
-                !cumulative &&
-                "border-zinc-600/80 bg-zinc-900/35 text-zinc-400 hover:border-zinc-500 hover:bg-zinc-800/45 hover:text-zinc-200",
-            )}
-          >
-            Cumulative
-          </button>
         )}
+        <button
+          type="button"
+          aria-pressed={Boolean(cumulativeOk && cumulative)}
+          disabled={!cumulativeOk}
+          title={
+            cumulativeOk
+              ? undefined
+              : kind === "lift"
+                ? "Switch to Volume for cumulative totals."
+                : "Not available for pace or efficiency."
+          }
+          onClick={() => {
+            if (cumulativeOk)
+              onSessionChartPatch({
+                cumulative: !cumulative,
+                proportional: false,
+              });
+          }}
+          className={cn(
+            "rounded-md border px-2 py-0.5 text-[11px] font-medium",
+            !cumulativeOk && "border-zinc-800/70 text-zinc-600 opacity-60",
+            cumulativeOk &&
+              cumulative &&
+              "border-emerald-500/45 bg-emerald-600/15 text-emerald-200",
+            cumulativeOk &&
+              !cumulative &&
+              "border-zinc-600/80 bg-zinc-900/35 text-zinc-400 hover:border-zinc-500 hover:bg-zinc-800/45 hover:text-zinc-200",
+          )}
+        >
+          Cumulative
+        </button>
       </div>
     </div>
   );

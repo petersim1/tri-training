@@ -284,21 +284,36 @@ const vizStacked = createServerFn({ method: "GET" })
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, g]) => ({ date, values: g.values }));
 
-    if (!options.proportional) {
+    if (!options.proportional && !options.cumulative) {
       return folded;
     }
 
-    return folded.map((f) => {
-      const tot = f.values.bike + f.values.run + f.values.swim;
-      return {
-        date: f.date,
+    if (options.proportional) {
+      return folded.map((f) => {
+        const tot = f.values.bike + f.values.run + f.values.swim;
+        return {
+          date: f.date,
+          values: {
+            swim: f.values.swim / tot,
+            bike: f.values.bike / tot,
+            run: f.values.run / tot,
+          },
+        };
+      });
+    }
+
+    return folded.reduce((acc, item) => {
+      const prev = acc.at(-1);
+      acc.push({
+        date: item.date,
         values: {
-          swim: f.values.swim / tot,
-          bike: f.values.bike / tot,
-          run: f.values.run / tot,
+          swim: (prev?.values.swim ?? 0) + item.values.swim,
+          bike: (prev?.values.bike ?? 0) + item.values.bike,
+          run: (prev?.values.run ?? 0) + item.values.run,
         },
-      };
-    });
+      });
+      return acc;
+    }, [] as StackedVizResult[]);
   });
 
 const unlinked = createServerFn({ method: "GET" }).handler(

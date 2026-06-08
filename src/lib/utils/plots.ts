@@ -32,7 +32,7 @@ export const getDimensions = (containerWidth: number): ChartDimensions => {
       fontSize: { axis: 16, label: 14, tooltip: 18 },
       dotRadius: 5,
       strokeWidth: 2.5,
-      pad: { l: 72, r: 40, t: 40, b: 48 },
+      pad: { l: 72, r: 40, t: 10, b: 48 },
     };
   }
   if (containerWidth < 640) {
@@ -46,7 +46,7 @@ export const getDimensions = (containerWidth: number): ChartDimensions => {
       fontSize: { axis: 14, label: 12, tooltip: 16 },
       dotRadius: 4,
       strokeWidth: 2,
-      pad: { l: 62, r: 40, t: 36, b: 42 },
+      pad: { l: 62, r: 40, t: 8, b: 42 },
     };
   }
   return {
@@ -59,7 +59,7 @@ export const getDimensions = (containerWidth: number): ChartDimensions => {
     fontSize: { axis: 11, label: 10, tooltip: 12 },
     dotRadius: 3,
     strokeWidth: 2,
-    pad: { l: 56, r: 40, t: 32, b: 36 },
+    pad: { l: 56, r: 40, t: 6, b: 36 },
   };
 };
 

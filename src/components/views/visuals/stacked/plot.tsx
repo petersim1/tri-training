@@ -4,22 +4,18 @@ import type {
   SessionChartRange,
 } from "@/lib/constants/visuals";
 import { DEFAULT_VIZ_UNIT } from "@/lib/utils/calculations";
-import {
-  type ChartDimensions,
-  monthLabel,
-  shortDateLabel,
-} from "@/lib/utils/plots";
+import { type ChartDimensions, monthLabel } from "@/lib/utils/plots";
 import type { StackedVizResult } from "@/types/responses/activities";
 
-const STACK_COLORS = {
+export const STACK_COLORS = {
   run: "rgb(16 185 129)", // emerald
   bike: "rgb(251 191 36)", // amber
   swim: "rgb(139 92 246)", // violet
 } as const;
 
-const STACK_ORDER = ["run", "bike", "swim"] as const;
+export const STACK_ORDER = ["run", "bike", "swim"] as const;
 
-const formatValue = (v: number, metric: SessionChartMetric): string => {
+export const formatValue = (v: number, metric: SessionChartMetric): string => {
   if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
   if (metric === "distance") return v < 10 ? v.toFixed(2) : v.toFixed(1);
   if (metric === "efficiency") return v.toFixed(3);
@@ -44,7 +40,7 @@ export const createStackedViz = (
   points: StackedVizResult[],
   metric: SessionChartMetric,
   range: SessionChartRange,
-  proportional: boolean,
+  onHover: (point: StackedVizResult | null) => void,
 ) => {
   const bounds = rangeToDateBounds(range);
   const xFrom =
@@ -171,28 +167,6 @@ export const createStackedViz = (
     });
   });
 
-  // Legend
-  const legendG = svg.append("g").attr("pointer-events", "none");
-  STACK_ORDER.forEach((kind, i) => {
-    const lx = dimensions.pad.l + i * (40 + dimensions.fontSize.label);
-    const ly = dimensions.pad.t - dimensions.pad.t / 2;
-    legendG
-      .append("rect")
-      .attr("x", lx)
-      .attr("y", ly - 7)
-      .attr("width", 8)
-      .attr("height", 8)
-      .attr("fill", STACK_COLORS[kind])
-      .attr("rx", 1);
-    legendG
-      .append("text")
-      .attr("x", lx + 12)
-      .attr("y", ly)
-      .attr("fill", "rgb(113 113 122)")
-      .attr("font-size", dimensions.fontSize.label)
-      .text(kind.charAt(0).toUpperCase() + kind.slice(1));
-  });
-
   // Hover line
   const hoverLine = svg
     .append("line")
@@ -201,12 +175,6 @@ export const createStackedViz = (
     .attr("stroke", "rgb(113 113 122)")
     .attr("stroke-width", 1)
     .attr("stroke-opacity", 0.45)
-    .attr("pointer-events", "none")
-    .style("display", "none");
-
-  // Tooltip
-  const tooltip = svg
-    .append("g")
     .attr("pointer-events", "none")
     .style("display", "none");
 
@@ -234,45 +202,12 @@ export const createStackedViz = (
       if (!p) return;
 
       const cx = xScale(new Date(`${p.date}T12:00:00`));
-      const total = STACK_ORDER.reduce((sum, k) => sum + (p.values[k] ?? 0), 0);
 
       hoverLine.style("display", null).attr("x1", cx).attr("x2", cx);
-      tooltip.style("display", null).selectAll("*").remove();
-
-      const textEl = tooltip
-        .append("text")
-        .attr("x", dimensions.viewW - dimensions.pad.r)
-        .attr("y", dimensions.pad.t - dimensions.pad.t / 2)
-        .attr("text-anchor", "end")
-        .attr("font-size", dimensions.fontSize.tooltip);
-
-      STACK_ORDER.filter((k) => (p.values[k] ?? 0) > 0).forEach((k) => {
-        const val = p.values[k];
-        const display = proportional
-          ? `${((val / total) * 100).toFixed(0)}%`
-          : formatValue(val, metric);
-        textEl
-          .append("tspan")
-          .attr("fill", STACK_COLORS[k])
-          .text(`${k} ${display}  `);
-      });
-
-      if (!proportional) {
-        textEl
-          .append("tspan")
-          .attr("fill", "rgb(228 228 231)")
-          .text(
-            `(total ${formatValue(total, metric)} ${DEFAULT_VIZ_UNIT[metric]})`,
-          );
-      }
-
-      textEl
-        .append("tspan")
-        .attr("fill", "rgb(161 161 170)")
-        .text(` - ${shortDateLabel(p.date, showYear)}`);
+      onHover(p);
     })
     .on("mouseleave", () => {
       hoverLine.style("display", "none");
-      tooltip.style("display", "none").selectAll("*").remove();
+      onHover(null);
     });
 };

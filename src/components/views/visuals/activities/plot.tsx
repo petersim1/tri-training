@@ -11,14 +11,10 @@ import type {
   SessionChartRange,
 } from "@/lib/constants/visuals";
 import { DEFAULT_VIZ_UNIT } from "@/lib/utils/calculations";
-import {
-  type ChartDimensions,
-  monthLabel,
-  shortDateLabel,
-} from "@/lib/utils/plots";
+import { type ChartDimensions, monthLabel } from "@/lib/utils/plots";
 import type { VizResult } from "@/types/responses/activities";
 
-const BAR_FILL: Record<SessionChartMetric, string> = {
+export const BAR_FILL: Record<SessionChartMetric, string> = {
   volume: "rgb(167 139 250)",
   time: "rgb(52 211 153)",
   distance: "rgb(16 185 129)",
@@ -58,6 +54,7 @@ export const createViz = (
   metric: SessionChartMetric,
   range: SessionChartRange,
   cumulative: boolean,
+  onHover: (point: VizResult | null) => void,
 ) => {
   const fill = BAR_FILL[metric];
 
@@ -221,20 +218,6 @@ export const createViz = (
     .attr("pointer-events", "none")
     .style("display", "none");
 
-  // Tooltip
-  const tooltip = svg
-    .append("g")
-    .attr("pointer-events", "none")
-    .style("display", "none");
-  const tooltipValue = tooltip
-    .append("text")
-    .attr("font-size", dimensions.fontSize.tooltip)
-    .attr("fill", "rgb(52 211 153)");
-  const tooltipDate = tooltip
-    .append("text")
-    .attr("font-size", dimensions.fontSize.tooltip)
-    .attr("fill", "rgb(161 161 170)");
-
   // Scrubber
   svg
     .append("rect")
@@ -258,31 +241,16 @@ export const createViz = (
       const p = enriched[closest];
       if (!p) return;
 
-      const anchor =
-        p.cx > dimensions.viewW - 120 ? "end" : p.cx < 120 ? "start" : "middle";
-
       hoverLine.style("display", null).attr("x1", p.cx).attr("x2", p.cx);
       dots
         .attr("opacity", (_d, i) => (i === closest ? 1 : 0.28))
         .attr("r", (_d, i) => (i === closest ? 3.75 : 3));
 
-      tooltip.style("display", null);
-      tooltipValue
-        .attr("x", p.cx)
-        .attr("y", dimensions.pad.t - 16)
-        .attr("text-anchor", anchor)
-        .text(
-          `${formatValue(p.displayValue, metric)} ${DEFAULT_VIZ_UNIT[metric]}`,
-        );
-      tooltipDate
-        .attr("x", p.cx)
-        .attr("y", dimensions.pad.t - 4)
-        .attr("text-anchor", anchor)
-        .text(shortDateLabel(p.date, showYear));
+      onHover(p);
     })
     .on("mouseleave", () => {
       hoverLine.style("display", "none");
-      tooltip.style("display", "none");
       dots.attr("opacity", 0.28).attr("r", 3);
+      onHover(null);
     });
 };

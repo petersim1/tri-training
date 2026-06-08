@@ -33,7 +33,8 @@ const stackedActivityViz = (
   metric?: SessionChartMetric,
   agg?: SessionChartAgg,
   proportional?: boolean,
-) => ["stacked-activity-viz", range, metric, agg, proportional];
+  cumulative?: boolean,
+) => ["stacked-activity-viz", range, metric, agg, proportional, cumulative];
 
 const weightViz = (range?: SessionChartRange) => ["weight-viz", range];
 

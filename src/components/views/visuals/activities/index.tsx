@@ -1,14 +1,20 @@
 // activity-metrics-chart.tsx
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { select } from "d3";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
 import queryKeys from "@/lib/query-keys";
 import type { ChartDimensions } from "@/lib/utils/plots";
 import { activityActions } from "@/server-fcts/activities";
-import { createStackedViz } from "../stacked/plot";
+import type { StackedVizResult, VizResult } from "@/types/responses/activities";
+import {
+  createStackedViz,
+  formatValue,
+  STACK_COLORS,
+  STACK_ORDER,
+} from "../stacked/plot";
 import { ActivityMetricsChartHeader } from "./header";
-import { createViz } from "./plot";
+import { BAR_FILL, createViz } from "./plot";
 
 type Props = {
   sessionChart: SessionChartSettings;
@@ -22,6 +28,10 @@ export const ActivityMetricsChart: React.FC<Props> = ({
   dimensions,
 }) => {
   const ref = useRef(null);
+
+  const [hoveredStackedPoint, setHoveredStackedPoint] =
+    useState<StackedVizResult | null>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<VizResult | null>(null);
 
   const { data: points = [], isLoading: isVizLoading } = useQuery({
     queryKey: queryKeys.activityViz(
@@ -50,6 +60,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
       sessionChart.metric,
       sessionChart.agg,
       sessionChart.proportional,
+      sessionChart.cumulative,
     ),
     queryFn: () =>
       activityActions.vizStacked({
@@ -58,6 +69,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
           range: sessionChart.range,
           metric: sessionChart.metric,
           proportional: sessionChart.proportional,
+          cumulative: sessionChart.cumulative,
         },
       }),
     placeholderData: keepPreviousData,
@@ -74,7 +86,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
           stackedPoints,
           sessionChart.metric,
           sessionChart.range,
-          sessionChart.proportional,
+          (p: StackedVizResult | null) => setHoveredStackedPoint(p),
         );
       }
     } else {
@@ -86,6 +98,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
           sessionChart.metric,
           sessionChart.range,
           sessionChart.cumulative,
+          (p: VizResult | null) => setHoveredPoint(p),
         );
       }
     }
@@ -118,6 +131,50 @@ export const ActivityMetricsChart: React.FC<Props> = ({
             </p>
           </div>
         )}
+        <div className="h-6 flex justify-end sm:justify-between items-center px-4 md:px-8">
+          {sessionChart.stacked && (
+            <div className="gap-1 items-center text-xs text-white/60 hidden sm:flex">
+              {STACK_ORDER.map((o) => (
+                <div key={o} className="flex gap-1 items-center">
+                  <span
+                    className="block size-2 rounded-full"
+                    style={{ background: STACK_COLORS[o] }}
+                  />
+                  {o}
+                </div>
+              ))}
+            </div>
+          )}
+          {sessionChart.stacked && hoveredStackedPoint && (
+            <div className="flex gap-3 text-xs h-5">
+              {STACK_ORDER.filter(
+                (k) => (hoveredStackedPoint.values[k] ?? 0) > 0,
+              ).map((k) => {
+                const val = hoveredStackedPoint.values[k];
+                const total = STACK_ORDER.reduce(
+                  (sum, k) => sum + (hoveredStackedPoint.values[k] ?? 0),
+                  0,
+                );
+                const display = sessionChart.proportional
+                  ? `${((val / total) * 100).toFixed(0)}%`
+                  : formatValue(val, sessionChart.metric);
+                return (
+                  <span key={k} style={{ color: STACK_COLORS[k] }}>
+                    {k} {display}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {!sessionChart.stacked && hoveredPoint && (
+            <div className="flex gap-2 ml-auto text-white/60 items-center">
+              <span style={{ color: BAR_FILL[sessionChart.metric] }}>
+                {formatValue(hoveredPoint.value, sessionChart.metric)}
+              </span>
+              <span>{hoveredPoint.date}</span>
+            </div>
+          )}
+        </div>
         <div ref={ref} />
       </div>
     </section>
