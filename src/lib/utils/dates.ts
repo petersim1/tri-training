@@ -133,10 +133,3 @@ export const durationSecondsFromIsoRange = (
   }
   return Math.max(0, Math.floor((b - a) / 1000));
 };
-
-export const dayKeyToUtc = (dayKey: string, timeZone: string): Date => {
-  const temp = new Date(`${dayKey}T00:00:00`);
-  const localStr = temp.toLocaleString("en-US", { timeZone });
-  const offset = new Date(localStr).getTime() - temp.getTime();
-  return new Date(temp.getTime() - offset);
-};

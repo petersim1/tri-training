@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { and, asc, desc, eq, gte, inArray, isNull, lt, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import {
   type SessionChartSettings,
   VALID_CUMULATIVE,
@@ -22,10 +22,10 @@ import {
   rollupValue,
 } from "@/lib/utils/calculations";
 import {
-  dayKeyToUtc,
   enumerateLocalDayKeysInclusive,
   getDateRange,
   toIsoDate,
+  toUtcBounds,
 } from "@/lib/utils/dates";
 import { vendorActivityToPlanKind } from "@/lib/utils/vendors";
 import {
@@ -58,8 +58,6 @@ const calendar = createServerFn({ method: "GET" })
     const timezone = await cookieActions.getTimezone();
     const { dateFrom, dateTo } = getDateRange(data);
 
-    const dateFromTs = dayKeyToUtc(dateFrom, timezone);
-    const dateToTs = dayKeyToUtc(dateTo, timezone);
     const today = toIsoDate(new Date(), timezone);
 
     const db = await getDb();
@@ -91,6 +89,9 @@ const calendar = createServerFn({ method: "GET" })
       )
       .all();
 
+    const { start } = toUtcBounds(dateFrom, timezone);
+    const { end } = toUtcBounds(dateTo, timezone);
+
     const unlinkedActivitiesRows = await db
       .select({ vendorActivities })
       .from(vendorActivities)
@@ -101,8 +102,8 @@ const calendar = createServerFn({ method: "GET" })
       .where(
         and(
           isNull(workoutEntries.id),
-          gte(vendorActivities.createdAt, dateFromTs),
-          lt(vendorActivities.createdAt, dateToTs),
+          gte(vendorActivities.createdAt, start),
+          lte(vendorActivities.createdAt, end),
         ),
       )
       .orderBy(desc(vendorActivities.createdAt))
