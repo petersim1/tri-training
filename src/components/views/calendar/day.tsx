@@ -63,6 +63,7 @@ export const CalendarDayItem: React.FC<CalendarDayProps> = ({
   isLoading,
 }) => {
   const dayN = Number(day.dayKey.split("-").slice(-1)[0]);
+  console.log(day, dayN);
   return (
     <div
       className={cn(

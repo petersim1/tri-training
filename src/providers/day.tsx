@@ -28,7 +28,7 @@ export const DayProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <DayContext.Provider value={{ todayKey, timeZone }}>
+    <DayContext.Provider value={{ todayKey, timeZone }} key={timeZone}>
       {children}
     </DayContext.Provider>
   );

@@ -83,7 +83,6 @@ export const PlanningChatProvider = ({ children }: { children: ReactNode }) => {
 
   const createThreadAsync = async (): Promise<string> => {
     const tid = await createThreadFn();
-    console.log("setting in create");
     window.localStorage.setItem("recent_chat", tid);
     selectThreadId(tid);
     void qc.invalidateQueries({ queryKey: queryKeys.chatThreads });

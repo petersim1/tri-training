@@ -169,7 +169,6 @@ export const Composer: React.FC = () => {
           setStreaming("");
         }
         if (value.type === "message") {
-          console.log(value.message);
           qc.setQueryData(
             queryKeys.messagesQueryKey(threadId),
             (old: ChatMessageItem[] | undefined) => {
