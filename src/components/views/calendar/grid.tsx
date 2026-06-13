@@ -90,6 +90,8 @@ export const CalendarGrid: React.FC<{
     todayKey,
   ]);
 
+  console.log(calendarCells);
+
   return (
     <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-800">
       <div className="grid min-w-0 grid-cols-7 gap-px">
