@@ -38,7 +38,7 @@ export const CalendarToggle: React.FC<{
     const prevAnchor = calStep(-1);
     const nextAnchor = calStep(1);
     queryClient.prefetchQuery({
-      queryKey: queryKeys.calendarQueryKey(period, prevAnchor),
+      queryKey: queryKeys.calendarQueryKey(period, prevAnchor, timeZone),
       queryFn: () =>
         activityActions.calendar({
           data: {
@@ -49,7 +49,7 @@ export const CalendarToggle: React.FC<{
         }),
     });
     queryClient.prefetchQuery({
-      queryKey: queryKeys.calendarQueryKey(period, nextAnchor),
+      queryKey: queryKeys.calendarQueryKey(period, nextAnchor, timeZone),
       queryFn: () =>
         activityActions.calendar({
           data: {
