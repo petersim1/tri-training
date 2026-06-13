@@ -14,7 +14,6 @@ import type { WorkoutEntryWithCompleted } from "@/lib/db/schema.server";
 import queryKeys from "@/lib/query-keys";
 import { convertTime } from "@/lib/utils/calculations";
 import { rawActivityType } from "@/lib/utils/vendors";
-import { useDay } from "@/providers/day";
 import { activityActions } from "@/server-fcts/activities";
 import { dayActions } from "@/server-fcts/days";
 import { vendorActions } from "@/server-fcts/vendors";
@@ -37,7 +36,6 @@ export const ActivityModal: React.FC<{
 }> = ({ dayKey, onClose }) => {
   const [step, setStep] = useState<"summary" | "add" | "workout">("summary");
   const [SelectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const { timeZone } = useDay();
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.dayDetails(dayKey),
@@ -45,7 +43,6 @@ export const ActivityModal: React.FC<{
       dayActions.dayInfo({
         data: {
           dayKey,
-          timezone: timeZone,
         },
       }),
   });
@@ -127,7 +124,9 @@ const SummaryModal: React.FC<{
     mutationFn: (weightLb: number) =>
       weightActions.set({ data: { dayKey, weightLb } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dayDetails(dayKey) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dayDetails(dayKey),
+      });
       queryClient.invalidateQueries({ queryKey: ["calendar"] });
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       queryClient.invalidateQueries({ queryKey: ["weight-viz"] });
@@ -138,7 +137,9 @@ const SummaryModal: React.FC<{
   const clearWeightMutation = useMutation({
     mutationFn: () => weightActions.remove({ data: { dayKey } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dayDetails(dayKey) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dayDetails(dayKey),
+      });
       queryClient.invalidateQueries({ queryKey: ["calendar"] });
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       queryClient.invalidateQueries({ queryKey: ["weight-viz"] });
@@ -153,7 +154,9 @@ const SummaryModal: React.FC<{
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.unlinkedActivities });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dayDetails(dayKey) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dayDetails(dayKey),
+      });
       queryClient.invalidateQueries({ queryKey: ["calendar"] });
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       queryClient.invalidateQueries({ queryKey: ["weight-viz"] });
@@ -369,7 +372,9 @@ const AddModal: React.FC<{
   const createPlanMutation = useMutation({
     mutationFn: (data: CreatePlanInput) => activityActions.create({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dayDetails(dayKey) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dayDetails(dayKey),
+      });
       queryClient.invalidateQueries({ queryKey: ["calendar"] });
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       queryClient.invalidateQueries({ queryKey: ["weight-viz"] });
@@ -679,7 +684,9 @@ export const WorkoutModal: React.FC<{
   const updatePlanMutation = useMutation({
     mutationFn: (data: UpdatePlanInput) => activityActions.update({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dayDetails(dayKey) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dayDetails(dayKey),
+      });
       queryClient.invalidateQueries({ queryKey: ["calendar"] });
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       queryClient.invalidateQueries({ queryKey: ["weight-viz"] });
@@ -691,7 +698,9 @@ export const WorkoutModal: React.FC<{
   const deletePlanMutation = useMutation({
     mutationFn: () => activityActions.deletePlan({ data: { id: plan.id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dayDetails(dayKey) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dayDetails(dayKey),
+      });
       queryClient.invalidateQueries({ queryKey: ["calendar"] });
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       queryClient.invalidateQueries({ queryKey: ["weight-viz"] });

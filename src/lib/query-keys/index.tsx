@@ -14,11 +14,11 @@ const activitiesList = (query: ActivityListSchemaValues) => [
   query,
 ];
 
-const calendarQueryKey = (
-  period: CalendarScope,
-  anchor: string,
-  timeZone: string,
-) => ["calendar", period, anchor, timeZone];
+const calendarQueryKey = (period: CalendarScope, anchor: string) => [
+  "calendar",
+  period,
+  anchor,
+];
 
 const activityViz = (
   kind?: PlanKind,
@@ -51,6 +51,8 @@ const messagesQueryKey = (threadId: string | null): readonly unknown[] => {
 const routines = ["hevy-routines"];
 const routineDetail = (routineId: string) => ["hevy-routine", routineId];
 
+const timezone = ["timezone"];
+
 export default {
   activitiesList,
   calendarQueryKey,
@@ -63,4 +65,5 @@ export default {
   messagesQueryKey,
   routines,
   routineDetail,
+  timezone,
 };

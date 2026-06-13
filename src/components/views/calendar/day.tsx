@@ -44,7 +44,7 @@ const CAL_DAY_DOT_BASE =
 const CAL_DAY_DOT_UNLINKED = `${CAL_DAY_DOT_BASE} bg-violet-400`;
 
 type CalendarDayProps = {
-  day: CalendarCell;
+  day: CalendarPageItem;
   layout: HomeCalendarDayLayout;
   onOpenDay: () => void;
   isLoading: boolean;
@@ -73,44 +73,40 @@ export const CalendarDayItem: React.FC<CalendarDayProps> = ({
         day.isToday && "ring-1 ring-emerald-600/50 ring-inset",
       )}
     >
-      {day.isCurrentPeriod && (
-        <>
-          <button
-            type="button"
+      <button
+        type="button"
+        className={cn(
+          "absolute inset-0 z-1 border-0 bg-transparent p-0 cursor-pointer touch-manipulation",
+          "hover:bg-zinc-900/45 outline-none focus:outline-none focus-visible:outline-none border-none focus-visible:bg-zinc-900/45",
+        )}
+        onClick={onOpenDay}
+      />
+      <div className="relative z-2 flex h-full min-h-0 w-full flex-col px-0.5 pt-1 pb-0 pointer-events-none">
+        <div className="relative mb-0.5 min-h-5 w-full shrink-0">
+          <span
+            suppressHydrationWarning
             className={cn(
-              "absolute inset-0 z-1 border-0 bg-transparent p-0 cursor-pointer touch-manipulation",
-              "hover:bg-zinc-900/45 outline-none focus:outline-none focus-visible:outline-none border-none focus-visible:bg-zinc-900/45",
+              "relative z-1 block w-full text-center text-sm font-medium tabular-nums leading-none",
+              day.isToday ? "text-emerald-400" : "text-zinc-200/50",
             )}
-            onClick={onOpenDay}
-          />
-          <div className="relative z-2 flex h-full min-h-0 w-full flex-col px-0.5 pt-1 pb-0 pointer-events-none">
-            <div className="relative mb-0.5 min-h-5 w-full shrink-0">
-              <span
-                suppressHydrationWarning
-                className={cn(
-                  "relative z-1 block w-full text-center text-sm font-medium tabular-nums leading-none",
-                  day.isToday ? "text-emerald-400" : "text-zinc-200/50",
-                )}
-              >
-                {dayN}
-              </span>
-              {day.hasWeight ? (
-                <WeightIcon className="pointer-events-auto absolute right-0.5 top-0.5 z-4 text-amber-400" />
-              ) : null}
-              {day.hasUnlinked ? (
-                <span
-                  className={`absolute right-0.5 top-0.5 z-4 ${CAL_DAY_DOT_UNLINKED}`}
-                  title="Session not linked to a plan"
-                  aria-hidden
-                />
-              ) : null}
-            </div>
-            <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-1 sm:gap-2">
-              <CalendarDayActivityIcons dayPlans={day.activities} />
-            </div>
-          </div>
-        </>
-      )}
+          >
+            {dayN}
+          </span>
+          {day.hasWeight ? (
+            <WeightIcon className="pointer-events-auto absolute right-0.5 top-0.5 z-4 text-amber-400" />
+          ) : null}
+          {day.hasUnlinked ? (
+            <span
+              className={`absolute right-0.5 top-0.5 z-4 ${CAL_DAY_DOT_UNLINKED}`}
+              title="Session not linked to a plan"
+              aria-hidden
+            />
+          ) : null}
+        </div>
+        <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-1 sm:gap-2">
+          <CalendarDayActivityIcons dayPlans={day.activities} />
+        </div>
+      </div>
     </div>
   );
 };

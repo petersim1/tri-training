@@ -1,5 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie, setCookie } from "@tanstack/react-start/server";
+import {
+  deleteCookie,
+  getCookie,
+  setCookie,
+} from "@tanstack/react-start/server";
 import {
   DEFAULT_CALENDAR_SCOPE,
   DEFAULT_SESSION_CHART_SETTINGS,
@@ -9,9 +13,34 @@ import {
   CALENDAR_SCOPE_COOKIE,
   SESSION_CHART_COOKIE,
   STRAVA_TOKENS_COOKIE,
+  USER_TIMEZONE_COOKIE,
 } from "@/lib/cookies";
+import { isValidIanaTimeZone } from "@/lib/utils/dates";
 import type { CalendarScope } from "@/types/requests/activities";
 import type { StravaTokenPayload } from "@/types/requests/cookies";
+import { timezoneSchema } from "@/types/requests/shared";
+
+const getTimezone = createServerFn({ method: "GET" }).handler(async () => {
+  const raw = getCookie(USER_TIMEZONE_COOKIE);
+  if (!raw) {
+    return "UTC";
+  }
+  if (!isValidIanaTimeZone(raw)) {
+    deleteCookie(USER_TIMEZONE_COOKIE);
+    return "UTC";
+  }
+  return raw;
+});
+
+const setTimezone = createServerFn({ method: "POST" })
+  .inputValidator(timezoneSchema)
+  .handler(async ({ data }) => {
+    if (!isValidIanaTimeZone(data.timezone)) {
+      return;
+    }
+    setCookie(USER_TIMEZONE_COOKIE, data.timezone);
+    return;
+  });
 
 const getCalendarScope = createServerFn({ method: "POST" }).handler(
   async (): Promise<CalendarScope> => {
@@ -115,6 +144,8 @@ const getStravaTokensFromCookies = createServerFn({
 });
 
 export const cookieActions = {
+  getTimezone,
+  setTimezone,
   getCalendarScope,
   getStravaTokensFromCookies,
   getVizSettings,

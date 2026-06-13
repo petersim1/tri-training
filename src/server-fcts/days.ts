@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { and, eq, getTableColumns, gte, isNull, lte } from "drizzle-orm";
-import z from "zod";
 import { getDb } from "@/lib/db/index.server";
 import {
   vendorActivities,
@@ -8,18 +7,14 @@ import {
   workoutEntries,
 } from "@/lib/db/schema.server";
 import { toUtcBounds } from "@/lib/utils/dates";
-import { timezoneSchema } from "@/types/requests/shared";
+import { dayKeySchema } from "@/types/requests/shared";
 import type { DayItem } from "@/types/responses/activities";
+import { cookieActions } from "./cookies";
 
 const dayInfo = createServerFn({ method: "GET" })
-  .inputValidator(
-    z.object({
-      ...timezoneSchema.shape,
-      dayKey: z.string(),
-    }),
-  )
+  .inputValidator(dayKeySchema)
   .handler(async ({ data }): Promise<DayItem> => {
-    // on initial server load, this won't be available to us from the client.
+    const timezone = await cookieActions.getTimezone();
 
     const db = await getDb();
 
@@ -44,7 +39,7 @@ const dayInfo = createServerFn({ method: "GET" })
       .where(eq(weightEntries.dayKey, data.dayKey))
       .get();
 
-    const { start, end } = toUtcBounds(data.dayKey, data.timezone);
+    const { start, end } = toUtcBounds(data.dayKey, timezone);
 
     const linkCandidates = await db
       .select({ vendorActivities })

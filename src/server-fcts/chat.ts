@@ -18,12 +18,14 @@ import {
   type SportEventRow,
 } from "@/lib/db/schema.server";
 import { logMessage } from "@/lib/utils";
+import { getToday } from "@/lib/utils/dates";
 import type { ToolName } from "@/types/chats/tools";
 import { chatSchema, listMessagesSchema } from "@/types/requests/chat";
 import { idSchema } from "@/types/requests/shared";
 import type { ChatMessage } from "@/types/responses/chat";
 import type { ChatMessageItem } from "@/types/responses/chats";
 import { coachingServerFns } from "./coaching.server";
+import { cookieActions } from "./cookies";
 import { eventActions } from "./events";
 
 const getThread = createServerFn({ method: "GET" })
@@ -183,7 +185,9 @@ const updateTitle = createServerFn({ method: "POST" })
 const chat = createServerFn({ method: "POST" })
   .inputValidator(chatSchema)
   .handler(async ({ data }): Promise<ReadableStream<ChatMessage>> => {
-    logMessage("Chat", data.dayKey, data.threadId, data.type);
+    const todayKey = getToday();
+    const timezone = await cookieActions.getTimezone();
+    logMessage("Chat", todayKey, data.threadId, data.type);
     if (data.type === "approval") {
       await handleApproval(data.threadId, data.approved);
       return new ReadableStream<ChatMessage>({
@@ -215,8 +219,8 @@ const chat = createServerFn({ method: "POST" })
     const ctx: ChatRunContext = {
       seq: messages.length ? messages[0].seq + 1 : 0,
       runStart: new Date(),
-      dayKey: data.dayKey,
-      timeZone: data.timezone,
+      dayKey: todayKey,
+      timeZone: timezone,
       thread,
       coachingState,
       event,

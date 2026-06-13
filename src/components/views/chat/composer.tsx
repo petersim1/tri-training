@@ -9,7 +9,6 @@ import {
 import type { ChatMessageRow } from "@/lib/db/schema.server";
 import queryKeys from "@/lib/query-keys";
 import { useChat } from "@/providers/chat";
-import { useDay } from "@/providers/day";
 import { chatActions } from "@/server-fcts/chat";
 import { eventActions } from "@/server-fcts/events";
 import type { ChatMessage } from "@/types/responses/chat";
@@ -47,8 +46,6 @@ export const Composer: React.FC = () => {
   const [optimisticText, setOptimisticText] = useState<string | null>(null);
 
   const chatFn = useServerFn(chatActions.chat);
-
-  const { todayKey, timeZone } = useDay();
 
   const abortRef = useRef<AbortController | null>(null);
   const activeStreamThreadRef = useRef<string | null>(null);
@@ -222,8 +219,6 @@ export const Composer: React.FC = () => {
           type: "message",
           message: text,
           threadId,
-          dayKey: todayKey,
-          timezone: timeZone,
           ...(sportEventContextId ? { eventId: sportEventContextId } : {}),
         },
       });
@@ -251,8 +246,6 @@ export const Composer: React.FC = () => {
           type: "approval",
           approved,
           threadId: tid,
-          dayKey: todayKey,
-          timezone: timeZone,
         },
       });
       if (approved) {
@@ -409,7 +402,7 @@ export const Composer: React.FC = () => {
                   }
                 }}
                 placeholder="Message"
-                className="max-h-[min(38vh,11rem)] min-h-12.5 w-full shrink-0 resize-none rounded-[1.15rem] border border-zinc-700 bg-zinc-900/97 px-[0.9rem] py-2 text-[13.75px] leading-snug text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50"
+                className="max-h-[min(38vh,11rem)] min-h-12.5 w-full shrink-0 resize-none rounded-[1.15rem] border border-zinc-700 bg-zinc-900/97 px-[0.9rem] py-2 leading-snug text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50"
               />
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1.5">

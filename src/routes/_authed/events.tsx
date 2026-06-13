@@ -526,7 +526,7 @@ function EventsPage() {
                     <input
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-[13px] text-zinc-100"
+                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
                       placeholder="https://…"
                       autoComplete="off"
                     />
@@ -537,7 +537,7 @@ function EventsPage() {
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={2}
-                      className="mt-1 w-full resize-y rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-[13px] text-zinc-100"
+                      className="mt-1 w-full resize-y rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
                     />
                   </label>
                 </div>

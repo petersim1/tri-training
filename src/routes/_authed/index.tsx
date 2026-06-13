@@ -8,6 +8,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Home } from "@/components/screens/home";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
 import queryKeys from "@/lib/query-keys";
+import { toIsoDate } from "@/lib/utils/dates";
 import { activityActions } from "@/server-fcts/activities";
 import { cookieActions } from "@/server-fcts/cookies";
 import { weightActions } from "@/server-fcts/weights";
@@ -50,10 +51,23 @@ const loadHomePageDataFn = async (
   calendarScope: CalendarScope;
   sessionChartSettings: SessionChartSettings;
 }> => {
+  const timezone = await cookieActions.getTimezone();
   const calendarScope = await cookieActions.getCalendarScope();
   const sessionChartSettings = await cookieActions.getVizSettings();
 
-  // can't prefetch the .calendar() fct because it's timezone-dependent.
+  const anchor = toIsoDate(new Date(), timezone);
+
+  queryClient.prefetchQuery({
+    queryKey: queryKeys.calendarQueryKey(calendarScope, anchor),
+    queryFn: () =>
+      activityActions.calendar({
+        data: {
+          period: calendarScope,
+          anchor: anchor,
+        },
+      }),
+  });
+
   queryClient.prefetchQuery({
     queryKey: queryKeys.activityViz(
       sessionChartSettings.kind,

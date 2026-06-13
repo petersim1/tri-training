@@ -45,7 +45,9 @@ export const persistTurn = async (
   const proposalSets = dbMessages
     .filter((m) => !!m.proposal)
     .map((m) => ({
+      // biome-ignore lint/style/noNonNullAssertion: <>
       op: m.proposal!.item.op,
+      // biome-ignore lint/style/noNonNullAssertion: <>
       status: m.proposal!.status,
     }));
   if (proposalSets.length > 0) {

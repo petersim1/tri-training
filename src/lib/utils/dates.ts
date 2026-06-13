@@ -9,6 +9,15 @@ export const isValidIanaTimeZone = (tz: string): boolean => {
   }
 };
 
+export const getTimezone = (): string => {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+};
+
+export const getToday = (): string => {
+  const timeZone = getTimezone();
+  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+};
+
 export const toIsoDate = (date: Date, tz: string) => {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(date);
 };
@@ -17,22 +26,14 @@ export const enumerateLocalDayKeysInclusive = (
   from: string,
   to: string,
 ): string[] => {
-  const start = new Date(`${from}T12:00:00`);
-  const end = new Date(`${to}T12:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return [from];
-  }
-  if (start > end) {
-    return [from];
-  }
+  if (from > to) return [from];
   const out: string[] = [];
-  const cur = new Date(start);
-  while (cur <= end) {
-    const y = cur.getFullYear();
-    const m = String(cur.getMonth() + 1).padStart(2, "0");
-    const d = String(cur.getDate()).padStart(2, "0");
-    out.push(`${y}-${m}-${d}`);
-    cur.setDate(cur.getDate() + 1);
+  let cur = from;
+  while (cur <= to) {
+    out.push(cur);
+    const d = new Date(`${cur}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    cur = d.toISOString().slice(0, 10);
   }
   return out;
 };
@@ -70,34 +71,34 @@ export const toUtcBounds = (
 
 export const getDateRange = (
   dates: CalendarSchemaValues,
+  timezone: string,
 ): { dateFrom: string; dateTo: string } => {
-  const { period, anchor, timezone } = dates;
+  const { period, anchor } = dates;
 
   const [yearStr, monthStr, dayStr] = anchor.split("-");
   const year = Number(yearStr);
   const month = Number(monthStr) - 1;
   const day = Number(dayStr);
 
+  let rangeStart: Date;
+  let rangeEnd: Date;
+
   if (period === "month") {
-    return {
-      dateFrom: toIsoDate(new Date(year, month, 1), timezone),
-      dateTo: toIsoDate(new Date(year, month + 1, 0), timezone),
-    };
+    rangeStart = new Date(year, month, 1);
+    rangeEnd = new Date(year, month + 1, 0);
+  } else {
+    const dow = new Date(year, month, day).getDay();
+    rangeStart = new Date(year, month, day - dow);
+    rangeEnd = new Date(year, month, day - dow + 6);
   }
 
-  const dow = new Date(year, month, day).getDay();
-  const startOfWeek = new Date(year, month, day - dow);
+  // Expand to full grid weeks
+  rangeStart.setDate(rangeStart.getDate() - rangeStart.getDay());
+  rangeEnd.setDate(rangeEnd.getDate() + (6 - rangeEnd.getDay()));
 
   return {
-    dateFrom: toIsoDate(startOfWeek, timezone),
-    dateTo: toIsoDate(
-      new Date(
-        startOfWeek.getFullYear(),
-        startOfWeek.getMonth(),
-        startOfWeek.getDate() + 6,
-      ),
-      timezone,
-    ),
+    dateFrom: toIsoDate(rangeStart, timezone),
+    dateTo: toIsoDate(rangeEnd, timezone),
   };
 };
 
@@ -130,4 +131,11 @@ export const durationSecondsFromIsoRange = (
     return null;
   }
   return Math.max(0, Math.floor((b - a) / 1000));
+};
+
+export const dayKeyToUtc = (dayKey: string, timeZone: string): Date => {
+  const temp = new Date(`${dayKey}T00:00:00`);
+  const localStr = temp.toLocaleString("en-US", { timeZone });
+  const offset = new Date(localStr).getTime() - temp.getTime();
+  return new Date(temp.getTime() - offset);
 };

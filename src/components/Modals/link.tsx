@@ -1,33 +1,27 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import type {
-  TypedVendorWorkoutRow,
-  VendorActivityRow,
-} from "@/lib/db/schema.server";
+import type { TypedVendorWorkoutRow } from "@/lib/db/schema.server";
 import { completedWorkoutTitle } from "@/lib/plans/completed-workout-data";
 import queryKeys from "@/lib/query-keys";
-import { toIsoDate } from "@/lib/utils/dates";
 import { rawActivityType } from "@/lib/utils/vendors";
-import { useDay } from "@/providers/day";
 import { activityActions } from "@/server-fcts/activities";
+import type { UnlinkedActivitiesItem } from "@/types/responses/activities";
 import { XIcon } from "../assets";
 import { Modal, ModalContent } from ".";
 
 export const LinkModal: React.FC<{
-  workouts: VendorActivityRow[];
+  workouts: UnlinkedActivitiesItem[];
   onClose: () => void;
 }> = ({ workouts, onClose }) => {
   const queryClient = useQueryClient();
   const linkAll = useServerFn(activityActions.linkAll);
 
-  const { timeZone } = useDay();
-
   const [linkAllError, setLinkAllError] = useState<string | null>(null);
   const [linkAllInfo, setLinkAllInfo] = useState<string | null>(null);
 
   const linkAllMutation = useMutation({
-    mutationFn: () => linkAll({ data: { timezone: timeZone } }),
+    mutationFn: () => linkAll(),
     onMutate: () => {
       setLinkAllError(null);
       setLinkAllInfo(null);
@@ -85,9 +79,7 @@ export const LinkModal: React.FC<{
                   {cw.vendor === "hevy" ? "Hevy" : "Strava"} ·{" "}
                   <span className="capitalize">{kindLabel}</span>
                   {" · "}
-                  <span className="tabular-nums">
-                    {toIsoDate(cw.createdAt, timeZone)}
-                  </span>
+                  <span className="tabular-nums">{cw.dayKey}</span>
                 </div>
               </li>
             );

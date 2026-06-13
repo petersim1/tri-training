@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte } from "drizzle-orm";
 import {
   type SessionChartSettings,
   VALID_CUMULATIVE,
@@ -9,7 +9,6 @@ import { getDb } from "@/lib/db/index.server";
 import {
   type NewWorkoutEntryRow,
   type TypedVendorWorkoutRow,
-  type VendorActivityRow,
   vendorActivities,
   type WorkoutEntryRow,
   type WorkoutEntryWithCompleted,
@@ -22,7 +21,12 @@ import {
   rollupStackedValue,
   rollupValue,
 } from "@/lib/utils/calculations";
-import { getDateRange, toIsoDate } from "@/lib/utils/dates";
+import {
+  dayKeyToUtc,
+  enumerateLocalDayKeysInclusive,
+  getDateRange,
+  toIsoDate,
+} from "@/lib/utils/dates";
 import { vendorActivityToPlanKind } from "@/lib/utils/vendors";
 import {
   activityListSchema,
@@ -33,7 +37,7 @@ import {
   updatePlanSchema,
   vizSchema,
 } from "@/types/requests/activities";
-import { idSchema, timezoneSchema } from "@/types/requests/shared";
+import { idSchema } from "@/types/requests/shared";
 import type {
   CalendarPageItem,
   GroupItem,
@@ -41,6 +45,7 @@ import type {
   PlannedWorkoutsPageResult,
   StackedGroupItem,
   StackedVizResult,
+  UnlinkedActivitiesItem,
   VizResult,
 } from "@/types/responses/activities";
 import { activityServerFns } from "./activities.server";
@@ -50,7 +55,12 @@ const calendar = createServerFn({ method: "GET" })
   .inputValidator(calendarSchema)
   .handler(async ({ data }): Promise<CalendarPageItem[]> => {
     // on initial server load, this won't be available to us from the client.
-    const { dateFrom, dateTo } = getDateRange(data);
+    const timezone = await cookieActions.getTimezone();
+    const { dateFrom, dateTo } = getDateRange(data, timezone);
+
+    const dateFromTs = dayKeyToUtc(dateFrom, timezone);
+    const dateToTs = dayKeyToUtc(dateTo, timezone);
+    const today = toIsoDate(new Date(), timezone);
 
     const db = await getDb();
 
@@ -81,20 +91,47 @@ const calendar = createServerFn({ method: "GET" })
       )
       .all();
 
+    const unlinkedActivitiesRows = await db
+      .select({ vendorActivities })
+      .from(vendorActivities)
+      .leftJoin(
+        workoutEntries,
+        eq(workoutEntries.vendorActivityId, vendorActivities.id),
+      )
+      .where(
+        and(
+          isNull(workoutEntries.id),
+          gte(vendorActivities.createdAt, dateFromTs),
+          lt(vendorActivities.createdAt, dateToTs),
+        ),
+      )
+      .orderBy(desc(vendorActivities.createdAt))
+      .all();
+
+    const unlinkedActivities = unlinkedActivitiesRows.map(
+      (r) => r.vendorActivities,
+    );
+
+    const unlinkedByDay = Map.groupBy(unlinkedActivities, (a) =>
+      toIsoDate(a.createdAt, timezone),
+    );
+
     const weightDays = new Set(weights.map((w) => w.dayKey));
     const workoutsByDay = Map.groupBy(workouts, (r) => r.dayKey);
 
-    const allDays = new Set([...workoutsByDay.keys(), ...weightDays]);
+    const allDayKeys = enumerateLocalDayKeysInclusive(dateFrom, dateTo);
 
-    const items = [...allDays]
-      .map((dayKey) => ({
-        dayKey,
-        activities: (workoutsByDay.get(dayKey) ?? []).map(
-          ({ id, kind, status }) => ({ id, kind, status }),
-        ),
-        hasWeight: weightDays.has(dayKey),
-      }))
-      .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+    console.log(dateFrom, dateTo);
+
+    const items = allDayKeys.map((dayKey) => ({
+      dayKey,
+      activities: (workoutsByDay.get(dayKey) ?? []).map(
+        ({ id, kind, status }) => ({ id, kind, status }),
+      ),
+      hasWeight: weightDays.has(dayKey),
+      hasUnlinked: unlinkedByDay.has(dayKey),
+      isToday: dayKey === today,
+    }));
 
     return items;
   });
@@ -317,7 +354,8 @@ const vizStacked = createServerFn({ method: "GET" })
   });
 
 const unlinked = createServerFn({ method: "GET" }).handler(
-  async (): Promise<VendorActivityRow[]> => {
+  async (): Promise<UnlinkedActivitiesItem[]> => {
+    const timezone = await cookieActions.getTimezone();
     const db = await getDb();
 
     const rows = await db
@@ -331,13 +369,17 @@ const unlinked = createServerFn({ method: "GET" }).handler(
       .orderBy(desc(vendorActivities.createdAt))
       .all();
 
-    return rows.map((r) => r.vendorActivities);
+    return rows.map((r) => ({
+      ...r.vendorActivities,
+      dayKey: toIsoDate(r.vendorActivities.createdAt, timezone),
+    }));
   },
 );
 
-const linkAll = createServerFn({ method: "POST" })
-  .inputValidator(timezoneSchema)
-  .handler(async ({ data }): Promise<LinkAllResponse> => {
+const linkAll = createServerFn({ method: "POST" }).handler(
+  async (): Promise<LinkAllResponse> => {
+    const timezone = await cookieActions.getTimezone();
+
     const db = await getDb();
     const now = new Date();
 
@@ -366,7 +408,7 @@ const linkAll = createServerFn({ method: "POST" })
 
     for (const unlinkedActivity of unlinkedActivities) {
       const activity = unlinkedActivity as TypedVendorWorkoutRow;
-      const dayKey = toIsoDate(activity.createdAt, data.timezone);
+      const dayKey = toIsoDate(activity.createdAt, timezone);
       const planKind = vendorActivityToPlanKind(activity);
       if (!planKind) continue;
 
@@ -423,7 +465,8 @@ const linkAll = createServerFn({ method: "POST" })
       nLinked: resolvedIds.length,
       nUnlinked: unlinkedActivities.length - resolvedIds.length,
     };
-  });
+  },
+);
 
 /** Server-fn registration only — DB implementation lives in `planner-db-operations.ts` (not client-bundled). */
 const get = createServerFn({ method: "GET" })

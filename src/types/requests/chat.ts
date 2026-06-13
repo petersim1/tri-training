@@ -1,5 +1,4 @@
 import z from "zod";
-import { dayKeySchema, timezoneSchema } from "./shared";
 
 export const listMessagesSchema = z.object({
   threadId: z.uuid(),
@@ -9,8 +8,6 @@ export const listMessagesSchema = z.object({
 
 export const chatSchema = z
   .object({
-    ...dayKeySchema.shape,
-    ...timezoneSchema.shape,
     threadId: z.uuid(),
     eventId: z.string().optional(),
   })

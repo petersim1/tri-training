@@ -9,14 +9,13 @@ import {
   CHART_METRIC_VALUES,
   CHART_RANGE_VALUES,
 } from "@/lib/constants/visuals";
-import { dayKeySchema, idSchema, timezoneSchema } from "./shared";
+import { dayKeySchema, idSchema } from "./shared";
 
 export type CalendarScope = "month" | "week";
 
 export const calendarSchema = z.object({
   period: z.enum(["month", "week"]),
   anchor: z.iso.date(),
-  ...timezoneSchema.shape,
 });
 
 export type CalendarSchemaValues = z.infer<typeof calendarSchema>;

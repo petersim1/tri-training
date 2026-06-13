@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
 import { getDimensions } from "@/lib/utils/plots";
 import { cookieActions } from "@/server-fcts/cookies";
@@ -43,21 +43,20 @@ export const Visualizer: React.FC<{
     patchSessionChartMutation.mutate(newSession);
   };
 
+  const sessionChart = useDeferredValue(sessionChartSettings);
+
   return (
     <section className="flex flex-col gap-2 pb-20" ref={holderRef}>
       <ChartRangeToolbar
-        range={sessionChartSettings.range}
+        range={sessionChart.range}
         onRangeChange={(r) => handlePlotChange({ range: r })}
       />
       <ActivityMetricsChart
-        sessionChart={sessionChartSettings}
+        sessionChart={sessionChart}
         onSessionChartPatch={handlePlotChange}
         dimensions={dimensions}
       />
-      <WeightTrendChart
-        sessionChart={sessionChartSettings}
-        dimensions={dimensions}
-      />
+      <WeightTrendChart sessionChart={sessionChart} dimensions={dimensions} />
     </section>
   );
 };

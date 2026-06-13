@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
-import { useDay } from "@/providers/day";
+import { getToday } from "@/lib/utils/dates";
 import type { CalendarScope } from "@/types/requests/activities";
 import { ActivityModal } from "../Modals/activity";
 import { CalendarGrid } from "../views/calendar/grid";
@@ -11,10 +11,8 @@ export const Home: React.FC<{
   initialCalendarScope: CalendarScope;
   initialChartSettings: SessionChartSettings;
 }> = ({ initialCalendarScope, initialChartSettings }) => {
-  const { todayKey } = useDay();
-
   const [period, setPeriod] = useState(initialCalendarScope);
-  const [anchor, setAnchor] = useState(todayKey);
+  const [anchor, setAnchor] = useState(() => getToday());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const calendarSectionRef = useRef<HTMLElement | null>(null);

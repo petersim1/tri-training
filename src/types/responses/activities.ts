@@ -19,7 +19,12 @@ export type CalendarPageItem = {
   dayKey: string;
   activities: ActivityItem[];
   hasWeight: boolean;
-  // hasUnlinked: boolean; // too finnicky with timezone's in the backend.
+  hasUnlinked: boolean;
+  isToday: boolean;
+};
+
+export type UnlinkedActivitiesItem = VendorActivityRow & {
+  dayKey: string;
 };
 
 export type VizResult = {

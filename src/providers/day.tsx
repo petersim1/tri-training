@@ -1,43 +1,37 @@
-import {
-  createContext,
-  type ReactNode,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
-
-export type DayContextValue = {
-  todayKey: string;
-  timeZone: string;
-};
-
-export const DayContext = createContext<DayContextValue | null>(null);
-
-const getTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
-const getToday = (timeZone: string) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { type ReactNode, useEffect, useEffectEvent } from "react";
+import queryKeys from "@/lib/query-keys";
+import { cookieActions } from "@/server-fcts/cookies";
 
 export const DayProvider = ({ children }: { children: ReactNode }) => {
-  const [timeZone, setTimeZone] = useState(getTimeZone());
-  const [todayKey, setTodayKey] = useState(getToday(timeZone));
+  const router = useRouter();
+  const updateTimeZone = useServerFn(cookieActions.setTimezone);
+
+  const tzQuery = useQuery({
+    queryKey: queryKeys.timezone,
+    queryFn: () => cookieActions.getTimezone(),
+  });
+
+  const updateTimeZoneMutation = useMutation({
+    mutationFn: (tz: string) => updateTimeZone({ data: { timezone: tz } }),
+    onSuccess: () => {
+      router.invalidate();
+      window.location.reload();
+    },
+  });
+
+  const onTimezoneCheck = useEffectEvent((serverTz: string | undefined) => {
+    const clientTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (serverTz && clientTimeZone !== serverTz) {
+      updateTimeZoneMutation.mutate(clientTimeZone);
+    }
+  });
 
   useEffect(() => {
-    const clientTimeZone = getTimeZone();
-    setTimeZone(clientTimeZone);
-    setTodayKey(getToday(clientTimeZone));
-  }, []);
+    onTimezoneCheck(tzQuery.data);
+  }, [tzQuery.data]);
 
-  return (
-    <DayContext.Provider value={{ todayKey, timeZone }} key={timeZone}>
-      {children}
-    </DayContext.Provider>
-  );
-};
-
-export const useDay = (): DayContextValue => {
-  const v = useContext(DayContext);
-  if (!v) {
-    throw new Error("useDay outside DayProvider");
-  }
-  return v;
+  return children;
 };
