@@ -62,6 +62,17 @@ export const CalendarGrid: React.FC<{
     const gridFrom = toIsoDate(gridStart, timeZone);
     const gridTo = toIsoDate(gridEnd, timeZone);
 
+    console.log({
+      todayKey,
+      timeZone,
+      gridFrom,
+      gridTo,
+      keys: enumerateLocalDayKeysInclusive(gridFrom, gridTo),
+      todayCell: enumerateLocalDayKeysInclusive(gridFrom, gridTo).find(
+        (k) => k === todayKey,
+      ),
+    });
+
     return enumerateLocalDayKeysInclusive(gridFrom, gridTo).map((dayKey) => ({
       dayKey,
       activities: calendarByDay.get(dayKey)?.activities ?? [],
