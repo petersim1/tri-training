@@ -14,11 +14,11 @@ const activitiesList = (query: ActivityListSchemaValues) => [
   query,
 ];
 
-const calendarQueryKey = (period: CalendarScope, anchor: string) => [
-  "calendar",
-  period,
-  anchor,
-];
+const calendarQueryKey = (
+  period: CalendarScope,
+  anchor: string,
+  timeZone: string,
+) => ["calendar", period, anchor, timeZone];
 
 const activityViz = (
   kind?: PlanKind,

@@ -1,4 +1,10 @@
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 export type DayContextValue = {
   todayKey: string;
@@ -7,24 +13,22 @@ export type DayContextValue = {
 
 export const DayContext = createContext<DayContextValue | null>(null);
 
-export const DayProvider = ({ children }: { children: ReactNode }) => {
-  const timeZone = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
-    [],
-  );
+const getTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+const getToday = (timeZone: string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
 
-  const todayKey = useMemo(
-    () => new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date()),
-    [timeZone],
-  );
+export const DayProvider = ({ children }: { children: ReactNode }) => {
+  const [timeZone, setTimeZone] = useState(getTimeZone());
+  const [todayKey, setTodayKey] = useState(getToday(timeZone));
+
+  useEffect(() => {
+    const clientTimeZone = getTimeZone();
+    setTimeZone(clientTimeZone);
+    setTodayKey(getToday(clientTimeZone));
+  }, []);
 
   return (
-    <DayContext.Provider
-      value={{
-        todayKey,
-        timeZone,
-      }}
-    >
+    <DayContext.Provider value={{ todayKey, timeZone }}>
       {children}
     </DayContext.Provider>
   );
