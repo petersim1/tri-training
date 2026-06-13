@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Field, Input, Label, Select, Textarea } from "@/components/Forms";
 import {
   CARDIO_DISTANCE_UNITS,
   type CardioDistanceUnit,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/constants/events";
 import type { SportEventRow } from "@/lib/db/schema.server";
 import { formatTargetDurationSec } from "@/lib/plans/cardio-targets";
+import { cn } from "@/lib/utils";
 import { eventActions } from "@/server-fcts/events";
 
 const QUERY_KEY = ["sportEvents"] as const;
@@ -310,15 +312,13 @@ function EventsPage() {
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-[15px] font-medium text-zinc-200">Your events</h2>
-          {!formOpen ? (
-            <button
-              type="button"
-              onClick={openCreateForm}
-              className="rounded-lg bg-emerald-700 px-3 py-2 text-[13px] font-medium text-white hover:bg-emerald-600"
-            >
-              Add event
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={openCreateForm}
+            className="rounded-lg bg-emerald-700 px-3 py-2 text-[13px] font-medium text-white hover:bg-emerald-600"
+          >
+            Add event
+          </button>
         </div>
 
         {query.isLoading ? (
@@ -335,97 +335,98 @@ function EventsPage() {
             to create one.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-zinc-800/95">
-            <table className="w-full border-collapse text-left text-[13px]">
-              <thead>
-                <tr className="border-b border-zinc-800 bg-zinc-900/90 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                  <th className="whitespace-nowrap px-4 py-2.5">Date</th>
-                  <th className="whitespace-nowrap px-4 py-2.5">Status</th>
-                  <th className="px-4 py-2.5">Name</th>
-                  <th className="whitespace-nowrap px-4 py-2.5">Tag</th>
-                  <th className="min-w-48 px-4 py-2.5">Legs</th>
-                  <th className="px-4 py-2.5">Link</th>
-                  <th className="whitespace-nowrap px-4 py-2.5 text-right">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/90 bg-zinc-950/95">
-                {sortedEvents.map((eventRow) => (
-                  <tr
-                    key={eventRow.id}
-                    className="align-top hover:bg-zinc-900/50"
-                  >
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-zinc-300">
-                      {eventRow.eventDayKey}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 capitalize text-zinc-400">
-                      {eventRow.status}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-100">{eventRow.name}</td>
-                    <td className="whitespace-nowrap px-4 py-3 capitalize text-zinc-400">
-                      {eventRow.discipline ?? "—"}
-                    </td>
-                    <td className="max-w-xl px-4 py-3 text-zinc-400">
-                      {eventRow.targets.length === 0 ? (
-                        <span className="italic text-zinc-600">
-                          No leg targets
+          <ul className="mt-3 space-y-2">
+            {sortedEvents.map((eventRow) => (
+              <li
+                key={eventRow.id}
+                className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4"
+              >
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-0 flex gap-4 items-start">
+                    <div className="shrink-0 text-center">
+                      <div className="text-lg font-semibold tabular-nums text-zinc-100">
+                        {eventRow.eventDayKey.slice(8)}
+                      </div>
+                      <div className="text-[11px] uppercase tracking-wide text-zinc-500">
+                        {new Date(
+                          `${eventRow.eventDayKey}T12:00:00Z`,
+                        ).toLocaleDateString("en-US", { month: "short" })}
+                      </div>
+                    </div>
+                    <div className="w-px self-stretch bg-zinc-800" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-zinc-100">
+                          {eventRow.name}
                         </span>
-                      ) : (
-                        <ul className="list-none space-y-1">
-                          {eventRow.targets.map((segment, segIdx) => (
-                            <li
-                              key={`${eventRow.id}-${segment.activity}-${String(segment.distance ?? "")}-${String(segment.time_seconds ?? "")}-${segment.label ?? ""}-${String(segIdx)}`}
+                        {eventRow.discipline && (
+                          <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[11px] capitalize text-zinc-400">
+                            {eventRow.discipline}
+                          </span>
+                        )}
+                        <span
+                          className={cn(
+                            "rounded-full border px-2 py-0.5 text-[11px] capitalize",
+                            eventRow.status === "completed"
+                              ? "border-emerald-800 text-emerald-400"
+                              : "border-zinc-700 text-zinc-400",
+                          )}
+                        >
+                          {eventRow.status}
+                        </span>
+                      </div>
+                      {eventRow.targets.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                          {eventRow.targets.map((segment) => (
+                            <span
+                              key={`${eventRow.id}`}
+                              className="text-xs text-zinc-500"
                             >
                               {segmentSummaryLine(segment)}
-                            </li>
+                            </span>
                           ))}
-                        </ul>
+                        </div>
                       )}
-                    </td>
-                    <td className="max-w-36 px-4 py-3">
-                      {eventRow.url ? (
+                      {eventRow.url && (
                         <a
                           href={eventRow.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="break-all text-emerald-400 underline decoration-emerald-500/55 underline-offset-2 hover:text-emerald-300"
+                          className="mt-1.5 block text-xs text-emerald-400 underline decoration-emerald-500/55 underline-offset-2 hover:text-emerald-300"
                         >
-                          Open
+                          Open link
                         </a>
-                      ) : (
-                        <span className="text-zinc-600">—</span>
                       )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        disabled={submitting}
-                        onClick={() => startEdit(eventRow)}
-                        className="mr-2 rounded px-2 py-1 text-emerald-400 hover:bg-zinc-800 disabled:opacity-45"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        disabled={removeMutation.isPending || submitting}
-                        onClick={() => {
-                          if (
-                            confirm("Delete this event? This cannot be undone.")
-                          ) {
-                            removeMutation.mutate(eventRow.id);
-                          }
-                        }}
-                        className="rounded px-2 py-1 text-rose-400 hover:bg-rose-950/50 disabled:opacity-45"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1 ml-auto">
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => startEdit(eventRow)}
+                      className="rounded px-2 py-1 text-sm text-emerald-400 hover:bg-zinc-800 disabled:opacity-45"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      disabled={removeMutation.isPending || submitting}
+                      onClick={() => {
+                        if (
+                          confirm("Delete this event? This cannot be undone.")
+                        ) {
+                          removeMutation.mutate(eventRow.id);
+                        }
+                      }}
+                      className="rounded px-2 py-1 text-sm text-rose-400 hover:bg-rose-950/50 disabled:opacity-45"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
@@ -443,7 +444,7 @@ function EventsPage() {
             }}
           />
           <div className="pointer-events-none absolute inset-0 z-10 flex items-end justify-center p-4 sm:items-center">
-            <div
+            <form
               role="dialog"
               aria-modal="true"
               aria-labelledby="events-form-title"
@@ -471,33 +472,30 @@ function EventsPage() {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block text-[12px] text-zinc-500">
-                    Name
-                    <input
+                <div className="grid gap-3 sm:grid-cols-2 items-center">
+                  <Field>
+                    <Label>Name</Label>
+                    <Input
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-[13px] text-zinc-100"
                       placeholder="June Olympic triathlon"
                       autoComplete="off"
                     />
-                  </label>
-                  <label className="block text-[12px] text-zinc-500">
-                    Event date (YYYY-MM-DD)
-                    <input
+                  </Field>
+                  <Field>
+                    <Label>Event date (YYYY-MM-DD)</Label>
+                    <Input
                       value={eventDayKey}
                       onChange={(e) => setEventDayKey(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-[13px] text-zinc-100"
                       placeholder="2026-06-21"
                       autoComplete="off"
                     />
-                  </label>
-                  <label className="block text-[12px] text-zinc-500">
-                    Overview tag (optional)
-                    <select
+                  </Field>
+                  <Field>
+                    <Label>Overview tag (optional)</Label>
+                    <Select
                       value={discipline}
                       onChange={(e) => setDiscipline(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-[13px] text-zinc-100"
                     >
                       <option value=""> — </option>
                       {SPORT_EVENT_DISCIPLINES.map((d) => (
@@ -505,41 +503,38 @@ function EventsPage() {
                           {d}
                         </option>
                       ))}
-                    </select>
-                  </label>
-                  <label className="block text-[12px] text-zinc-500">
-                    Status
-                    <select
+                    </Select>
+                  </Field>
+                  <Field>
+                    <Label>Status</Label>
+                    <Select
                       value={status}
                       onChange={(e) => setStatus(e.target.value as PlanStatus)}
-                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-[13px] capitalize text-zinc-100"
                     >
                       {PLAN_STATUS_VALUES.map((s) => (
                         <option key={s} value={s}>
                           {s}
                         </option>
                       ))}
-                    </select>
-                  </label>
-                  <label className="block text-[12px] text-zinc-500 sm:col-span-2">
-                    URL (optional)
-                    <input
+                    </Select>
+                  </Field>
+                  <Field className="col-span-full">
+                    <Label>URL (optional)</Label>
+                    <Input
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
                       placeholder="https://…"
                       autoComplete="off"
                     />
-                  </label>
-                  <label className="block text-[12px] text-zinc-500 sm:col-span-2">
-                    Notes (optional)
-                    <textarea
+                  </Field>
+                  <Field className="col-span-full">
+                    <Label>Notes (optional)</Label>
+                    <Textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={2}
-                      className="mt-1 w-full resize-y rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
                     />
-                  </label>
+                  </Field>
                 </div>
 
                 <div className="mt-5">
@@ -552,7 +547,7 @@ function EventsPage() {
                       onClick={() =>
                         setSegmentDrafts((d) => [...d, newSegmentDraft()])
                       }
-                      className="rounded-lg border border-zinc-700 bg-zinc-800/80 px-3 py-1.5 text-[12px] font-medium text-zinc-200 hover:bg-zinc-800"
+                      className="rounded-lg border border-zinc-700  px-3 py-1.5 text-[12px] font-medium text-zinc-200 hover:bg-zinc-800"
                     >
                       + Add leg
                     </button>
@@ -562,11 +557,11 @@ function EventsPage() {
                     {segmentDrafts.map((row, idx) => (
                       <li
                         key={row.draftId}
-                        className="flex flex-wrap items-end gap-x-3 gap-y-3 p-4"
+                        className="grid grid-cols-2 gap-2 sm:grid-cols-3 gap-x-3 gap-y-3 p-4"
                       >
-                        <label className="text-[11px] text-zinc-500">
-                          Activity
-                          <select
+                        <Field>
+                          <Label>Activity</Label>
+                          <Select
                             value={row.activity}
                             onChange={(e) =>
                               setSegmentDrafts((ds) =>
@@ -582,18 +577,17 @@ function EventsPage() {
                                 ),
                               )
                             }
-                            className="mt-1 block w-31 rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[12px] capitalize text-zinc-100"
                           >
                             {PLAN_KIND_VALUES.map((k) => (
                               <option key={k} value={k}>
                                 {k}
                               </option>
                             ))}
-                          </select>
-                        </label>
-                        <label className="min-w-20 text-[11px] text-zinc-500">
-                          Label
-                          <input
+                          </Select>
+                        </Field>
+                        <Field>
+                          <Label>Label</Label>
+                          <Input
                             value={row.label}
                             placeholder="SWIM"
                             onChange={(e) =>
@@ -605,12 +599,11 @@ function EventsPage() {
                                 ),
                               )
                             }
-                            className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-[12px] text-zinc-100"
                           />
-                        </label>
-                        <label className="min-w-19 text-[11px] text-zinc-500">
-                          Distance
-                          <input
+                        </Field>
+                        <Field>
+                          <Label>Distance</Label>
+                          <Input
                             value={row.distance}
                             inputMode="decimal"
                             onChange={(e) =>
@@ -622,12 +615,11 @@ function EventsPage() {
                                 ),
                               )
                             }
-                            className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-[12px] text-zinc-100"
                           />
-                        </label>
-                        <label className="text-[11px] text-zinc-500">
-                          Units
-                          <select
+                        </Field>
+                        <Field>
+                          <Label>Units</Label>
+                          <Select
                             value={row.distance_units}
                             onChange={(e) =>
                               setSegmentDrafts((ds) =>
@@ -641,18 +633,17 @@ function EventsPage() {
                                 ),
                               )
                             }
-                            className="mt-1 block w-19 rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[12px] text-zinc-100"
                           >
                             {CARDIO_DISTANCE_UNITS.map((u) => (
                               <option key={u} value={u}>
                                 {u}
                               </option>
                             ))}
-                          </select>
-                        </label>
-                        <label className="min-w-23 text-[11px] text-zinc-500">
-                          Time (s)
-                          <input
+                          </Select>
+                        </Field>
+                        <Field>
+                          <Label>Time (s)</Label>
+                          <Input
                             value={row.time_seconds}
                             inputMode="numeric"
                             onChange={(e) =>
@@ -667,13 +658,12 @@ function EventsPage() {
                                 ),
                               )
                             }
-                            className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-[12px] text-zinc-100"
                             placeholder={`${3600}`}
                           />
-                        </label>
-                        <label className="min-w-32 flex-1 text-[11px] text-zinc-500">
-                          Notes
-                          <input
+                        </Field>
+                        <Field>
+                          <Label>Notes</Label>
+                          <Input
                             value={row.notes}
                             onChange={(e) =>
                               setSegmentDrafts((ds) =>
@@ -684,9 +674,9 @@ function EventsPage() {
                                 ),
                               )
                             }
-                            className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[12px] text-zinc-100"
                           />
-                        </label>
+                        </Field>
+
                         {segmentDrafts.length > 1 ? (
                           <button
                             type="button"
@@ -743,7 +733,7 @@ function EventsPage() {
                   </button>
                 </div>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       ) : null}
