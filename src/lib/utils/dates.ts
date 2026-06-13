@@ -71,7 +71,6 @@ export const toUtcBounds = (
 
 export const getDateRange = (
   dates: CalendarSchemaValues,
-  timezone: string,
 ): { dateFrom: string; dateTo: string } => {
   const { period, anchor } = dates;
 
@@ -80,25 +79,27 @@ export const getDateRange = (
   const month = Number(monthStr) - 1;
   const day = Number(dayStr);
 
-  let rangeStart: Date;
-  let rangeEnd: Date;
+  // Use UTC noon to avoid any local timezone contamination
+  const anchorDate = new Date(Date.UTC(year, month, day, 12));
 
   if (period === "month") {
-    rangeStart = new Date(year, month, 1);
-    rangeEnd = new Date(year, month + 1, 0);
-  } else {
-    const dow = new Date(year, month, day).getDay();
-    rangeStart = new Date(year, month, day - dow);
-    rangeEnd = new Date(year, month, day - dow + 6);
+    const firstDay = new Date(Date.UTC(year, month, 1, 12));
+    const lastDay = new Date(Date.UTC(year, month + 1, 0, 12));
+    firstDay.setUTCDate(firstDay.getUTCDate() - firstDay.getUTCDay());
+    lastDay.setUTCDate(lastDay.getUTCDate() + (6 - lastDay.getUTCDay()));
+    return {
+      dateFrom: firstDay.toISOString().slice(0, 10),
+      dateTo: lastDay.toISOString().slice(0, 10),
+    };
   }
 
-  // Expand to full grid weeks
-  rangeStart.setDate(rangeStart.getDate() - rangeStart.getDay());
-  rangeEnd.setDate(rangeEnd.getDate() + (6 - rangeEnd.getDay()));
+  const dow = anchorDate.getUTCDay();
+  const startOfWeek = new Date(Date.UTC(year, month, day - dow, 12));
+  const endOfWeek = new Date(Date.UTC(year, month, day - dow + 6, 12));
 
   return {
-    dateFrom: toIsoDate(rangeStart, timezone),
-    dateTo: toIsoDate(rangeEnd, timezone),
+    dateFrom: startOfWeek.toISOString().slice(0, 10),
+    dateTo: endOfWeek.toISOString().slice(0, 10),
   };
 };
 

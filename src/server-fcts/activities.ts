@@ -56,7 +56,7 @@ const calendar = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<CalendarPageItem[]> => {
     // on initial server load, this won't be available to us from the client.
     const timezone = await cookieActions.getTimezone();
-    const { dateFrom, dateTo } = getDateRange(data, timezone);
+    const { dateFrom, dateTo } = getDateRange(data);
 
     const dateFromTs = dayKeyToUtc(dateFrom, timezone);
     const dateToTs = dayKeyToUtc(dateTo, timezone);
@@ -120,8 +120,6 @@ const calendar = createServerFn({ method: "GET" })
     const workoutsByDay = Map.groupBy(workouts, (r) => r.dayKey);
 
     const allDayKeys = enumerateLocalDayKeysInclusive(dateFrom, dateTo);
-
-    console.log(dateFrom, dateTo);
 
     const items = allDayKeys.map((dayKey) => ({
       dayKey,
