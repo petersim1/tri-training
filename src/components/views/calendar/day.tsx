@@ -45,7 +45,6 @@ const CAL_DAY_DOT_UNLINKED = `${CAL_DAY_DOT_BASE} bg-violet-400`;
 
 type CalendarDayProps = {
   day: CalendarCell;
-  isHighlighted: boolean;
   layout: HomeCalendarDayLayout;
   onOpenDay: () => void;
   isLoading: boolean;
@@ -60,7 +59,6 @@ export type CalendarCell = CalendarPageItem & {
 export const CalendarDayItem: React.FC<CalendarDayProps> = ({
   day,
   layout,
-  isHighlighted,
   onOpenDay,
   isLoading,
 }) => {
@@ -72,11 +70,7 @@ export const CalendarDayItem: React.FC<CalendarDayProps> = ({
         isLoading && "calendar-cell-loading",
         layout === "week" && "h-16 sm:h-18",
         layout === "month" && "h-16 lg:h-18",
-        isHighlighted
-          ? "z-4 ring-2 ring-sky-500/80 ring-inset"
-          : day.isToday
-            ? "ring-1 ring-emerald-600/50 ring-inset"
-            : "",
+        day.isToday && "ring-1 ring-emerald-600/50 ring-inset",
       )}
     >
       {day.isCurrentPeriod && (
@@ -84,8 +78,8 @@ export const CalendarDayItem: React.FC<CalendarDayProps> = ({
           <button
             type="button"
             className={cn(
-              "absolute inset-0 z-1 border-0 bg-transparent p-0",
-              "cursor-pointer hover:bg-zinc-900/45 focus-visible:z-5 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-inset touch-manipulation",
+              "absolute inset-0 z-1 border-0 bg-transparent p-0 cursor-pointer touch-manipulation",
+              "hover:bg-zinc-900/45 outline-none focus:outline-none focus-visible:outline-none border-none focus-visible:bg-zinc-900/45",
             )}
             onClick={onOpenDay}
           />

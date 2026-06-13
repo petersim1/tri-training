@@ -9,6 +9,7 @@ import {
 import type { ChatMessageRow } from "@/lib/db/schema.server";
 import queryKeys from "@/lib/query-keys";
 import { useChat } from "@/providers/chat";
+import { useDay } from "@/providers/day";
 import { chatActions } from "@/server-fcts/chat";
 import { eventActions } from "@/server-fcts/events";
 import type { ChatMessage } from "@/types/responses/chat";
@@ -20,8 +21,6 @@ import {
 } from "./displays";
 import { TypingDotsBubble } from "./loader";
 import { MessageBubble } from "./message";
-
-const today = (): string => new Date().toISOString().slice(0, 10);
 
 const lastSportEventIdFromMessages = (msgs: ChatMessageRow[]): string => {
   for (let i = msgs.length - 1; i >= 0; i--) {
@@ -48,6 +47,8 @@ export const Composer: React.FC = () => {
   const [optimisticText, setOptimisticText] = useState<string | null>(null);
 
   const chatFn = useServerFn(chatActions.chat);
+
+  const { todayKey, timeZone } = useDay();
 
   const abortRef = useRef<AbortController | null>(null);
   const activeStreamThreadRef = useRef<string | null>(null);
@@ -222,7 +223,8 @@ export const Composer: React.FC = () => {
           type: "message",
           message: text,
           threadId,
-          dayKey: today(),
+          dayKey: todayKey,
+          timezone: timeZone,
           ...(sportEventContextId ? { eventId: sportEventContextId } : {}),
         },
       });
@@ -246,7 +248,13 @@ export const Composer: React.FC = () => {
     setBusy(true);
     try {
       await chatActions.chat({
-        data: { type: "approval", approved, threadId: tid, dayKey: today() },
+        data: {
+          type: "approval",
+          approved,
+          threadId: tid,
+          dayKey: todayKey,
+          timezone: timeZone,
+        },
       });
       if (approved) {
         qc.invalidateQueries({ queryKey: ["calendar"] });

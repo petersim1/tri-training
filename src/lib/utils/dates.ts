@@ -37,14 +37,6 @@ export const enumerateLocalDayKeysInclusive = (
   return out;
 };
 
-export const browserTimeZone = (): string => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return "UTC";
-  }
-};
-
 export const formatPlanDayKey = (dayKey: string): string => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey.trim());
   if (!m) {

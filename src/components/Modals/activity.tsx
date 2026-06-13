@@ -14,6 +14,7 @@ import type { WorkoutEntryWithCompleted } from "@/lib/db/schema.server";
 import queryKeys from "@/lib/query-keys";
 import { convertTime } from "@/lib/utils/calculations";
 import { rawActivityType } from "@/lib/utils/vendors";
+import { useDay } from "@/providers/day";
 import { activityActions } from "@/server-fcts/activities";
 import { dayActions } from "@/server-fcts/days";
 import { vendorActions } from "@/server-fcts/vendors";
@@ -32,11 +33,11 @@ import { Modal, ModalContent } from ".";
 
 export const ActivityModal: React.FC<{
   dayKey: string;
-  timeZone: string;
   onClose: () => void;
-}> = ({ dayKey, timeZone, onClose }) => {
+}> = ({ dayKey, onClose }) => {
   const [step, setStep] = useState<"summary" | "add" | "workout">("summary");
   const [SelectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const { timeZone } = useDay();
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.dayDetails(dayKey),

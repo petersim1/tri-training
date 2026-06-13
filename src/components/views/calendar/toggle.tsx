@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo } from "react";
 import queryKeys from "@/lib/query-keys";
 import { getDateRange } from "@/lib/utils/dates";
+import { useDay } from "@/providers/day";
 import { activityActions } from "@/server-fcts/activities";
 import { cookieActions } from "@/server-fcts/cookies";
 import type { CalendarScope } from "@/types/requests/activities";
@@ -12,12 +13,11 @@ export const CalendarToggle: React.FC<{
   setPeriod: React.Dispatch<React.SetStateAction<CalendarScope>>;
   anchor: string;
   setAnchor: React.Dispatch<React.SetStateAction<string>>;
-  timeZone: string;
-  today: string;
-}> = ({ period, anchor, timeZone, today, setPeriod, setAnchor }) => {
+}> = ({ period, anchor, setPeriod, setAnchor }) => {
   const queryClient = useQueryClient();
 
   const runSetCalendarScope = useServerFn(cookieActions.setCalendarScope);
+  const { todayKey, timeZone } = useDay();
 
   const calStep = useCallback(
     (dir: 1 | -1) => {
@@ -116,7 +116,7 @@ export const CalendarToggle: React.FC<{
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => setAnchor(today)}
+          onClick={() => setAnchor(todayKey)}
           className="touch-manipulation rounded border border-zinc-700 px-2.5 py-1 sm:px-3 sm:py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
         >
           Today

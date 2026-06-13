@@ -216,6 +216,7 @@ const chat = createServerFn({ method: "POST" })
       seq: messages.length ? messages[0].seq + 1 : 0,
       runStart: new Date(),
       dayKey: data.dayKey,
+      timeZone: data.timezone,
       thread,
       coachingState,
       event,

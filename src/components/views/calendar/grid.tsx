@@ -6,6 +6,7 @@ import {
   getDateRange,
   toIsoDate,
 } from "@/lib/utils/dates";
+import { useDay } from "@/providers/day";
 import { activityActions } from "@/server-fcts/activities";
 import type { CalendarScope } from "@/types/requests/activities";
 import { type CalendarCell, CalendarDayItem } from "./day";
@@ -15,11 +16,10 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const CalendarGrid: React.FC<{
   period: CalendarScope;
   anchor: string;
-  timeZone: string;
-  today: string;
-  selectedDay: string | null;
   setSelectedDay: (dayKey: string) => void;
-}> = ({ period, anchor, timeZone, today, selectedDay, setSelectedDay }) => {
+}> = ({ period, anchor, setSelectedDay }) => {
+  const { todayKey, timeZone } = useDay();
+
   const { data: periodActivities = [], isLoading } = useQuery({
     queryKey: queryKeys.calendarQueryKey(period, anchor),
     queryFn: () =>
@@ -68,9 +68,16 @@ export const CalendarGrid: React.FC<{
       hasWeight: calendarByDay.get(dayKey)?.hasWeight ?? false,
       hasUnlinked: (unlinkedByDay.get(dayKey)?.length ?? 0) > 0,
       isCurrentPeriod: dayKey >= dateFrom && dayKey <= dateTo,
-      isToday: dayKey === today,
+      isToday: dayKey === todayKey,
     }));
-  }, [periodActivities, unlinkedActivities, period, anchor, timeZone, today]);
+  }, [
+    periodActivities,
+    unlinkedActivities,
+    period,
+    anchor,
+    timeZone,
+    todayKey,
+  ]);
 
   return (
     <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-800">
@@ -88,7 +95,6 @@ export const CalendarGrid: React.FC<{
             key={`${cell.dayKey}-${anchor}-${period}`}
             day={cell}
             isLoading={isLoading}
-            isHighlighted={cell.dayKey === selectedDay}
             layout={period}
             onOpenDay={() => setSelectedDay(cell.dayKey)}
           />

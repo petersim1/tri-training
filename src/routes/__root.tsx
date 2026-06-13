@@ -11,6 +11,7 @@ import type * as React from "react";
 import { DefaultCatchBoundary } from "@/components/DefaultCatchBoundary";
 import { NotFound } from "@/components/NotFound";
 import { getQueryClient } from "@/lib/query/client";
+import { DayProvider } from "@/providers/day";
 import appCss from "../styles/app.css?url";
 
 interface RouterContext {
@@ -59,7 +60,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="flex min-h-dvh flex-col bg-zinc-950">
         <QueryClientProvider client={getQueryClient()}>
-          {children}
+          <DayProvider>{children}</DayProvider>
         </QueryClientProvider>
         <TanStackRouterDevtools position="bottom-right" />
         <Scripts />

@@ -46,10 +46,10 @@ When asked for training advice or schedule changes:
 - notes: short intent label (easy spin, tempo, drills, etc.)`;
 
 export const buildSystemPrompt = (ctx: ChatRunContext): string => {
-  const weekday = new Date(`${ctx.dayKey}T12:00:00`).toLocaleDateString(
-    undefined,
-    { weekday: "long" },
-  );
+  const weekday = new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    timeZone: ctx.timeZone, // client-supplied from DayProvider
+  }).format(new Date(`${ctx.dayKey}T12:00:00Z`));
 
   let prompt = SYSTEM_BASE;
 

@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
+import { useDay } from "@/providers/day";
 import type { CalendarScope } from "@/types/requests/activities";
 import { ActivityModal } from "../Modals/activity";
 import { CalendarGrid } from "../views/calendar/grid";
@@ -10,21 +11,11 @@ export const Home: React.FC<{
   initialCalendarScope: CalendarScope;
   initialChartSettings: SessionChartSettings;
 }> = ({ initialCalendarScope, initialChartSettings }) => {
-  const tz = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
-    [],
-  );
-  const today = useMemo(
-    () => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date()),
-    [tz],
-  );
+  const { todayKey } = useDay();
 
   const [period, setPeriod] = useState(initialCalendarScope);
-  const [anchor, setAnchor] = useState(today);
+  const [anchor, setAnchor] = useState(todayKey);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  // const [highlightedDayKey, setHighlightedDayKey] = useState<string | null>(
-  //   null,
-  // );
 
   const calendarSectionRef = useRef<HTMLElement | null>(null);
 
@@ -39,8 +30,6 @@ export const Home: React.FC<{
         <CalendarToggle
           anchor={anchor}
           period={period}
-          timeZone={tz}
-          today={today}
           setAnchor={setAnchor}
           setPeriod={setPeriod}
         />
@@ -48,9 +37,6 @@ export const Home: React.FC<{
         <CalendarGrid
           anchor={anchor}
           period={period}
-          timeZone={tz}
-          today={today}
-          selectedDay={selectedDay}
           setSelectedDay={openDay}
         />
       </section>
@@ -60,7 +46,6 @@ export const Home: React.FC<{
       {!!selectedDay && (
         <ActivityModal
           dayKey={selectedDay}
-          timeZone={tz}
           onClose={() => setSelectedDay(null)}
         />
       )}

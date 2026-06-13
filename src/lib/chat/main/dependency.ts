@@ -11,6 +11,7 @@ export type ChatRunContext = {
   runStart: Date;
   // Generic
   dayKey: string;
+  timeZone: string;
 
   // Thread
   thread: ChatThreadRow;
