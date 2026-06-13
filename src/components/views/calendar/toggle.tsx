@@ -80,15 +80,10 @@ export const CalendarToggle: React.FC<{
       });
     }
 
-    const timezone = getTimezone();
-
-    const { dateFrom, dateTo } = getDateRange(
-      {
-        period,
-        anchor,
-      },
-      timezone,
-    );
+    const { dateFrom, dateTo } = getDateRange({
+      period,
+      anchor,
+    });
     const start = new Date(`${dateFrom}T12:00:00`);
     const end = new Date(`${dateTo}T12:00:00`);
     const fmt = (d: Date) =>
