@@ -79,6 +79,8 @@ export const CalendarGrid: React.FC<{
     todayKey,
   ]);
 
+  console.log(calendarCells);
+
   return (
     <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-800">
       <div className="grid min-w-0 grid-cols-7 gap-px">
@@ -90,15 +92,19 @@ export const CalendarGrid: React.FC<{
             {w}
           </div>
         ))}
-        {calendarCells.map((cell) => (
-          <CalendarDayItem
-            key={`${cell.dayKey}-${anchor}-${period}-${timeZone}`}
-            day={cell}
-            isLoading={isLoading}
-            layout={period}
-            onOpenDay={() => setSelectedDay(cell.dayKey)}
-          />
-        ))}
+        {calendarCells.map((cell) => {
+          const key = `${cell.dayKey}-${anchor}-${period}-${timeZone}-${todayKey}`;
+          console.log(key);
+          return (
+            <CalendarDayItem
+              key={key}
+              day={cell}
+              isLoading={isLoading}
+              layout={period}
+              onOpenDay={() => setSelectedDay(cell.dayKey)}
+            />
+          );
+        })}
       </div>
     </div>
   );

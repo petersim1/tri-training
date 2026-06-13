@@ -63,7 +63,6 @@ export const CalendarDayItem: React.FC<CalendarDayProps> = ({
   isLoading,
 }) => {
   const dayN = Number(day.dayKey.split("-").slice(-1)[0]);
-  console.log(day, dayN);
   return (
     <div
       className={cn(
@@ -87,6 +86,7 @@ export const CalendarDayItem: React.FC<CalendarDayProps> = ({
           <div className="relative z-2 flex h-full min-h-0 w-full flex-col px-0.5 pt-1 pb-0 pointer-events-none">
             <div className="relative mb-0.5 min-h-5 w-full shrink-0">
               <span
+                suppressHydrationWarning
                 className={cn(
                   "relative z-1 block w-full text-center text-sm font-medium tabular-nums leading-none",
                   day.isToday ? "text-emerald-400" : "text-zinc-200/50",
