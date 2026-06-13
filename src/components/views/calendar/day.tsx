@@ -70,7 +70,8 @@ export const CalendarDayItem: React.FC<CalendarDayProps> = ({
         isLoading && "calendar-cell-loading",
         layout === "week" && "h-16 sm:h-18",
         layout === "month" && "h-16 lg:h-18",
-        day.isToday && "ring-1 ring-emerald-600/50 ring-inset",
+        day.isToday &&
+          "before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-emerald-500 before:z-10",
       )}
     >
       <button

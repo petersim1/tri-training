@@ -27,26 +27,24 @@ export const CalendarGrid: React.FC<{
   });
 
   return (
-    <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-800">
-      <div className="grid min-w-0 grid-cols-7 gap-px">
-        {WEEKDAYS.map((w) => (
-          <div
-            key={w}
-            className="bg-zinc-900 px-0.5 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-zinc-500"
-          >
-            {w}
-          </div>
-        ))}
-        {data.map((cell) => (
-          <CalendarDayItem
-            key={`${cell.dayKey}-${anchor}-${period}`}
-            day={cell}
-            isLoading={isLoading}
-            layout={period}
-            onOpenDay={() => setSelectedDay(cell.dayKey)}
-          />
-        ))}
-      </div>
+    <div className="grid min-w-0 grid-cols-7 gap-px rounded-lg overflow-hidden border border-zinc-800 bg-zinc-800">
+      {WEEKDAYS.map((w) => (
+        <div
+          key={w}
+          className="bg-zinc-900 px-0.5 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-zinc-500"
+        >
+          {w}
+        </div>
+      ))}
+      {data.map((cell) => (
+        <CalendarDayItem
+          key={`${cell.dayKey}-${anchor}-${period}`}
+          day={cell}
+          isLoading={isLoading}
+          layout={period}
+          onOpenDay={() => setSelectedDay(cell.dayKey)}
+        />
+      ))}
     </div>
   );
 };
