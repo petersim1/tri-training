@@ -1,3 +1,4 @@
+import { type Exception, trace } from "@opentelemetry/api";
 import { createServerFn } from "@tanstack/react-start";
 import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import z from "zod";
@@ -28,53 +29,82 @@ import { coachingServerFns } from "./coaching.server";
 import { cookieActions } from "./cookies";
 import { eventActions } from "./events";
 
+const tracer = trace.getTracer("bevor.chat");
+
 const getThread = createServerFn({ method: "GET" })
   .inputValidator(idSchema)
   .handler(async ({ data }): Promise<ChatThreadRow> => {
-    const db = await getDb();
-    const thread = await db
-      .select()
-      .from(chatThreads)
-      .where(eq(chatThreads.id, data.id))
-      .get();
+    return tracer.startActiveSpan("getThread", async (span) => {
+      try {
+        const db = await getDb();
+        const thread = await db
+          .select()
+          .from(chatThreads)
+          .where(eq(chatThreads.id, data.id))
+          .get();
 
-    if (!thread) {
-      throw new Error("not found");
-    }
-    return thread;
+        if (!thread) {
+          throw new Error("not found");
+        }
+        return thread;
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   });
 
 const listThreads = createServerFn({
   method: "GET",
 }).handler(async (): Promise<ChatThreadRow[]> => {
-  const db = await getDb();
-  const threads = await db
-    .select()
-    .from(chatThreads)
-    .orderBy(desc(chatThreads.updatedAt))
-    .all();
-  return threads;
+  return tracer.startActiveSpan("listThreads", async (span) => {
+    try {
+      const db = await getDb();
+      const threads = await db
+        .select()
+        .from(chatThreads)
+        .orderBy(desc(chatThreads.updatedAt))
+        .all();
+      return threads;
+    } catch (err) {
+      span.recordException(err as Exception);
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
 });
 
 const createThread = createServerFn({
   method: "POST",
 }).handler(async (): Promise<string> => {
-  const db = await getDb();
-  const [row] = await db
-    .insert(chatThreads)
-    .values({})
-    .returning({ id: chatThreads.id });
-  if (!row) {
-    throw new Error("Failed to create planning thread");
-  }
-  const existing = await db
-    .select({ id: coachingState.id })
-    .from(coachingState)
-    .get();
-  if (!existing) {
-    await db.insert(coachingState).values({}).run();
-  }
-  return row.id;
+  return tracer.startActiveSpan("createThread", async (span) => {
+    try {
+      const db = await getDb();
+      const [row] = await db
+        .insert(chatThreads)
+        .values({})
+        .returning({ id: chatThreads.id });
+      if (!row) {
+        throw new Error("Failed to create planning thread");
+      }
+      const existing = await db
+        .select({ id: coachingState.id })
+        .from(coachingState)
+        .get();
+      if (!existing) {
+        await db.insert(coachingState).values({}).run();
+      }
+      return row.id;
+    } catch (err) {
+      span.recordException(err as Exception);
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
 });
 
 const listMessages = createServerFn({
@@ -82,64 +112,73 @@ const listMessages = createServerFn({
 })
   .inputValidator(listMessagesSchema)
   .handler(async ({ data }): Promise<ChatMessageItem[]> => {
-    const tid = String(data.threadId ?? "").trim();
-    if (!tid) {
-      return [];
-    }
-    const db = await getDb();
+    return tracer.startActiveSpan("listMessages", async (span) => {
+      try {
+        const tid = String(data.threadId ?? "").trim();
+        if (!tid) {
+          return [];
+        }
+        const db = await getDb();
 
-    const baseQuery = db
-      .select()
-      .from(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.threadId, tid),
-          inArray(chatMessages.role, ["assistant", "user"]),
-        ),
-      )
-      .orderBy(
-        data.orderBy === "desc"
-          ? desc(chatMessages.createdAt)
-          : asc(chatMessages.createdAt),
-      );
+        const baseQuery = db
+          .select()
+          .from(chatMessages)
+          .where(
+            and(
+              eq(chatMessages.threadId, tid),
+              inArray(chatMessages.role, ["assistant", "user"]),
+            ),
+          )
+          .orderBy(
+            data.orderBy === "desc"
+              ? desc(chatMessages.createdAt)
+              : asc(chatMessages.createdAt),
+          );
 
-    const messages = await (data.limit
-      ? baseQuery.limit(data.limit)
-      : baseQuery
-    ).all();
+        const messages = await (data.limit
+          ? baseQuery.limit(data.limit)
+          : baseQuery
+        ).all();
 
-    const seqs = Array.from(new Set(messages.map((m) => m.seq)));
+        const seqs = Array.from(new Set(messages.map((m) => m.seq)));
 
-    const proposals = await db
-      .select({ seq: chatMessages.seq, proposal: chatMessages.proposal })
-      .from(chatMessages)
-      .where(
-        and(
-          isNotNull(chatMessages.proposal),
-          inArray(chatMessages.seq, seqs),
-          eq(chatMessages.threadId, tid),
-          eq(chatMessages.role, "tool"),
-        ),
-      );
-    const proposalSet = Map.groupBy(proposals, (r) => r.seq);
+        const proposals = await db
+          .select({ seq: chatMessages.seq, proposal: chatMessages.proposal })
+          .from(chatMessages)
+          .where(
+            and(
+              isNotNull(chatMessages.proposal),
+              inArray(chatMessages.seq, seqs),
+              eq(chatMessages.threadId, tid),
+              eq(chatMessages.role, "tool"),
+            ),
+          );
+        const proposalSet = Map.groupBy(proposals, (r) => r.seq);
 
-    return messages.map((m) => {
-      if (m.role === "tool") throw new Error();
-      if (m.role === "user") return m as ChatMessageItem;
-      const proposals = proposalSet.get(m.seq);
-      if (!proposals) return m as ChatMessageItem;
-      return {
-        ...m,
-        role: m.role as "user" | "assistant",
-        proposalSet: proposals.map((p) => {
+        return messages.map((m) => {
+          if (m.role === "tool") throw new Error();
+          if (m.role === "user") return m as ChatMessageItem;
+          const proposals = proposalSet.get(m.seq);
+          if (!proposals) return m as ChatMessageItem;
           return {
-            // biome-ignore lint/style/noNonNullAssertion: <guaranteed from the query>
-            op: p.proposal!.item.op,
-            // biome-ignore lint/style/noNonNullAssertion: <guaranteed from the query>
-            status: p.proposal!.status,
-          };
-        }),
-      } as ChatMessageItem;
+            ...m,
+            role: m.role as "user" | "assistant",
+            proposalSet: proposals.map((p) => {
+              return {
+                // biome-ignore lint/style/noNonNullAssertion: <guaranteed from the query>
+                op: p.proposal!.item.op,
+                // biome-ignore lint/style/noNonNullAssertion: <guaranteed from the query>
+                status: p.proposal!.status,
+              };
+            }),
+          } as ChatMessageItem;
+        });
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
     });
   });
 
@@ -148,14 +187,23 @@ const deleteThread = createServerFn({
 })
   .inputValidator((d: { threadId: string }) => d)
   .handler(async ({ data }): Promise<{ deleted: boolean }> => {
-    const tid = data.threadId.trim();
-    if (!tid) {
-      return { deleted: false };
-    }
+    return tracer.startActiveSpan("deleteThread", async (span) => {
+      try {
+        const tid = data.threadId.trim();
+        if (!tid) {
+          return { deleted: false };
+        }
 
-    const db = await getDb();
-    await db.delete(chatThreads).where(eq(chatThreads.id, tid)).run();
-    return { deleted: true };
+        const db = await getDb();
+        await db.delete(chatThreads).where(eq(chatThreads.id, tid)).run();
+        return { deleted: true };
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   });
 
 const updateTitle = createServerFn({ method: "POST" })
@@ -166,128 +214,154 @@ const updateTitle = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const db = await getDb();
-    const row = await db
-      .select()
-      .from(chatThreads)
-      .where(and(eq(chatThreads.id, data.id), isNull(chatThreads.title)))
-      .get();
+    return tracer.startActiveSpan("updateTitle", async (span) => {
+      try {
+        const db = await getDb();
+        const row = await db
+          .select()
+          .from(chatThreads)
+          .where(and(eq(chatThreads.id, data.id), isNull(chatThreads.title)))
+          .get();
 
-    if (row) {
-      const title = data.title.trim().slice(0, 96).replace(/\s+/g, " ");
-      await db
-        .update(chatThreads)
-        .set({ title, updatedAt: new Date() })
-        .where(eq(chatThreads.id, data.id));
-    }
+        if (row) {
+          const title = data.title.trim().slice(0, 96).replace(/\s+/g, " ");
+          await db
+            .update(chatThreads)
+            .set({ title, updatedAt: new Date() })
+            .where(eq(chatThreads.id, data.id));
+        }
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   });
 
 const chat = createServerFn({ method: "POST" })
   .inputValidator(chatSchema)
   .handler(async ({ data }): Promise<ReadableStream<ChatMessage>> => {
-    const todayKey = getToday();
-    const timezone = await cookieActions.getTimezone();
-    logMessage("Chat", todayKey, data.threadId, data.type);
-    if (data.type === "approval") {
-      await handleApproval(data.threadId, data.approved);
-      return new ReadableStream<ChatMessage>({
-        start(controller) {
-          controller.enqueue({ type: "done" });
-          controller.close();
-        },
-      });
-    }
+    return tracer.startActiveSpan("chat", async (span) => {
+      try {
+        const todayKey = getToday();
+        const timezone = await cookieActions.getTimezone();
+        logMessage("Chat", todayKey, data.threadId, data.type);
+        if (data.type === "approval") {
+          await handleApproval(data.threadId, data.approved);
+          return new ReadableStream<ChatMessage>({
+            start(controller) {
+              controller.enqueue({ type: "done" });
+              controller.close();
+            },
+          });
+        }
 
-    const thread = await getThread({ data: { id: data.threadId } });
-    const coachingState = await coachingServerFns.get();
+        const thread = await getThread({ data: { id: data.threadId } });
+        const coachingState = await coachingServerFns.get();
 
-    let event: SportEventRow | undefined;
-    if (data.eventId) {
-      const ev = await eventActions.get({ data: { id: data.eventId } });
-      if (!ev) {
-        throw new Error("unknown_sport_event");
-      }
-      event = ev;
-    }
+        let event: SportEventRow | undefined;
+        if (data.eventId) {
+          const ev = await eventActions.get({ data: { id: data.eventId } });
+          if (!ev) {
+            throw new Error("unknown_sport_event");
+          }
+          event = ev;
+        }
 
-    const client = getPlanningOpenAiClient(process.env.OPENAI_KEY as string);
+        const client = getPlanningOpenAiClient(
+          process.env.OPENAI_KEY as string,
+        );
 
-    const messages = await listMessages({
-      data: { threadId: thread.id, orderBy: "desc", limit: 6 },
-    });
+        const messages = await listMessages({
+          data: { threadId: thread.id, orderBy: "desc", limit: 6 },
+        });
 
-    const ctx: ChatRunContext = {
-      seq: messages.length ? messages[0].seq + 1 : 0,
-      runStart: new Date(),
-      dayKey: todayKey,
-      timeZone: timezone,
-      thread,
-      coachingState,
-      event,
-      hasProposal: false,
-      maxRounds: 10,
-      availableTools: new Set<ToolName>([
-        "list_workouts",
-        "get_workout",
-        "create_workout",
-        "update_workout",
-        "delete_workout",
-      ]),
-    };
-
-    const stream = new ReadableStream<ChatMessage>({
-      async start(controller) {
-        const emit = (chunk: ChatMessage) => {
-          controller.enqueue(chunk);
+        const ctx: ChatRunContext = {
+          seq: messages.length ? messages[0].seq + 1 : 0,
+          runStart: new Date(),
+          dayKey: todayKey,
+          timeZone: timezone,
+          thread,
+          coachingState,
+          event,
+          hasProposal: false,
+          maxRounds: 10,
+          availableTools: new Set<ToolName>([
+            "list_workouts",
+            "get_workout",
+            "create_workout",
+            "update_workout",
+            "delete_workout",
+          ]),
         };
 
-        let dbMessagesStore: NewChatMessageRow[] = [];
-        try {
-          dbMessagesStore = await runPlanningTurn(
-            client,
-            ctx,
-            messages,
-            data.message,
-            emit,
-          );
-        } catch (e) {
-          emit({
-            type: "error",
-            message: e instanceof Error ? e.message : "failed",
-          });
-        } finally {
-          if (ctx.hasProposal) {
-            emit({ type: "approval" });
-          }
+        const stream = new ReadableStream<ChatMessage>({
+          async start(controller) {
+            const emit = (chunk: ChatMessage) => {
+              controller.enqueue(chunk);
+            };
 
-          try {
-            const [userDbMessage, sysDbMessage] = await persistTurn(
-              ctx,
-              data.message,
-              dbMessagesStore,
-            );
-            emit({ type: "message", message: userDbMessage });
-            emit({ type: "message", message: sysDbMessage });
-            runReplaySummary(client, ctx, messages, data.message, sysDbMessage);
-            runCoachingStateSummary(
-              client,
-              ctx,
-              messages,
-              data.message,
-              sysDbMessage,
-            );
-          } catch (e) {
-            console.error(e);
-          }
+            let dbMessagesStore: NewChatMessageRow[] = [];
+            try {
+              dbMessagesStore = await runPlanningTurn(
+                client,
+                ctx,
+                messages,
+                data.message,
+                emit,
+              );
+            } catch (e) {
+              emit({
+                type: "error",
+                message: e instanceof Error ? e.message : "failed",
+              });
+            } finally {
+              if (ctx.hasProposal) {
+                emit({ type: "approval" });
+              }
 
-          emit({ type: "done" });
+              try {
+                const [userDbMessage, sysDbMessage] = await persistTurn(
+                  ctx,
+                  data.message,
+                  dbMessagesStore,
+                );
+                emit({ type: "message", message: userDbMessage });
+                emit({ type: "message", message: sysDbMessage });
+                runReplaySummary(
+                  client,
+                  ctx,
+                  messages,
+                  data.message,
+                  sysDbMessage,
+                );
+                runCoachingStateSummary(
+                  client,
+                  ctx,
+                  messages,
+                  data.message,
+                  sysDbMessage,
+                );
+              } catch (e) {
+                console.error(e);
+              }
 
-          controller.close();
-        }
-      },
+              emit({ type: "done" });
+
+              controller.close();
+            }
+          },
+        });
+
+        return stream;
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
     });
-
-    return stream;
   });
 
 export const chatActions = {

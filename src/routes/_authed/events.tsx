@@ -1,4 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  dehydrate,
+  HydrationBoundary,
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,8 +30,28 @@ import { eventActions } from "@/server-fcts/events";
 const QUERY_KEY = ["sportEvents"] as const;
 
 export const Route = createFileRoute("/_authed/events")({
-  component: EventsPage,
+  loader: ({ context }) => {
+    const { queryClient } = context;
+    void queryClient.prefetchQuery({
+      queryKey: QUERY_KEY,
+      queryFn: async () => eventActions.list(),
+    });
+
+    return {
+      dehydrated: dehydrate(queryClient),
+    };
+  },
+  component: EventsRoute,
 });
+
+function EventsRoute() {
+  const { dehydrated } = Route.useLoaderData();
+  return (
+    <HydrationBoundary state={dehydrated}>
+      <EventsPage />
+    </HydrationBoundary>
+  );
+}
 
 type SegmentDraft = {
   draftId: string;
@@ -142,20 +168,13 @@ function emptyFormSegments(): SegmentDraft[] {
 
 function EventsPage() {
   const queryClient = useQueryClient();
-  const runList = useServerFn(eventActions.list);
   const runInsert = useServerFn(eventActions.add);
   const runPatch = useServerFn(eventActions.update);
   const runRemove = useServerFn(eventActions.remove);
 
-  const query = useQuery({
+  const query = useSuspenseQuery({
     queryKey: QUERY_KEY,
-    queryFn: async () => {
-      const rows = await runList();
-      if (!Array.isArray(rows)) {
-        throw new Error("Unexpected response when loading events.");
-      }
-      return rows;
-    },
+    queryFn: async () => eventActions.list(),
   });
 
   const [creating, setCreating] = useState(false);
@@ -321,9 +340,7 @@ function EventsPage() {
           </button>
         </div>
 
-        {query.isLoading ? (
-          <p className="text-[13px] text-zinc-500">Loading…</p>
-        ) : query.isError ? (
+        {query.isError ? (
           <p className="text-[13px] text-rose-400">
             {query.error instanceof Error
               ? query.error.message
@@ -377,9 +394,9 @@ function EventsPage() {
                       </div>
                       {eventRow.targets.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                          {eventRow.targets.map((segment) => (
+                          {eventRow.targets.map((segment, i) => (
                             <span
-                              key={`${eventRow.id}`}
+                              key={`${eventRow.id}${i}`}
                               className="text-xs text-zinc-500"
                             >
                               {segmentSummaryLine(segment)}

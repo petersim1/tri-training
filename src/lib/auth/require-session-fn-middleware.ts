@@ -1,3 +1,9 @@
+import {
+  context,
+  type Exception,
+  propagation,
+  trace,
+} from "@opentelemetry/api";
 import { redirect } from "@tanstack/react-router";
 import { createMiddleware } from "@tanstack/react-start";
 import { getSessionOk } from "../utils/session.server";
@@ -50,21 +56,45 @@ function isServerFnHttpRequest(request: Request, pathname: string): boolean {
 /** Global `requestMiddleware` in `start.ts`: require a session for page/document routes only. */
 export const requireSessionFnMiddleware = createMiddleware().server(
   async ({ next, pathname, request }) => {
-    if (isServerFnHttpRequest(request, pathname)) {
-      return next();
-    }
+    const ctx = propagation.extract(context.active(), request.headers);
 
-    const isAuthed = await getSessionOk();
+    return context.with(ctx, async () => {
+      const tracer = trace.getTracer("bevor");
 
-    if (isAuthed && normalizePathname(pathname) === "/login") {
-      throw redirect({ to: "/" });
-    }
-    if (!isAuthed && !isPublicPath(pathname)) {
-      if (isApiHandlerAuthedPath(pathname)) {
-        return next();
-      }
-      throw redirect({ to: "/login" });
-    }
-    return next();
+      return tracer.startActiveSpan(`middleware ${pathname}`, async (span) => {
+        try {
+          span.setAttributes({
+            "http.target": pathname,
+            "middleware.type": isServerFnHttpRequest(request, pathname)
+              ? "server_fn"
+              : "page",
+          });
+
+          if (isServerFnHttpRequest(request, pathname)) {
+            return next();
+          }
+
+          const isAuthed = await getSessionOk();
+          span.setAttribute("auth.ok", isAuthed);
+
+          if (isAuthed && normalizePathname(pathname) === "/login") {
+            throw redirect({ to: "/" });
+          }
+          if (!isAuthed && !isPublicPath(pathname)) {
+            if (isApiHandlerAuthedPath(pathname)) {
+              return next();
+            }
+            throw redirect({ to: "/login" });
+          }
+
+          return next();
+        } catch (err) {
+          span.recordException(err as Exception);
+          throw err;
+        } finally {
+          span.end();
+        }
+      });
+    });
   },
 );

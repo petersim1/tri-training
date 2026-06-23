@@ -1,3 +1,4 @@
+import { type Exception, trace } from "@opentelemetry/api";
 import { createServerFn } from "@tanstack/react-start";
 import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import {
@@ -51,419 +52,490 @@ import type {
 import { activityServerFns } from "./activities.server";
 import { cookieActions } from "./cookies";
 
+const tracer = trace.getTracer("bevor.activities");
+
 const calendar = createServerFn({ method: "GET" })
   .inputValidator(calendarSchema)
   .handler(async ({ data }): Promise<CalendarPageItem[]> => {
-    // on initial server load, this won't be available to us from the client.
-    const timezone = await cookieActions.getTimezone();
-    const { dateFrom, dateTo } = getDateRange(data);
+    return tracer.startActiveSpan("calendar", async (span) => {
+      try {
+        const timezone = await cookieActions.getTimezone();
+        const { dateFrom, dateTo } = getDateRange(data);
 
-    const today = toIsoDate(new Date(), timezone);
+        const today = toIsoDate(new Date(), timezone);
 
-    const db = await getDb();
+        const db = await getDb();
 
-    const workouts = await db
-      .select({
-        id: workoutEntries.id,
-        kind: workoutEntries.kind,
-        dayKey: workoutEntries.dayKey,
-        status: workoutEntries.status,
-      })
-      .from(workoutEntries)
-      .where(
-        and(
-          gte(workoutEntries.dayKey, dateFrom),
-          lte(workoutEntries.dayKey, dateTo),
-        ),
-      )
-      .all();
+        const workouts = await db
+          .select({
+            id: workoutEntries.id,
+            kind: workoutEntries.kind,
+            dayKey: workoutEntries.dayKey,
+            status: workoutEntries.status,
+          })
+          .from(workoutEntries)
+          .where(
+            and(
+              gte(workoutEntries.dayKey, dateFrom),
+              lte(workoutEntries.dayKey, dateTo),
+            ),
+          )
+          .all();
 
-    const weights = await db
-      .select({ dayKey: weightEntries.dayKey })
-      .from(weightEntries)
-      .where(
-        and(
-          gte(weightEntries.dayKey, dateFrom),
-          lte(weightEntries.dayKey, dateTo),
-        ),
-      )
-      .all();
+        const weights = await db
+          .select({ dayKey: weightEntries.dayKey })
+          .from(weightEntries)
+          .where(
+            and(
+              gte(weightEntries.dayKey, dateFrom),
+              lte(weightEntries.dayKey, dateTo),
+            ),
+          )
+          .all();
 
-    const { start } = toUtcBounds(dateFrom, timezone);
-    const { end } = toUtcBounds(dateTo, timezone);
+        const { start } = toUtcBounds(dateFrom, timezone);
+        const { end } = toUtcBounds(dateTo, timezone);
 
-    const unlinkedActivitiesRows = await db
-      .select({ vendorActivities })
-      .from(vendorActivities)
-      .leftJoin(
-        workoutEntries,
-        eq(workoutEntries.vendorActivityId, vendorActivities.id),
-      )
-      .where(
-        and(
-          isNull(workoutEntries.id),
-          gte(vendorActivities.createdAt, start),
-          lte(vendorActivities.createdAt, end),
-        ),
-      )
-      .orderBy(desc(vendorActivities.createdAt))
-      .all();
+        const unlinkedActivitiesRows = await db
+          .select({ vendorActivities })
+          .from(vendorActivities)
+          .leftJoin(
+            workoutEntries,
+            eq(workoutEntries.vendorActivityId, vendorActivities.id),
+          )
+          .where(
+            and(
+              isNull(workoutEntries.id),
+              gte(vendorActivities.createdAt, start),
+              lte(vendorActivities.createdAt, end),
+            ),
+          )
+          .orderBy(desc(vendorActivities.createdAt))
+          .all();
 
-    const unlinkedActivities = unlinkedActivitiesRows.map(
-      (r) => r.vendorActivities,
-    );
+        const unlinkedActivities = unlinkedActivitiesRows.map(
+          (r) => r.vendorActivities,
+        );
 
-    const unlinkedByDay = Map.groupBy(unlinkedActivities, (a) =>
-      toIsoDate(a.createdAt, timezone),
-    );
+        const unlinkedByDay = Map.groupBy(unlinkedActivities, (a) =>
+          toIsoDate(a.createdAt, timezone),
+        );
 
-    const weightDays = new Set(weights.map((w) => w.dayKey));
-    const workoutsByDay = Map.groupBy(workouts, (r) => r.dayKey);
+        const weightDays = new Set(weights.map((w) => w.dayKey));
+        const workoutsByDay = Map.groupBy(workouts, (r) => r.dayKey);
 
-    const allDayKeys = enumerateLocalDayKeysInclusive(dateFrom, dateTo);
+        const allDayKeys = enumerateLocalDayKeysInclusive(dateFrom, dateTo);
 
-    const items = allDayKeys.map((dayKey) => ({
-      dayKey,
-      activities: (workoutsByDay.get(dayKey) ?? []).map(
-        ({ id, kind, status }) => ({ id, kind, status }),
-      ),
-      hasWeight: weightDays.has(dayKey),
-      hasUnlinked: unlinkedByDay.has(dayKey),
-      isToday: dayKey === today,
-    }));
+        const items = allDayKeys.map((dayKey) => ({
+          dayKey,
+          activities: (workoutsByDay.get(dayKey) ?? []).map(
+            ({ id, kind, status }) => ({ id, kind, status }),
+          ),
+          hasWeight: weightDays.has(dayKey),
+          hasUnlinked: unlinkedByDay.has(dayKey),
+          isToday: dayKey === today,
+        }));
 
-    return items;
+        return items;
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   });
 
 const list = createServerFn({ method: "GET" })
   .inputValidator(activityListSchema)
   .handler(async ({ data }): Promise<PlannedWorkoutsPageResult> => {
-    return activityServerFns.list(data);
+    return tracer.startActiveSpan("list", async (span) => {
+      try {
+        return activityServerFns.list(data);
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   });
 
 const viz = createServerFn({ method: "GET" })
   .inputValidator(vizSchema)
   .handler(async ({ data }): Promise<VizResult[]> => {
-    const currentSettings = await cookieActions.getVizSettings();
+    return tracer.startActiveSpan("viz", async (span) => {
+      try {
+        const currentSettings = await cookieActions.getVizSettings();
 
-    const options: SessionChartSettings = {
-      ...currentSettings,
-      ...data,
-    };
+        const options: SessionChartSettings = {
+          ...currentSettings,
+          ...data,
+        };
 
-    const validMetrics = VALID_METRICS[options.kind];
-    const cumulativeOk = VALID_CUMULATIVE[options.metric];
-    if (!validMetrics.includes(options.metric)) {
-      return [];
-    }
-    if (options.cumulative && !cumulativeOk) {
-      return [];
-    }
+        const validMetrics = VALID_METRICS[options.kind];
+        const cumulativeOk = VALID_CUMULATIVE[options.metric];
+        if (!validMetrics.includes(options.metric)) {
+          return [];
+        }
+        if (options.cumulative && !cumulativeOk) {
+          return [];
+        }
 
-    const wheres = [];
-    const date = new Date();
-    if (options.range === "3m") {
-      date.setMonth(date.getMonth() - 3);
-      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
-    }
-    if (options.range === "6m") {
-      date.setMonth(date.getMonth() - 6);
-      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
-    }
-    if (options.range === "12m") {
-      date.setFullYear(date.getFullYear() - 1);
-      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
-    }
-    if (options.range === "ytd") {
-      date.setMonth(0);
-      date.setDate(0);
-      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
-    }
+        const wheres = [];
+        const date = new Date();
+        if (options.range === "3m") {
+          date.setMonth(date.getMonth() - 3);
+          wheres.push(
+            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
+          );
+        }
+        if (options.range === "6m") {
+          date.setMonth(date.getMonth() - 6);
+          wheres.push(
+            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
+          );
+        }
+        if (options.range === "12m") {
+          date.setFullYear(date.getFullYear() - 1);
+          wheres.push(
+            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
+          );
+        }
+        if (options.range === "ytd") {
+          date.setMonth(0);
+          date.setDate(0);
+          wheres.push(
+            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
+          );
+        }
 
-    wheres.push(eq(workoutEntries.kind, options.kind));
-    wheres.push(eq(workoutEntries.status, "completed"));
+        wheres.push(eq(workoutEntries.kind, options.kind));
+        wheres.push(eq(workoutEntries.status, "completed"));
 
-    const db = await getDb();
+        const db = await getDb();
 
-    const rows = await db
-      .select({
-        kind: workoutEntries.kind,
-        dayKey: workoutEntries.dayKey,
-        vendorActivy: {
-          vendor: vendorActivities.vendor,
-          data: vendorActivities.data,
-        },
-      })
-      .from(workoutEntries)
-      .leftJoin(
-        vendorActivities,
-        eq(workoutEntries.vendorActivityId, vendorActivities.id),
-      )
-      .where(and(...wheres))
-      .orderBy(asc(workoutEntries.dayKey))
-      .all();
+        const rows = await db
+          .select({
+            kind: workoutEntries.kind,
+            dayKey: workoutEntries.dayKey,
+            vendorActivy: {
+              vendor: vendorActivities.vendor,
+              data: vendorActivities.data,
+            },
+          })
+          .from(workoutEntries)
+          .leftJoin(
+            vendorActivities,
+            eq(workoutEntries.vendorActivityId, vendorActivities.id),
+          )
+          .where(and(...wheres))
+          .orderBy(asc(workoutEntries.dayKey))
+          .all();
 
-    const out: VizResult[] = [];
-    rows.forEach((r) => {
-      const { vendorActivy } = r;
-      if (!vendorActivy) return;
-      const va = vendorActivy as TypedVendorWorkoutRow;
-      const value = getVizValue(va, options.metric);
-      if (value) {
-        out.push({
-          date: r.dayKey,
-          value,
+        const out: VizResult[] = [];
+        rows.forEach((r) => {
+          const { vendorActivy } = r;
+          if (!vendorActivy) return;
+          const va = vendorActivy as TypedVendorWorkoutRow;
+          const value = getVizValue(va, options.metric);
+          if (value) {
+            out.push({
+              date: r.dayKey,
+              value,
+            });
+          }
         });
+
+        const grouped = new Map<string, GroupItem>();
+
+        out.forEach(({ date, value }) => {
+          rollupValue(grouped, options.agg, options.metric, date, value);
+        });
+
+        const folded: VizResult[] = [...grouped.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, g]) => ({ date, value: g.v }));
+
+        if (!options.cumulative) {
+          return folded;
+        }
+
+        return folded.reduce((acc, item) => {
+          const prev = acc.at(-1)?.value ?? 0;
+          acc.push({ date: item.date, value: prev + item.value });
+          return acc;
+        }, [] as VizResult[]);
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
       }
     });
-
-    const grouped = new Map<string, GroupItem>();
-
-    out.forEach(({ date, value }) => {
-      rollupValue(grouped, options.agg, options.metric, date, value);
-    });
-
-    const folded: VizResult[] = [...grouped.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, g]) => ({ date, value: g.v }));
-
-    if (!options.cumulative) {
-      return folded;
-    }
-
-    return folded.reduce((acc, item) => {
-      const prev = acc.at(-1)?.value ?? 0;
-      acc.push({ date: item.date, value: prev + item.value });
-      return acc;
-    }, [] as VizResult[]);
   });
 
 const vizStacked = createServerFn({ method: "GET" })
   .inputValidator(stackedVizSchema)
   .handler(async ({ data }): Promise<StackedVizResult[]> => {
-    const currentSettings = await cookieActions.getVizSettings();
+    return tracer.startActiveSpan("vizStacked", async (span) => {
+      try {
+        const currentSettings = await cookieActions.getVizSettings();
 
-    const options: SessionChartSettings = {
-      ...currentSettings,
-      ...data,
-    };
+        const options: SessionChartSettings = {
+          ...currentSettings,
+          ...data,
+        };
 
-    if (!["distance", "time"].includes(options.metric)) {
-      return [];
-    }
+        if (!["distance", "time"].includes(options.metric)) {
+          return [];
+        }
 
-    const wheres = [];
-    const date = new Date();
-    if (options.range === "3m") {
-      date.setMonth(date.getMonth() - 3);
-      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
-    }
-    if (options.range === "6m") {
-      date.setMonth(date.getMonth() - 6);
-      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
-    }
-    if (options.range === "12m") {
-      date.setFullYear(date.getFullYear() - 1);
-      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
-    }
-    if (options.range === "ytd") {
-      date.setMonth(0);
-      date.setDate(0);
-      wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
-    }
+        const wheres = [];
+        const date = new Date();
+        if (options.range === "3m") {
+          date.setMonth(date.getMonth() - 3);
+          wheres.push(
+            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
+          );
+        }
+        if (options.range === "6m") {
+          date.setMonth(date.getMonth() - 6);
+          wheres.push(
+            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
+          );
+        }
+        if (options.range === "12m") {
+          date.setFullYear(date.getFullYear() - 1);
+          wheres.push(
+            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
+          );
+        }
+        if (options.range === "ytd") {
+          date.setMonth(0);
+          date.setDate(0);
+          wheres.push(
+            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
+          );
+        }
 
-    wheres.push(inArray(workoutEntries.kind, ["bike", "run", "swim"]));
-    wheres.push(eq(workoutEntries.status, "completed"));
+        wheres.push(inArray(workoutEntries.kind, ["bike", "run", "swim"]));
+        wheres.push(eq(workoutEntries.status, "completed"));
 
-    const db = await getDb();
+        const db = await getDb();
 
-    const rows = await db
-      .select({
-        kind: workoutEntries.kind,
-        dayKey: workoutEntries.dayKey,
-        vendorActivy: {
-          vendor: vendorActivities.vendor,
-          data: vendorActivities.data,
-        },
-      })
-      .from(workoutEntries)
-      .leftJoin(
-        vendorActivities,
-        eq(workoutEntries.vendorActivityId, vendorActivities.id),
-      )
-      .where(and(...wheres))
-      .orderBy(asc(workoutEntries.dayKey))
-      .all();
+        const rows = await db
+          .select({
+            kind: workoutEntries.kind,
+            dayKey: workoutEntries.dayKey,
+            vendorActivy: {
+              vendor: vendorActivities.vendor,
+              data: vendorActivities.data,
+            },
+          })
+          .from(workoutEntries)
+          .leftJoin(
+            vendorActivities,
+            eq(workoutEntries.vendorActivityId, vendorActivities.id),
+          )
+          .where(and(...wheres))
+          .orderBy(asc(workoutEntries.dayKey))
+          .all();
 
-    const out: (VizResult & { kind: "swim" | "bike" | "run" })[] = [];
-    rows.forEach((r) => {
-      const { vendorActivy } = r;
-      if (!vendorActivy) return;
-      const va = vendorActivy as TypedVendorWorkoutRow;
-      const value = getVizValue(va, options.metric);
-      if (value) {
-        out.push({
-          date: r.dayKey,
-          value,
-          kind: r.kind as "swim" | "bike" | "run",
+        const out: (VizResult & { kind: "swim" | "bike" | "run" })[] = [];
+        rows.forEach((r) => {
+          const { vendorActivy } = r;
+          if (!vendorActivy) return;
+          const va = vendorActivy as TypedVendorWorkoutRow;
+          const value = getVizValue(va, options.metric);
+          if (value) {
+            out.push({
+              date: r.dayKey,
+              value,
+              kind: r.kind as "swim" | "bike" | "run",
+            });
+          }
         });
+
+        const grouped = new Map<string, StackedGroupItem>();
+
+        out.forEach(({ date, value, kind }) => {
+          rollupStackedValue(grouped, options.agg, kind, date, value);
+        });
+
+        const folded: StackedVizResult[] = [...grouped.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, g]) => ({ date, values: g.values }));
+
+        if (!options.proportional && !options.cumulative) {
+          return folded;
+        }
+
+        if (options.proportional) {
+          return folded.map((f) => {
+            const tot = f.values.bike + f.values.run + f.values.swim;
+            return {
+              date: f.date,
+              values: {
+                swim: f.values.swim / tot,
+                bike: f.values.bike / tot,
+                run: f.values.run / tot,
+              },
+            };
+          });
+        }
+
+        return folded.reduce((acc, item) => {
+          const prev = acc.at(-1);
+          acc.push({
+            date: item.date,
+            values: {
+              swim: (prev?.values.swim ?? 0) + item.values.swim,
+              bike: (prev?.values.bike ?? 0) + item.values.bike,
+              run: (prev?.values.run ?? 0) + item.values.run,
+            },
+          });
+          return acc;
+        }, [] as StackedVizResult[]);
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
       }
     });
-
-    const grouped = new Map<string, StackedGroupItem>();
-
-    out.forEach(({ date, value, kind }) => {
-      rollupStackedValue(grouped, options.agg, kind, date, value);
-    });
-
-    const folded: StackedVizResult[] = [...grouped.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, g]) => ({ date, values: g.values }));
-
-    if (!options.proportional && !options.cumulative) {
-      return folded;
-    }
-
-    if (options.proportional) {
-      return folded.map((f) => {
-        const tot = f.values.bike + f.values.run + f.values.swim;
-        return {
-          date: f.date,
-          values: {
-            swim: f.values.swim / tot,
-            bike: f.values.bike / tot,
-            run: f.values.run / tot,
-          },
-        };
-      });
-    }
-
-    return folded.reduce((acc, item) => {
-      const prev = acc.at(-1);
-      acc.push({
-        date: item.date,
-        values: {
-          swim: (prev?.values.swim ?? 0) + item.values.swim,
-          bike: (prev?.values.bike ?? 0) + item.values.bike,
-          run: (prev?.values.run ?? 0) + item.values.run,
-        },
-      });
-      return acc;
-    }, [] as StackedVizResult[]);
   });
 
 const unlinked = createServerFn({ method: "GET" }).handler(
   async (): Promise<UnlinkedActivitiesItem[]> => {
-    const timezone = await cookieActions.getTimezone();
-    const db = await getDb();
+    return tracer.startActiveSpan("unlinked", async (span) => {
+      try {
+        const timezone = await cookieActions.getTimezone();
+        const db = await getDb();
 
-    const rows = await db
-      .select({ vendorActivities })
-      .from(vendorActivities)
-      .leftJoin(
-        workoutEntries,
-        eq(workoutEntries.vendorActivityId, vendorActivities.id),
-      )
-      .where(isNull(workoutEntries.id))
-      .orderBy(desc(vendorActivities.createdAt))
-      .all();
+        const rows = await db
+          .select({ vendorActivities })
+          .from(vendorActivities)
+          .leftJoin(
+            workoutEntries,
+            eq(workoutEntries.vendorActivityId, vendorActivities.id),
+          )
+          .where(isNull(workoutEntries.id))
+          .orderBy(desc(vendorActivities.createdAt))
+          .all();
 
-    return rows.map((r) => ({
-      ...r.vendorActivities,
-      dayKey: toIsoDate(r.vendorActivities.createdAt, timezone),
-    }));
+        return rows.map((r) => ({
+          ...r.vendorActivities,
+          dayKey: toIsoDate(r.vendorActivities.createdAt, timezone),
+        }));
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   },
 );
 
 const linkAll = createServerFn({ method: "POST" }).handler(
   async (): Promise<LinkAllResponse> => {
-    const timezone = await cookieActions.getTimezone();
+    return tracer.startActiveSpan("linkAll", async (span) => {
+      try {
+        const timezone = await cookieActions.getTimezone();
 
-    const db = await getDb();
-    const now = new Date();
+        const db = await getDb();
+        const now = new Date();
 
-    const unlinkedActivities = await unlinked();
+        const unlinkedActivities = await unlinked();
 
-    const allPlans = await db
-      .select()
-      .from(workoutEntries)
-      .where(
-        and(
-          isNull(workoutEntries.vendorActivityId),
-          eq(workoutEntries.status, "planned"),
-        ),
-      )
-      .all();
+        const allPlans = await db
+          .select()
+          .from(workoutEntries)
+          .where(
+            and(
+              isNull(workoutEntries.vendorActivityId),
+              eq(workoutEntries.status, "planned"),
+            ),
+          )
+          .all();
 
-    const plansByDayKind = new Map<string, WorkoutEntryRow[]>();
-    for (const p of allPlans) {
-      const key = `${p.dayKey}:${p.kind}`;
-      const arr = plansByDayKind.get(key) ?? [];
-      arr.push(p);
-      plansByDayKind.set(key, arr);
-    }
+        const plansByDayKind = new Map<string, WorkoutEntryRow[]>();
+        for (const p of allPlans) {
+          const key = `${p.dayKey}:${p.kind}`;
+          const arr = plansByDayKind.get(key) ?? [];
+          arr.push(p);
+          plansByDayKind.set(key, arr);
+        }
 
-    const resolvedIds = [];
+        const resolvedIds = [];
 
-    for (const unlinkedActivity of unlinkedActivities) {
-      const activity = unlinkedActivity as TypedVendorWorkoutRow;
-      const dayKey = toIsoDate(activity.createdAt, timezone);
-      const planKind = vendorActivityToPlanKind(activity);
-      if (!planKind) continue;
+        for (const unlinkedActivity of unlinkedActivities) {
+          const activity = unlinkedActivity as TypedVendorWorkoutRow;
+          const dayKey = toIsoDate(activity.createdAt, timezone);
+          const planKind = vendorActivityToPlanKind(activity);
+          if (!planKind) continue;
 
-      const key = `${dayKey}:${planKind}`;
-      const candidates = plansByDayKind.get(key) ?? [];
-      const existing = candidates.shift(); // take the first available, remove it so next cw doesn't reuse it
+          const key = `${dayKey}:${planKind}`;
+          const candidates = plansByDayKind.get(key) ?? [];
+          const existing = candidates.shift(); // take the first available, remove it so next cw doesn't reuse it
 
-      if (existing) {
-        await db
-          .update(workoutEntries)
-          .set({
-            vendorActivityId: activity.id,
-            status: "completed",
-            updatedAt: now,
-          })
-          .where(eq(workoutEntries.id, existing.id))
-          .run();
-        existing.vendorActivityId = activity.id;
-        existing.status = "completed";
-      } else {
-        const id = crypto.randomUUID();
-        await db
-          .insert(workoutEntries)
-          .values({
-            id,
-            kind: planKind,
-            dayKey,
-            notes: null,
-            status: "completed",
-            routineVendor: activity.vendor,
-            routineId: null,
-            vendorActivityId: activity.id,
-            distance: null,
-            distanceUnits: null,
-            timeSeconds: null,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .run();
+          if (existing) {
+            await db
+              .update(workoutEntries)
+              .set({
+                vendorActivityId: activity.id,
+                status: "completed",
+                updatedAt: now,
+              })
+              .where(eq(workoutEntries.id, existing.id))
+              .run();
+            existing.vendorActivityId = activity.id;
+            existing.status = "completed";
+          } else {
+            const id = crypto.randomUUID();
+            await db
+              .insert(workoutEntries)
+              .values({
+                id,
+                kind: planKind,
+                dayKey,
+                notes: null,
+                status: "completed",
+                routineVendor: activity.vendor,
+                routineId: null,
+                vendorActivityId: activity.id,
+                distance: null,
+                distanceUnits: null,
+                timeSeconds: null,
+                createdAt: now,
+                updatedAt: now,
+              })
+              .run();
+          }
+
+          resolvedIds.push(activity.id);
+        }
+
+        if (resolvedIds.length > 0) {
+          await db
+            .update(vendorActivities)
+            .set({ updatedAt: now })
+            .where(inArray(vendorActivities.id, resolvedIds))
+            .run();
+        }
+
+        return {
+          nLinked: resolvedIds.length,
+          nUnlinked: unlinkedActivities.length - resolvedIds.length,
+        };
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
       }
-
-      resolvedIds.push(activity.id);
-    }
-
-    if (resolvedIds.length > 0) {
-      await db
-        .update(vendorActivities)
-        .set({ updatedAt: now })
-        .where(inArray(vendorActivities.id, resolvedIds))
-        .run();
-    }
-
-    return {
-      nLinked: resolvedIds.length,
-      nUnlinked: unlinkedActivities.length - resolvedIds.length,
-    };
+    });
   },
 );
 
@@ -471,177 +543,225 @@ const linkAll = createServerFn({ method: "POST" }).handler(
 const get = createServerFn({ method: "GET" })
   .inputValidator(idSchema)
   .handler(async ({ data }): Promise<WorkoutEntryWithCompleted> => {
-    return activityServerFns.get(data);
+    return tracer.startActiveSpan("get", async (span) => {
+      try {
+        return activityServerFns.get(data);
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   });
 
 const create = createServerFn({ method: "POST" })
   .inputValidator(createPlanSchema)
   .handler(async ({ data }): Promise<{ id: string }> => {
-    const cardio = ["run", "bike", "swim"].includes(data.kind);
-    const distance = cardio ? data.distance : null;
-    const distanceUnits = cardio ? data.distanceUnits : null;
+    return tracer.startActiveSpan("create", async (span) => {
+      try {
+        const cardio = ["run", "bike", "swim"].includes(data.kind);
+        const distance = cardio ? data.distance : null;
+        const distanceUnits = cardio ? data.distanceUnits : null;
 
-    const db = await getDb();
+        const db = await getDb();
 
-    const id = crypto.randomUUID();
-    await db
-      .insert(workoutEntries)
-      .values({
-        id,
-        kind: data.kind,
-        dayKey: data.dayKey,
-        notes: data.notes ?? null,
-        status: "planned",
-        routineVendor: data.kind === "lift" ? "hevy" : "strava",
-        routineId: data.kind === "lift" ? data.routineId : null,
-        vendorActivityId: null,
-        distance,
-        distanceUnits,
-        timeSeconds: data.timeSeconds,
-      })
-      .run();
-    return { id };
+        const id = crypto.randomUUID();
+        await db
+          .insert(workoutEntries)
+          .values({
+            id,
+            kind: data.kind,
+            dayKey: data.dayKey,
+            notes: data.notes ?? null,
+            status: "planned",
+            routineVendor: data.kind === "lift" ? "hevy" : "strava",
+            routineId: data.kind === "lift" ? data.routineId : null,
+            vendorActivityId: null,
+            distance,
+            distanceUnits,
+            timeSeconds: data.timeSeconds,
+          })
+          .run();
+        return { id };
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   });
 
 const createFromCompleted = createServerFn({ method: "POST" })
   .inputValidator(createFromCompletedSchema)
   .handler(async ({ data }) => {
-    const db = await getDb();
+    return tracer.startActiveSpan("createFromCompleted", async (span) => {
+      try {
+        const db = await getDb();
 
-    const completed = await db
-      .select()
-      .from(vendorActivities)
-      .where(eq(vendorActivities.id, data.vendorActivityId))
-      .get();
-    if (!completed) throw new Error("Completed workout not found");
-    const linked = await db
-      .select()
-      .from(workoutEntries)
-      .where(eq(workoutEntries.vendorActivityId, completed.id))
-      .get();
-    if (linked) throw new Error("Activity is already linked");
+        const completed = await db
+          .select()
+          .from(vendorActivities)
+          .where(eq(vendorActivities.id, data.vendorActivityId))
+          .get();
+        if (!completed) throw new Error("Completed workout not found");
+        const linked = await db
+          .select()
+          .from(workoutEntries)
+          .where(eq(workoutEntries.vendorActivityId, completed.id))
+          .get();
+        if (linked) throw new Error("Activity is already linked");
 
-    const planKind = vendorActivityToPlanKind(
-      completed as TypedVendorWorkoutRow,
-    );
+        const planKind = vendorActivityToPlanKind(
+          completed as TypedVendorWorkoutRow,
+        );
 
-    if (!planKind) {
-      throw new Error(
-        `cannot create a plan from ${completed.vendor} due to incompatible activity type`,
-      );
-    }
+        if (!planKind) {
+          throw new Error(
+            `cannot create a plan from ${completed.vendor} due to incompatible activity type`,
+          );
+        }
 
-    const existing = await db
-      .select()
-      .from(workoutEntries)
-      .where(
-        and(
-          eq(workoutEntries.dayKey, data.dayKey),
-          eq(workoutEntries.kind, planKind),
-          isNull(workoutEntries.vendorActivityId),
-        ),
-      )
-      .get();
+        const existing = await db
+          .select()
+          .from(workoutEntries)
+          .where(
+            and(
+              eq(workoutEntries.dayKey, data.dayKey),
+              eq(workoutEntries.kind, planKind),
+              isNull(workoutEntries.vendorActivityId),
+            ),
+          )
+          .get();
 
-    const id = existing ? existing.id : crypto.randomUUID();
-    if (existing) {
-      await db
-        .update(workoutEntries)
-        .set({
-          vendorActivityId: completed.id,
-          status: "completed",
-          updatedAt: new Date(),
-        })
-        .where(eq(workoutEntries.id, existing.id))
-        .run();
-    } else {
-      await db
-        .insert(workoutEntries)
-        .values({
-          id,
-          kind: planKind,
-          dayKey: data.dayKey,
-          status: "completed",
-          routineVendor: completed.vendor,
-          routineId: null,
-          vendorActivityId: completed.id,
-          notes: null,
-          distance: null,
-          distanceUnits: null,
-          timeSeconds: null,
-        })
-        .run();
-    }
+        const id = existing ? existing.id : crypto.randomUUID();
+        if (existing) {
+          await db
+            .update(workoutEntries)
+            .set({
+              vendorActivityId: completed.id,
+              status: "completed",
+              updatedAt: new Date(),
+            })
+            .where(eq(workoutEntries.id, existing.id))
+            .run();
+        } else {
+          await db
+            .insert(workoutEntries)
+            .values({
+              id,
+              kind: planKind,
+              dayKey: data.dayKey,
+              status: "completed",
+              routineVendor: completed.vendor,
+              routineId: null,
+              vendorActivityId: completed.id,
+              notes: null,
+              distance: null,
+              distanceUnits: null,
+              timeSeconds: null,
+            })
+            .run();
+        }
 
-    return { id };
+        return { id };
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   });
 
 const update = createServerFn({ method: "POST" })
   .inputValidator(updatePlanSchema)
   .handler(async ({ data }): Promise<{ ok: boolean; note?: string }> => {
-    const db = await getDb();
-    const row = await db
-      .select()
-      .from(workoutEntries)
-      .where(eq(workoutEntries.id, data.id))
-      .get();
+    return tracer.startActiveSpan("update", async (span) => {
+      try {
+        const db = await getDb();
+        const row = await db
+          .select()
+          .from(workoutEntries)
+          .where(eq(workoutEntries.id, data.id))
+          .get();
 
-    if (!row) throw new Error("Plan not found");
-    const updates: Partial<NewWorkoutEntryRow> = { updatedAt: new Date() };
+        if (!row) throw new Error("Plan not found");
+        const updates: Partial<NewWorkoutEntryRow> = { updatedAt: new Date() };
 
-    if (data.notes !== undefined) updates.notes = data.notes;
+        if (data.notes !== undefined) updates.notes = data.notes;
 
-    if (!row.vendorActivityId) {
-      if (data.dayKey !== undefined) updates.dayKey = data.dayKey;
-      if (data.kind !== undefined) updates.kind = data.kind;
-      if (data.distance !== undefined) updates.distance = data.distance;
-      if (data.distanceUnits !== undefined)
-        updates.distanceUnits = data.distanceUnits;
-      if (data.timeSeconds !== undefined)
-        updates.timeSeconds = data.timeSeconds;
-      if (data.routineId !== undefined) {
-        if (data.routineId && data.routineId !== row.routineId) {
-          try {
-            await hevyFetchRoutineById(data.routineId);
-          } catch {
-            throw new Error(
-              "Could not verify routine — it may no longer exist in Hevy.",
-            );
+        if (!row.vendorActivityId) {
+          if (data.dayKey !== undefined) updates.dayKey = data.dayKey;
+          if (data.kind !== undefined) updates.kind = data.kind;
+          if (data.distance !== undefined) updates.distance = data.distance;
+          if (data.distanceUnits !== undefined)
+            updates.distanceUnits = data.distanceUnits;
+          if (data.timeSeconds !== undefined)
+            updates.timeSeconds = data.timeSeconds;
+          if (data.routineId !== undefined) {
+            if (data.routineId && data.routineId !== row.routineId) {
+              try {
+                await hevyFetchRoutineById(data.routineId);
+              } catch {
+                throw new Error(
+                  "Could not verify routine — it may no longer exist in Hevy.",
+                );
+              }
+              updates.routineId = data.routineId;
+              updates.routineVendor = "hevy";
+            } else if (!data.routineId) {
+              updates.routineId = null;
+              updates.routineVendor = null;
+            }
           }
-          updates.routineId = data.routineId;
-          updates.routineVendor = "hevy";
-        } else if (!data.routineId) {
-          updates.routineId = null;
-          updates.routineVendor = null;
         }
-      }
-    }
 
-    await db
-      .update(workoutEntries)
-      .set(updates)
-      .where(eq(workoutEntries.id, data.id));
-    return { ok: true };
+        await db
+          .update(workoutEntries)
+          .set(updates)
+          .where(eq(workoutEntries.id, data.id));
+        return { ok: true };
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   });
 
 const deletePlan = createServerFn({ method: "POST" })
   .inputValidator(idSchema)
   .handler(async ({ data }) => {
-    const db = await getDb();
-    const plan = await db
-      .select({ completedWorkoutId: workoutEntries.vendorActivityId })
-      .from(workoutEntries)
-      .where(eq(workoutEntries.id, data.id))
-      .get();
-    if (!plan) throw new Error("plan not found");
-    if (plan.completedWorkoutId) {
-      return {
-        ok: false,
-        note: "cannot delete a completed workout",
-      };
-    }
-    await db.delete(workoutEntries).where(eq(workoutEntries.id, data.id)).run();
-    return { ok: true };
+    return tracer.startActiveSpan("deletePlan", async (span) => {
+      try {
+        const db = await getDb();
+        const plan = await db
+          .select({ completedWorkoutId: workoutEntries.vendorActivityId })
+          .from(workoutEntries)
+          .where(eq(workoutEntries.id, data.id))
+          .get();
+        if (!plan) throw new Error("plan not found");
+        if (plan.completedWorkoutId) {
+          return {
+            ok: false,
+            note: "cannot delete a completed workout",
+          };
+        }
+        await db
+          .delete(workoutEntries)
+          .where(eq(workoutEntries.id, data.id))
+          .run();
+        return { ok: true };
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
   });
 
 export const activityActions = {

@@ -11,6 +11,9 @@ import { logMessage } from "./lib/utils";
  * you run `vite dev` / `vite preview` / production server), not in the browser DevTools console.
  */
 logMessage("[start]");
+if (typeof window === "undefined") {
+  await import("./instrumentation");
+}
 export const startInstance = createStart(() => ({
   requestMiddleware: [requireSessionFnMiddleware],
 }));
