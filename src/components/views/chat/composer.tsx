@@ -94,12 +94,7 @@ export const Composer: React.FC = () => {
 
   const sportEventsQuery = useQuery({
     queryKey: ["sportEvents"] as const,
-    queryFn: async () => {
-      const rows = await runListSportEvents();
-      if (!Array.isArray(rows))
-        throw new Error("Unexpected response loading events.");
-      return rows;
-    },
+    queryFn: async () => runListSportEvents(),
     staleTime: 60_000,
   });
 

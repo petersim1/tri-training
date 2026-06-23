@@ -25,12 +25,12 @@ import { ActivityElement } from "../views/activities/element";
 import { Modal, ModalContent } from ".";
 
 export const EditModal: React.FC<{
-  workout: WorkoutEntryWithCompleted;
+  plan: WorkoutEntryWithCompleted;
   onClose: () => void;
-}> = ({ workout, onClose }) => {
+}> = ({ plan, onClose }) => {
   const queryClient = useQueryClient();
 
-  const { vendorActivity, timeSeconds, ...rest } = workout;
+  const { vendorActivity, timeSeconds, ...rest } = plan;
 
   const formReducer = useFormReducer<UpdatePlanInput>({
     ...rest,
@@ -65,7 +65,7 @@ export const EditModal: React.FC<{
     mutationFn: (data: UpdatePlanInput) => activityActions.update({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.dayDetails(workout.dayKey),
+        queryKey: queryKeys.dayDetails(plan.dayKey),
       });
       queryClient.invalidateQueries({ queryKey: ["calendar"] });
       queryClient.invalidateQueries({ queryKey: ["activities"] });
@@ -76,10 +76,10 @@ export const EditModal: React.FC<{
   });
 
   const deletePlanMutation = useMutation({
-    mutationFn: () => activityActions.deletePlan({ data: { id: workout.id } }),
+    mutationFn: () => activityActions.deletePlan({ data: { id: plan.id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.dayDetails(workout.dayKey),
+        queryKey: queryKeys.dayDetails(plan.dayKey),
       });
       queryClient.invalidateQueries({ queryKey: ["calendar"] });
       queryClient.invalidateQueries({ queryKey: ["activities"] });
@@ -146,7 +146,7 @@ export const EditModal: React.FC<{
           </button>
         </div>
 
-        <ActivityElement workout={workout} hideEdit hideNote isCard />
+        <ActivityElement workout={plan} hideEdit hideNote isCard />
 
         <form className="space-y-3 mt-2" onSubmit={handleSubmit}>
           {!vendorActivity && (
@@ -360,9 +360,7 @@ export const EditModal: React.FC<{
           <div className="flex flex-wrap justify-between gap-2 border-t border-zinc-800/80 pt-3 mt-3">
             <button
               type="button"
-              disabled={
-                deletePlanMutation.isPending || !!workout.vendorActivityId
-              }
+              disabled={deletePlanMutation.isPending || !!plan.vendorActivityId}
               className="text-[11px] text-red-400/90 hover:not-disabled:underline disabled:opacity-50"
               onClick={(e) => {
                 e.preventDefault();

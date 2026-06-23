@@ -1,4 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import type { TypedVendorWorkoutRow } from "@/lib/db/schema.server";
@@ -6,19 +10,24 @@ import { completedWorkoutTitle } from "@/lib/plans/completed-workout-data";
 import queryKeys from "@/lib/query-keys";
 import { rawActivityType } from "@/lib/utils/vendors";
 import { activityActions } from "@/server-fcts/activities";
-import type { UnlinkedActivitiesItem } from "@/types/responses/activities";
 import { XIcon } from "../assets";
 import { Modal, ModalContent } from ".";
 
 export const LinkModal: React.FC<{
-  workouts: UnlinkedActivitiesItem[];
   onClose: () => void;
-}> = ({ workouts, onClose }) => {
+}> = ({ onClose }) => {
   const queryClient = useQueryClient();
   const linkAll = useServerFn(activityActions.linkAll);
 
   const [linkAllError, setLinkAllError] = useState<string | null>(null);
   const [linkAllInfo, setLinkAllInfo] = useState<string | null>(null);
+
+  // shouldn't suspend as this is hydrated in the parent component where the modal is used
+  // prior to even making the button available
+  const { data } = useSuspenseQuery({
+    queryKey: queryKeys.unlinkedActivities,
+    queryFn: () => activityActions.unlinked(),
+  });
 
   const linkAllMutation = useMutation({
     mutationFn: () => linkAll(),
@@ -58,7 +67,7 @@ export const LinkModal: React.FC<{
             id="activities-link-all-title"
             className="text-lg font-semibold text-zinc-100"
           >
-            Link <span>{workouts.length}</span> sessions
+            Link <span>{data.length}</span> sessions
           </h2>
           <button type="button" onClick={onClose}>
             <XIcon className="size-4" />
@@ -66,7 +75,7 @@ export const LinkModal: React.FC<{
         </div>
 
         <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 max-h-78">
-          {workouts.map((cw) => {
+          {data.map((cw) => {
             const title = completedWorkoutTitle(cw) ?? "Session";
             const kindLabel = rawActivityType(cw as TypedVendorWorkoutRow);
             return (
@@ -114,7 +123,7 @@ export const LinkModal: React.FC<{
             </button>
             <button
               type="button"
-              disabled={linkAllMutation.isPending || workouts.length === 0}
+              disabled={linkAllMutation.isPending || data.length === 0}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();

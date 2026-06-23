@@ -1,11 +1,31 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import type React from "react";
 import { useDeferredValue } from "react";
 import queryKeys from "@/lib/query-keys";
+import { cn } from "@/lib/utils";
 import { activityActions } from "@/server-fcts/activities";
 import type { CalendarScope } from "@/types/requests/activities";
 import { CalendarDayItem } from "./day";
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export const CalendarGridLoading: React.FC<{ period: CalendarScope }> = ({
+  period,
+}) => {
+  return (
+    <>
+      {Array.from({ length: period === "week" ? 7 : 35 }).map((_, i) => (
+        <div
+          key={i}
+          className={cn(
+            "relative flex min-w-0 flex-col overflow-hidden bg-zinc-950",
+            "calendar-cell-loading",
+            period === "week" && "h-16 sm:h-18",
+            period === "month" && "h-16 lg:h-18",
+          )}
+        />
+      ))}
+    </>
+  );
+};
 
 export const CalendarGrid: React.FC<{
   period: CalendarScope;
@@ -15,7 +35,7 @@ export const CalendarGrid: React.FC<{
   const periodUse = useDeferredValue(period);
   const anchorUse = useDeferredValue(anchor);
 
-  const { data = [], isLoading } = useSuspenseQuery({
+  const { data } = useSuspenseQuery({
     queryKey: queryKeys.calendarQueryKey(periodUse, anchorUse),
     queryFn: () =>
       activityActions.calendar({
@@ -27,24 +47,15 @@ export const CalendarGrid: React.FC<{
   });
 
   return (
-    <div className="grid min-w-0 grid-cols-7 gap-px rounded-lg overflow-hidden border border-zinc-800 bg-zinc-800">
-      {WEEKDAYS.map((w) => (
-        <div
-          key={w}
-          className="bg-zinc-900 px-0.5 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-zinc-500"
-        >
-          {w}
-        </div>
-      ))}
+    <>
       {data.map((cell) => (
         <CalendarDayItem
           key={`${cell.dayKey}-${anchor}-${period}`}
           day={cell}
-          isLoading={isLoading}
-          layout={period}
+          period={period}
           onOpenDay={() => setSelectedDay(cell.dayKey)}
         />
       ))}
-    </div>
+    </>
   );
 };

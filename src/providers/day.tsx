@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { type ReactNode, useEffect, useEffectEvent } from "react";
@@ -9,7 +9,7 @@ export const DayProvider = ({ children }: { children: ReactNode }) => {
   const router = useRouter();
   const updateTimeZone = useServerFn(cookieActions.setTimezone);
 
-  const tzQuery = useQuery({
+  const { data: tz } = useSuspenseQuery({
     queryKey: queryKeys.timezone,
     queryFn: () => cookieActions.getTimezone(),
   });
@@ -30,8 +30,8 @@ export const DayProvider = ({ children }: { children: ReactNode }) => {
   });
 
   useEffect(() => {
-    onTimezoneCheck(tzQuery.data);
-  }, [tzQuery.data]);
+    onTimezoneCheck(tz);
+  }, [tz]);
 
   return children;
 };

@@ -1,11 +1,10 @@
 import { PlanActivityKindIcon, WeightIcon } from "@/components/assets";
 import { cn } from "@/lib/utils";
+import type { CalendarScope } from "@/types/requests/activities";
 import type {
   ActivityItem,
   CalendarPageItem,
 } from "@/types/responses/activities";
-
-export type HomeCalendarDayLayout = "month" | "week";
 
 const CalendarDayActivityIcons = ({
   dayPlans,
@@ -43,33 +42,24 @@ const CAL_DAY_DOT_BASE =
   "inline-flex size-2 shrink-0 rounded-full ring-1 ring-inset ring-black/25";
 const CAL_DAY_DOT_UNLINKED = `${CAL_DAY_DOT_BASE} bg-violet-400`;
 
-type CalendarDayProps = {
-  day: CalendarPageItem;
-  layout: HomeCalendarDayLayout;
-  onOpenDay: () => void;
-  isLoading: boolean;
-};
-
 export type CalendarCell = CalendarPageItem & {
   hasUnlinked: boolean;
   isCurrentPeriod: boolean;
   isToday: boolean;
 };
 
-export const CalendarDayItem: React.FC<CalendarDayProps> = ({
-  day,
-  layout,
-  onOpenDay,
-  isLoading,
-}) => {
+export const CalendarDayItem: React.FC<{
+  day: CalendarPageItem;
+  period: CalendarScope;
+  onOpenDay: () => void;
+}> = ({ day, period, onOpenDay }) => {
   const dayN = Number(day.dayKey.split("-").slice(-1)[0]);
   return (
     <div
       className={cn(
         "relative flex min-w-0 flex-col overflow-hidden bg-zinc-950",
-        isLoading && "calendar-cell-loading",
-        layout === "week" && "h-16 sm:h-18",
-        layout === "month" && "h-16 lg:h-18",
+        period === "week" && "h-16 sm:h-18",
+        period === "month" && "h-16 lg:h-18",
         day.isToday &&
           "before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-emerald-500 before:z-10",
       )}

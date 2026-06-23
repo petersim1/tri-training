@@ -236,7 +236,7 @@ export const LiftRoutineReadOnlyPreview: React.FC<{
   titleFromList: string | null;
 }> = ({ routineId, titleFromList }) => {
   const routineQuery = useQuery({
-    queryKey: ["hevyRoutineDetail", routineId],
+    queryKey: queryKeys.routineDetail(routineId as string),
     queryFn: () =>
       vendorActions.getRoutine({ data: { routineId: routineId as string } }),
     enabled: Boolean(routineId),
