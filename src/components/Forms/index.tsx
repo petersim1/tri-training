@@ -20,7 +20,7 @@ type WithError = { isError?: boolean };
 const errorClass =
   "border-rose-500/70 focus:border-rose-500/70 focus:ring-rose-500/25";
 const baseClass =
-  "w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/70 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50";
+  "w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/70 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 disabled:opacity-50";
 
 export const Input: React.FC<
   React.InputHTMLAttributes<HTMLInputElement> & WithError

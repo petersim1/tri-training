@@ -128,7 +128,7 @@ function SettingsPage() {
           type="button"
           disabled={backfillMutation.isPending}
           onClick={() => backfillMutation.mutate()}
-          className="rounded border border-zinc-600 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded border border-zinc-600 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-800 disabled:opacity-50"
         >
           {backfillMutation.isPending
             ? "Running…"

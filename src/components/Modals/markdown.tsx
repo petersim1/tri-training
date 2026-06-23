@@ -101,7 +101,7 @@ export const MarkdownModal: React.FC<{
             type="button"
             disabled={importMarkdownMutation.isPending}
             onClick={() => copy(ACTIVITIES_PLANNED_MARKDOWN_TEMPLATE)}
-            className="mr-auto h-8 rounded border border-zinc-700 px-3 text-xs text-zinc-300 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mr-auto h-8 rounded border border-zinc-700 px-3 text-xs text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
           >
             {isCopied ? (
               <CheckIcon className="size-4 stroke-green-400" />
@@ -113,7 +113,7 @@ export const MarkdownModal: React.FC<{
             type="button"
             disabled={importMarkdownMutation.isPending}
             onClick={onClose}
-            className="h-8 rounded border border-zinc-700 px-3 text-xs text-zinc-300 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-8 rounded border border-zinc-700 px-3 text-xs text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -123,7 +123,7 @@ export const MarkdownModal: React.FC<{
               importMarkdownMutation.isPending || uploadMarkdown.trim() === ""
             }
             onClick={() => importMarkdownMutation.mutate()}
-            className="h-8 rounded border border-emerald-600/60 bg-emerald-950/35 px-3 text-xs font-medium text-emerald-200 hover:bg-emerald-950/55 disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-8 rounded border border-emerald-600/60 bg-emerald-950/35 px-3 text-xs font-medium text-emerald-200 hover:bg-emerald-950/55 disabled:opacity-50"
           >
             {importMarkdownMutation.isPending ? "Importing…" : "Import"}
           </button>

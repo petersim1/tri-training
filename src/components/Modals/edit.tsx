@@ -379,14 +379,14 @@ export const EditModal: React.FC<{
                   e.stopPropagation();
                   formReducer.reset();
                 }}
-                className="rounded border border-zinc-700 px-3 h-8 text-xs text-zinc-300 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded border border-zinc-700 px-3 h-8 text-xs text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
               >
                 Reset
               </button>
               <button
                 type="submit"
                 disabled={updatePlanMutation.isPending}
-                className="rounded border border-emerald-600/60 bg-emerald-950/40 px-3 h-8 text-xs font-medium text-emerald-200 hover:bg-emerald-950/65 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded border border-emerald-600/60 bg-emerald-950/40 px-3 h-8 text-xs font-medium text-emerald-200 hover:bg-emerald-950/65 disabled:opacity-50"
               >
                 {updatePlanMutation.isPending ? "Saving…" : "Save"}
               </button>

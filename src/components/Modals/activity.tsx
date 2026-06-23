@@ -247,7 +247,7 @@ const SummaryModal: React.FC<{
                       type="button"
                       disabled={createFromCompletedMutation.isPending}
                       onClick={() => createFromCompletedMutation.mutate(va.id)}
-                      className="rounded border border-violet-500/60 bg-violet-950/40 px-2.5 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-950/70 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded border border-violet-500/60 bg-violet-950/40 px-2.5 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-950/70 disabled:opacity-50"
                     >
                       {createFromCompletedMutation.isPending
                         ? "Linking…"
@@ -310,7 +310,7 @@ const SummaryModal: React.FC<{
           <button
             type="submit"
             disabled={setWeightMutation.isPending}
-            className="ml-auto h-10 shrink-0 rounded border border-emerald-600 bg-emerald-600/90 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ml-auto h-10 shrink-0 rounded border border-emerald-600 bg-emerald-600/90 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
           >
             {setWeightMutation.isPending ? "…" : "Save"}
           </button>
@@ -320,7 +320,7 @@ const SummaryModal: React.FC<{
               disabled={
                 clearWeightMutation.isPending || setWeightMutation.isPending
               }
-              className="h-10 shrink-0 rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-10 shrink-0 rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
               onClick={() => {
                 setWeightErr(null);
                 clearWeightMutation.mutate();
@@ -624,7 +624,7 @@ const AddModal: React.FC<{
         <button
           type="submit"
           disabled={createPlanMutation.isPending}
-          className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
         >
           {createPlanMutation.isPending ? "Creating…" : "Create plan"}
         </button>
@@ -987,7 +987,7 @@ export const WorkoutModal: React.FC<{
           <button
             type="submit"
             disabled={updatePlanMutation.isPending}
-            className="text-[11px] text-emerald-400/90 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+            className="text-[11px] text-emerald-400/90 hover:underline disabled:opacity-50"
           >
             {updatePlanMutation.isPending ? "Saving…" : "Save Workout"}
           </button>

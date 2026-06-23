@@ -132,7 +132,7 @@ export const CalendarToggle: React.FC<{
             aria-pressed={period === "month"}
             disabled={persistCalendarScopeMutation.isPending}
             onClick={() => persistCalendarScopeMutation.mutate("month")}
-            className={`touch-manipulation rounded px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`touch-manipulation rounded px-2.5 py-1 disabled:opacity-50 ${
               period === "month"
                 ? "bg-zinc-800 font-medium text-zinc-100"
                 : "hover:bg-zinc-900/80"
@@ -146,7 +146,7 @@ export const CalendarToggle: React.FC<{
             aria-pressed={period === "week"}
             disabled={persistCalendarScopeMutation.isPending}
             onClick={() => persistCalendarScopeMutation.mutate("week")}
-            className={`touch-manipulation rounded px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`touch-manipulation rounded px-2.5 py-1 disabled:opacity-50 ${
               period === "week"
                 ? "bg-zinc-800 font-medium text-zinc-100"
                 : "hover:bg-zinc-900/80"

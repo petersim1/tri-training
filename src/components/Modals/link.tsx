@@ -117,7 +117,7 @@ export const LinkModal: React.FC<{
               type="button"
               disabled={linkAllMutation.isPending}
               onClick={onClose}
-              className="rounded border border-zinc-700 px-3 h-8 text-xs text-zinc-300 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded border border-zinc-700 px-3 h-8 text-xs text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -129,7 +129,7 @@ export const LinkModal: React.FC<{
                 e.stopPropagation();
                 linkAllMutation.mutate();
               }}
-              className="rounded border border-violet-600/60 bg-violet-950/40 px-3 h-8 text-xs font-medium text-violet-200 hover:bg-violet-950/65 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded border border-violet-600/60 bg-violet-950/40 px-3 h-8 text-xs font-medium text-violet-200 hover:bg-violet-950/65 disabled:opacity-50"
             >
               {linkAllMutation.isPending ? "Linking…" : "Link All"}
             </button>

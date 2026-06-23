@@ -134,7 +134,7 @@ export const ActivityFilters: React.FC<{
           type="button"
           disabled={!hasActiveFilters}
           onClick={() => formReducer.reset()}
-          className="ml-auto h-8 shrink-0 rounded border border-transparent px-2 text-xs text-emerald-500/90 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-emerald-500/90"
+          className="ml-auto h-8 shrink-0 rounded border border-transparent px-2 text-xs text-emerald-500/90 hover:text-emerald-400 disabled:opacity-40 disabled:hover:text-emerald-500/90"
         >
           Reset filters
         </button>
@@ -148,7 +148,7 @@ export const ActivityFilters: React.FC<{
           aria-labelledby="activities-export-label"
           disabled={!exportDateRangeOk || copyMutation.isPending}
           onClick={() => copyMutation.mutate()}
-          className="h-8 rounded border border-zinc-600/70 bg-zinc-900/80 px-3 text-xs text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-8 rounded border border-zinc-600/70 bg-zinc-900/80 px-3 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
         >
           {copyMutation.isPending ? "Generating…" : "Copy markdown"}
         </button>
