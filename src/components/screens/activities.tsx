@@ -206,9 +206,13 @@ export const ActivitiesContent: React.FC<{
       </div>
 
       <Suspense
-        fallback={Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="w-full h-50" />
-        ))}
+        fallback={
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-30" />
+            ))}
+          </div>
+        }
       >
         <ActivityList filter={defferredFilter} setEditPlan={setEditPlan} />
       </Suspense>
