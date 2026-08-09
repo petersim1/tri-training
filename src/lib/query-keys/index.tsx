@@ -242,6 +242,30 @@ export const invalidators = {
         exact: false,
       });
 
+      qc.setQueriesData(
+        {
+          queryKey: [QUERY_KEYS.CALENDAR],
+          exact: false,
+        },
+        (oldData: CalendarPageItem[] | undefined): CalendarPageItem[] | undefined => {
+          if (!oldData) return oldData;
+          return oldData.map((page) => {
+            if (page.dayKey !== plan.dayKey) {
+              return page;
+            }
+            return {
+              ...page,
+              activities: page.activities.map((activity) => {
+                if (activity.id === plan.id) {
+                  return plan;
+                }
+                return activity;
+              }),
+            };
+          });
+        },
+      );
+
       qc.setQueryData(getters.activities.unlinked().queryKey, (oldData) => {
         if (!oldData) return oldData;
         return oldData.filter((d) => d.id !== plan.vendorActivityId);
