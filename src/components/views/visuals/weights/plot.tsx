@@ -1,7 +1,9 @@
 import { area, axisBottom, axisLeft, line, pointer, scaleLinear, scaleTime } from "d3";
 import type { SessionChartRange } from "@/lib/constants/visuals";
-import { type ChartDimensions, monthLabel, shortDateLabel } from "@/lib/utils/plots";
+import { type ChartDimensions, monthLabel } from "@/lib/utils/plots";
 import type { VizResult } from "@/types/responses/activities";
+
+export const LINE_COLOR = "rgb(52 211 153)";
 
 type EnrichedPoint = VizResult & { cx: number; cy: number };
 
@@ -10,7 +12,7 @@ export const createViz = (
   dimensions: ChartDimensions,
   points: VizResult[],
   range: SessionChartRange,
-  onHover: (idx: number | null) => void,
+  onHover: (point: VizResult | null) => void,
 ) => {
   const sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
   const values = sorted.map((p) => p.value);
@@ -148,7 +150,7 @@ export const createViz = (
     .append("path")
     .datum(enriched)
     .attr("fill", "none")
-    .attr("stroke", "rgb(52 211 153)")
+    .attr("stroke", LINE_COLOR)
     .attr("stroke-width", 2)
     .attr("stroke-linecap", "round")
     .attr("stroke-linejoin", "round")
@@ -161,8 +163,9 @@ export const createViz = (
     );
 
   // Dots
-  svg
+  const dots = svg
     .append("g")
+    .attr("pointer-events", "none")
     .selectAll("circle")
     .data(enriched)
     .join("circle")
@@ -172,8 +175,7 @@ export const createViz = (
     .attr("fill", "rgb(24 24 27)")
     .attr("stroke", "rgb(244 244 245)")
     .attr("stroke-width", 1)
-    .attr("opacity", 0.6)
-    .attr("pointer-events", "none");
+    .attr("opacity", 0.6);
 
   // Hover line
   const hoverLine = svg
@@ -185,17 +187,6 @@ export const createViz = (
     .attr("y2", dimensions.viewH - dimensions.pad.b)
     .attr("pointer-events", "none")
     .style("display", "none");
-
-  // Tooltip
-  const tooltip = svg.append("g").attr("pointer-events", "none").style("display", "none");
-  const tooltipValue = tooltip
-    .append("text")
-    .attr("fill", "rgb(52 211 153)")
-    .attr("font-size", dimensions.fontSize.tooltip);
-  const tooltipDate = tooltip
-    .append("text")
-    .attr("fill", "rgb(161 161 170)")
-    .attr("font-size", dimensions.fontSize.tooltip);
 
   // Scrubber
   svg
@@ -220,33 +211,16 @@ export const createViz = (
       const p = enriched[closest];
       if (!p) return;
 
-      const anchor = p.cx > dimensions.viewW - 120 ? "end" : p.cx < 120 ? "start" : "middle";
-
       hoverLine.style("display", null).attr("x1", p.cx).attr("x2", p.cx);
-
-      tooltip.style("display", null);
-      tooltipValue
-        .attr("x", p.cx)
-        .attr("y", dimensions.pad.t - 16)
-        .attr("text-anchor", anchor)
-        .text(`${p.value.toFixed(1)} lb`);
-      tooltipDate
-        .attr("x", p.cx)
-        .attr("y", dimensions.pad.t - 4)
-        .attr("text-anchor", anchor)
-        .text(shortDateLabel(p.date, showYear));
-
-      svg
-        .selectAll("circle")
+      dots
         .attr("opacity", (_d, i) => (i === closest ? 1 : 0.6))
         .attr("r", (_d, i) => (i === closest ? 3.75 : 3));
 
-      onHover(closest);
+      onHover(p);
     })
     .on("mouseleave", () => {
       hoverLine.style("display", "none");
-      tooltip.style("display", "none");
-      svg.selectAll("circle").attr("opacity", 0.6).attr("r", 3);
+      dots.attr("opacity", 0.6).attr("r", 3);
       onHover(null);
     });
 };
