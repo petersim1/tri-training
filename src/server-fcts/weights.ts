@@ -1,6 +1,6 @@
 import { type Exception, trace } from "@opentelemetry/api";
 import { createServerFn } from "@tanstack/react-start";
-import { and, asc, eq, gte } from "drizzle-orm";
+import { and, asc, eq, gte, lte } from "drizzle-orm";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
 import { getDb } from "@/lib/db/index.server";
 import { weightEntries } from "@/lib/db/schema.server";
@@ -23,32 +23,25 @@ const viz = createServerFn({ method: "GET" })
           ...data,
         };
 
-        const wheres = [];
         const date = new Date();
+
+        const wheres = [lte(weightEntries.dayKey, date.toISOString().split("T")[0])];
         if (options.range === "3m") {
           date.setMonth(date.getMonth() - 3);
-          wheres.push(
-            gte(weightEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(weightEntries.dayKey, date.toISOString().split("T")[0]));
         }
         if (options.range === "6m") {
           date.setMonth(date.getMonth() - 6);
-          wheres.push(
-            gte(weightEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(weightEntries.dayKey, date.toISOString().split("T")[0]));
         }
         if (options.range === "12m") {
           date.setFullYear(date.getFullYear() - 1);
-          wheres.push(
-            gte(weightEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(weightEntries.dayKey, date.toISOString().split("T")[0]));
         }
         if (options.range === "ytd") {
           date.setMonth(0);
           date.setDate(0);
-          wheres.push(
-            gte(weightEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(weightEntries.dayKey, date.toISOString().split("T")[0]));
         }
 
         const db = await getDb();
@@ -87,10 +80,7 @@ const set = createServerFn({ method: "POST" })
         const id = crypto.randomUUID();
         const db = await getDb();
         await db.transaction(async (tx) => {
-          await tx
-            .delete(weightEntries)
-            .where(eq(weightEntries.dayKey, data.dayKey))
-            .run();
+          await tx.delete(weightEntries).where(eq(weightEntries.dayKey, data.dayKey)).run();
           await tx
             .insert(weightEntries)
             .values({
@@ -118,10 +108,7 @@ const remove = createServerFn({ method: "POST" })
     return tracer.startActiveSpan("remove", async (span) => {
       try {
         const db = await getDb();
-        await db
-          .delete(weightEntries)
-          .where(eq(weightEntries.dayKey, data.dayKey))
-          .run();
+        await db.delete(weightEntries).where(eq(weightEntries.dayKey, data.dayKey)).run();
         return { ok: true };
       } catch (err) {
         span.recordException(err as Exception);

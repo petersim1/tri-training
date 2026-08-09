@@ -25,9 +25,7 @@ type TokenResponse = {
 const SERVICE_ROW_ID = 1 as const;
 
 /** Refresh access token; used by cookie-based sessions and server-stored tokens (webhooks). */
-async function exchangeStravaRefreshToken(
-  refreshToken: string,
-): Promise<TokenResponse> {
+async function exchangeStravaRefreshToken(refreshToken: string): Promise<TokenResponse> {
   const clientId = process.env.STRAVA_CLIENT_ID;
   const clientSecret = process.env.STRAVA_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
@@ -154,10 +152,7 @@ const listRoutines = createServerFn({ method: "GET" }).handler(
   async (): Promise<GroupedRoutines> => {
     return tracer.startActiveSpan("listRoutines", async (span) => {
       try {
-        const [routines, folders] = await Promise.all([
-          fetchAllRoutines(),
-          fetchAllFolders(),
-        ]);
+        const [routines, folders] = await Promise.all([fetchAllRoutines(), fetchAllFolders()]);
 
         return groupRoutinesByFolder(folders, routines);
       } catch (err) {
@@ -173,81 +168,75 @@ const listRoutines = createServerFn({ method: "GET" }).handler(
 const persistServiceStravaTokens = createServerFn({ method: "POST" })
   .inputValidator((data: TokenResponse) => data)
   .handler(async ({ data }) => {
-    return tracer.startActiveSpan(
-      "persistServiceStravaTokens",
-      async (span) => {
-        try {
-          const db = await getDb();
-          const now = new Date();
-          await db
-            .insert(serviceStravaTokens)
-            .values({
-              id: SERVICE_ROW_ID,
+    return tracer.startActiveSpan("persistServiceStravaTokens", async (span) => {
+      try {
+        const db = await getDb();
+        const now = new Date();
+        await db
+          .insert(serviceStravaTokens)
+          .values({
+            id: SERVICE_ROW_ID,
+            refreshToken: data.refresh_token,
+            accessToken: data.access_token,
+            expiresAt: data.expires_at,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: serviceStravaTokens.id,
+            set: {
               refreshToken: data.refresh_token,
               accessToken: data.access_token,
               expiresAt: data.expires_at,
               updatedAt: now,
-            })
-            .onConflictDoUpdate({
-              target: serviceStravaTokens.id,
-              set: {
-                refreshToken: data.refresh_token,
-                accessToken: data.access_token,
-                expiresAt: data.expires_at,
-                updatedAt: now,
-              },
-            });
-        } catch (err) {
-          span.recordException(err as Exception);
-          throw err;
-        } finally {
-          span.end();
-        }
-      },
-    );
-  });
-
-const getValidAccessTokenForWebhooks = createServerFn({
-  method: "GET",
-}).handler(async () => {
-  return tracer.startActiveSpan(
-    "getValidAccessTokenForWebhooks",
-    async (span) => {
-      try {
-        const db = await getDb();
-        const row = await db
-          .select()
-          .from(serviceStravaTokens)
-          .where(eq(serviceStravaTokens.id, SERVICE_ROW_ID))
-          .get();
-        if (!row) {
-          return null;
-        }
-        const nowSec = Math.floor(Date.now() / 1000);
-        if (row.expiresAt > nowSec + 120) {
-          return row.accessToken;
-        }
-        const next = await exchangeStravaRefreshToken(row.refreshToken);
-        const updated = new Date();
-        await db
-          .update(serviceStravaTokens)
-          .set({
-            accessToken: next.access_token,
-            refreshToken: next.refresh_token,
-            expiresAt: next.expires_at,
-            updatedAt: updated,
-          })
-          .where(eq(serviceStravaTokens.id, SERVICE_ROW_ID))
-          .run();
-        return next.access_token;
+            },
+          });
       } catch (err) {
         span.recordException(err as Exception);
         throw err;
       } finally {
         span.end();
       }
-    },
-  );
+    });
+  });
+
+const getValidAccessTokenForWebhooks = createServerFn({
+  method: "GET",
+}).handler(async () => {
+  return tracer.startActiveSpan("getValidAccessTokenForWebhooks", async (span) => {
+    try {
+      const db = await getDb();
+      const row = await db
+        .select()
+        .from(serviceStravaTokens)
+        .where(eq(serviceStravaTokens.id, SERVICE_ROW_ID))
+        .get();
+      if (!row) {
+        return null;
+      }
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (row.expiresAt > nowSec + 120) {
+        return row.accessToken;
+      }
+      const next = await exchangeStravaRefreshToken(row.refreshToken);
+      const updated = new Date();
+      await db
+        .update(serviceStravaTokens)
+        .set({
+          accessToken: next.access_token,
+          refreshToken: next.refresh_token,
+          expiresAt: next.expires_at,
+          updatedAt: updated,
+        })
+        .where(eq(serviceStravaTokens.id, SERVICE_ROW_ID))
+        .run();
+      return next.access_token;
+    } catch (err) {
+      span.recordException(err as Exception);
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
 });
 
 export const vendorActions = {

@@ -1,7 +1,4 @@
-import {
-  CARDIO_DISTANCE_UNITS,
-  type CardioDistanceUnit,
-} from "../constants/activities";
+import { CARDIO_DISTANCE_UNITS, type CardioDistanceUnit } from "../constants/activities";
 import type { NewWorkoutEntryRow } from "../db/schema.server";
 
 export type BulkValidationIssue = { index: number; message: string };
@@ -15,9 +12,7 @@ function normalizeDistanceUnit(raw: string | null): CardioDistanceUnit | null {
     return null;
   }
   if (!CARDIO_DISTANCE_UNITS.includes(s as CardioDistanceUnit)) {
-    throw new Error(
-      `Invalid distance unit (use ${CARDIO_DISTANCE_UNITS.join(", ")})`,
-    );
+    throw new Error(`Invalid distance unit (use ${CARDIO_DISTANCE_UNITS.join(", ")})`);
   }
   return s as CardioDistanceUnit;
 }
@@ -63,25 +58,17 @@ export const validateAndBuildRow = (
     }
     const isLift = kind === "lift";
     const routineId =
-      isLift && raw.routineId && raw.routineId.trim() !== ""
-        ? raw.routineId.trim()
-        : null;
+      isLift && raw.routineId && raw.routineId.trim() !== "" ? raw.routineId.trim() : null;
 
     const cardio = ["swim", "bike", "run"].includes(kind);
     let distance: number | null = null;
     let distanceUnits: CardioDistanceUnit | null = null;
     let timeSeconds: number | null = null;
     try {
-      distance =
-        cardio && raw.distance ? normalizeOptionalDistance(raw.distance) : null;
-      distanceUnits =
-        cardio && raw.distanceUnits
-          ? normalizeDistanceUnit(raw.distanceUnits)
-          : null;
+      distance = cardio && raw.distance ? normalizeOptionalDistance(raw.distance) : null;
+      distanceUnits = cardio && raw.distanceUnits ? normalizeDistanceUnit(raw.distanceUnits) : null;
       timeSeconds =
-        cardio && raw.timeSeconds
-          ? normalizeOptionalTimeSeconds(raw.timeSeconds)
-          : null;
+        cardio && raw.timeSeconds ? normalizeOptionalTimeSeconds(raw.timeSeconds) : null;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Invalid distance/time";
       return { index, message: msg };

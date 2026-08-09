@@ -1,11 +1,7 @@
 import { and, count, desc, eq, getTableColumns, gte, lte } from "drizzle-orm";
 import type { PlanKind, PlanStatus } from "@/lib/constants/activities";
 import { getDb } from "@/lib/db/index.server";
-import {
-  type VendorActivityRow,
-  vendorActivities,
-  workoutEntries,
-} from "@/lib/db/schema.server";
+import { type VendorActivityRow, vendorActivities, workoutEntries } from "@/lib/db/schema.server";
 import type { ActivityListSchemaValues } from "@/types/requests/activities";
 import type { IdSchemaValues } from "@/types/requests/shared";
 
@@ -17,10 +13,7 @@ const get = async ({ id }: IdSchemaValues) => {
       vendorActivity: vendorActivities,
     })
     .from(workoutEntries)
-    .leftJoin(
-      vendorActivities,
-      eq(workoutEntries.vendorActivityId, vendorActivities.id),
-    )
+    .leftJoin(vendorActivities, eq(workoutEntries.vendorActivityId, vendorActivities.id))
     .where(eq(workoutEntries.id, id))
     .get();
   if (!row) {
@@ -64,9 +57,7 @@ const list = async (data: ActivityListSchemaValues) => {
     .from(workoutEntries)
     .where(whereClause)
     .all();
-  const totalPages = Math.ceil(
-    Number(countFilteredRow?.n ?? 0) / data.pageSize,
-  );
+  const totalPages = Math.ceil(Number(countFilteredRow?.n ?? 0) / data.pageSize);
 
   const rows = await db
     .select({
@@ -74,10 +65,7 @@ const list = async (data: ActivityListSchemaValues) => {
       va: vendorActivities,
     })
     .from(workoutEntries)
-    .leftJoin(
-      vendorActivities,
-      eq(workoutEntries.vendorActivityId, vendorActivities.id),
-    )
+    .leftJoin(vendorActivities, eq(workoutEntries.vendorActivityId, vendorActivities.id))
     .where(whereClause)
     .orderBy(desc(workoutEntries.dayKey))
     .limit(data.pageSize)

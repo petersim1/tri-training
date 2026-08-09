@@ -55,11 +55,7 @@ function formatDistanceForExport(p: WorkoutEntryWithCompleted): string | null {
       return lbl !== "" ? lbl : null;
     }
   }
-  if (
-    ["run", "swim", "bike"].includes(p.kind) &&
-    p.distance != null &&
-    p.distanceUnits
-  ) {
+  if (["run", "swim", "bike"].includes(p.kind) && p.distance != null && p.distanceUnits) {
     const u = String(p.distanceUnits).trim();
     return `${p.distance} ${u}`;
   }
@@ -118,9 +114,7 @@ function exportActivityBlock(p: WorkoutEntryWithCompleted): string[] {
  * Markdown grouped by `day_key`, with weekday labels in the given IANA timezone.
  * Same shape as upload markdown, plus a required `status` sub-bullet on each activity.
  */
-export function buildActivitiesMarkdownExport(
-  rows: WorkoutEntryWithCompleted[],
-): string {
+export function buildActivitiesMarkdownExport(rows: WorkoutEntryWithCompleted[]): string {
   if (rows.length === 0) {
     return "";
   }

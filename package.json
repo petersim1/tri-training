@@ -39,7 +39,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.12",
+    "@biomejs/biome": "^2.5.7",
     "@tailwindcss/vite": "^4.2.2",
     "@types/d3": "^7.4.3",
     "@types/node": "^22.5.4",

@@ -26,13 +26,7 @@ export type SessionChartAgg = (typeof CHART_AGG_VALUES)[number];
 export const CHART_RANGE_VALUES = ["3m", "6m", "12m", "ytd", "all"] as const;
 export type SessionChartRange = (typeof CHART_RANGE_VALUES)[number];
 
-export const CHART_METRIC_VALUES = [
-  "distance",
-  "time",
-  "pace",
-  "efficiency",
-  "volume",
-] as const;
+export const CHART_METRIC_VALUES = ["distance", "time", "pace", "efficiency", "volume"] as const;
 export type SessionChartMetric = (typeof CHART_METRIC_VALUES)[number];
 
 export type SessionChartSettings = {

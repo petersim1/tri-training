@@ -1,8 +1,4 @@
-import type {
-  ChatMessageRow,
-  ChatThreadRow,
-  SportEventRow,
-} from "@/lib/db/schema.server";
+import type { ChatMessageRow, ChatThreadRow, SportEventRow } from "@/lib/db/schema.server";
 
 export const threadListTitle = (t: ChatThreadRow): string => {
   const raw = (t.title ?? "").trim();
@@ -35,9 +31,7 @@ export const formatChatListTime = (d: Date): string => {
   }
 };
 
-export const sportEventContextLine = (
-  row: SportEventRow | null | undefined,
-): string | null => {
+export const sportEventContextLine = (row: SportEventRow | null | undefined): string | null => {
   if (!row) return null;
   return `Event · ${row.eventDayKey} — ${row.name}`;
 };

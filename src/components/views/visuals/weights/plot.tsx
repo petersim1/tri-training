@@ -1,18 +1,6 @@
-import {
-  area,
-  axisBottom,
-  axisLeft,
-  line,
-  pointer,
-  scaleLinear,
-  scaleTime,
-} from "d3";
+import { area, axisBottom, axisLeft, line, pointer, scaleLinear, scaleTime } from "d3";
 import type { SessionChartRange } from "@/lib/constants/visuals";
-import {
-  type ChartDimensions,
-  monthLabel,
-  shortDateLabel,
-} from "@/lib/utils/plots";
+import { type ChartDimensions, monthLabel, shortDateLabel } from "@/lib/utils/plots";
 import type { VizResult } from "@/types/responses/activities";
 
 type EnrichedPoint = VizResult & { cx: number; cy: number };
@@ -199,10 +187,7 @@ export const createViz = (
     .style("display", "none");
 
   // Tooltip
-  const tooltip = svg
-    .append("g")
-    .attr("pointer-events", "none")
-    .style("display", "none");
+  const tooltip = svg.append("g").attr("pointer-events", "none").style("display", "none");
   const tooltipValue = tooltip
     .append("text")
     .attr("fill", "rgb(52 211 153)")
@@ -235,8 +220,7 @@ export const createViz = (
       const p = enriched[closest];
       if (!p) return;
 
-      const anchor =
-        p.cx > dimensions.viewW - 120 ? "end" : p.cx < 120 ? "start" : "middle";
+      const anchor = p.cx > dimensions.viewW - 120 ? "end" : p.cx < 120 ? "start" : "middle";
 
       hoverLine.style("display", null).attr("x1", p.cx).attr("x2", p.cx);
 

@@ -4,11 +4,7 @@ import {
   PLAN_KIND_VALUES,
   PLAN_STATUS_VALUES,
 } from "@/lib/constants/activities";
-import {
-  CHART_AGG_VALUES,
-  CHART_METRIC_VALUES,
-  CHART_RANGE_VALUES,
-} from "@/lib/constants/visuals";
+import { CHART_AGG_VALUES, CHART_METRIC_VALUES, CHART_RANGE_VALUES } from "@/lib/constants/visuals";
 import { dayKeySchema, idSchema } from "./shared";
 
 export type CalendarScope = "month" | "week";
@@ -92,9 +88,7 @@ export const createFromCompletedSchema = z.object({
   vendorActivityId: z.string(),
 });
 
-export type CreateFromCompletedInput = z.infer<
-  typeof createFromCompletedSchema
->;
+export type CreateFromCompletedInput = z.infer<typeof createFromCompletedSchema>;
 
 export const updatePlanBaseSchema = z.object({
   ...idSchema.shape,

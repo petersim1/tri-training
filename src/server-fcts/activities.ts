@@ -17,11 +17,7 @@ import {
   workoutEntries,
 } from "@/lib/db/schema.server";
 import { hevyFetchRoutineById } from "@/lib/hevy/client";
-import {
-  getVizValue,
-  rollupStackedValue,
-  rollupValue,
-} from "@/lib/utils/calculations";
+import { getVizValue, rollupStackedValue, rollupValue } from "@/lib/utils/calculations";
 import {
   enumerateLocalDayKeysInclusive,
   getDateRange,
@@ -74,23 +70,13 @@ const calendar = createServerFn({ method: "GET" })
             status: workoutEntries.status,
           })
           .from(workoutEntries)
-          .where(
-            and(
-              gte(workoutEntries.dayKey, dateFrom),
-              lte(workoutEntries.dayKey, dateTo),
-            ),
-          )
+          .where(and(gte(workoutEntries.dayKey, dateFrom), lte(workoutEntries.dayKey, dateTo)))
           .all();
 
         const weights = await db
           .select({ dayKey: weightEntries.dayKey })
           .from(weightEntries)
-          .where(
-            and(
-              gte(weightEntries.dayKey, dateFrom),
-              lte(weightEntries.dayKey, dateTo),
-            ),
-          )
+          .where(and(gte(weightEntries.dayKey, dateFrom), lte(weightEntries.dayKey, dateTo)))
           .all();
 
         const { start } = toUtcBounds(dateFrom, timezone);
@@ -99,10 +85,7 @@ const calendar = createServerFn({ method: "GET" })
         const unlinkedActivitiesRows = await db
           .select({ vendorActivities })
           .from(vendorActivities)
-          .leftJoin(
-            workoutEntries,
-            eq(workoutEntries.vendorActivityId, vendorActivities.id),
-          )
+          .leftJoin(workoutEntries, eq(workoutEntries.vendorActivityId, vendorActivities.id))
           .where(
             and(
               isNull(workoutEntries.id),
@@ -113,9 +96,7 @@ const calendar = createServerFn({ method: "GET" })
           .orderBy(desc(vendorActivities.createdAt))
           .all();
 
-        const unlinkedActivities = unlinkedActivitiesRows.map(
-          (r) => r.vendorActivities,
-        );
+        const unlinkedActivities = unlinkedActivitiesRows.map((r) => r.vendorActivities);
 
         const unlinkedByDay = Map.groupBy(unlinkedActivities, (a) =>
           toIsoDate(a.createdAt, timezone),
@@ -128,9 +109,11 @@ const calendar = createServerFn({ method: "GET" })
 
         const items = allDayKeys.map((dayKey) => ({
           dayKey,
-          activities: (workoutsByDay.get(dayKey) ?? []).map(
-            ({ id, kind, status }) => ({ id, kind, status }),
-          ),
+          activities: (workoutsByDay.get(dayKey) ?? []).map(({ id, kind, status }) => ({
+            id,
+            kind,
+            status,
+          })),
           hasWeight: weightDays.has(dayKey),
           hasUnlinked: unlinkedByDay.has(dayKey),
           isToday: dayKey === today,
@@ -182,32 +165,25 @@ const viz = createServerFn({ method: "GET" })
           return [];
         }
 
-        const wheres = [];
         const date = new Date();
+
+        const wheres = [lte(workoutEntries.dayKey, date.toISOString().split("T")[0])];
         if (options.range === "3m") {
           date.setMonth(date.getMonth() - 3);
-          wheres.push(
-            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
         }
         if (options.range === "6m") {
           date.setMonth(date.getMonth() - 6);
-          wheres.push(
-            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
         }
         if (options.range === "12m") {
           date.setFullYear(date.getFullYear() - 1);
-          wheres.push(
-            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
         }
         if (options.range === "ytd") {
           date.setMonth(0);
           date.setDate(0);
-          wheres.push(
-            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
         }
 
         wheres.push(eq(workoutEntries.kind, options.kind));
@@ -219,26 +195,31 @@ const viz = createServerFn({ method: "GET" })
           .select({
             kind: workoutEntries.kind,
             dayKey: workoutEntries.dayKey,
-            vendorActivy: {
+            fallback: {
+              distance: workoutEntries.distance,
+              units: workoutEntries.distanceUnits,
+              time: workoutEntries.timeSeconds,
+            },
+
+            vendorActivity: {
               vendor: vendorActivities.vendor,
               data: vendorActivities.data,
             },
           })
           .from(workoutEntries)
-          .leftJoin(
-            vendorActivities,
-            eq(workoutEntries.vendorActivityId, vendorActivities.id),
-          )
+          .leftJoin(vendorActivities, eq(workoutEntries.vendorActivityId, vendorActivities.id))
           .where(and(...wheres))
           .orderBy(asc(workoutEntries.dayKey))
           .all();
 
         const out: VizResult[] = [];
         rows.forEach((r) => {
-          const { vendorActivy } = r;
-          if (!vendorActivy) return;
-          const va = vendorActivy as TypedVendorWorkoutRow;
-          const value = getVizValue(va, options.metric);
+          const value = getVizValue(
+            r.vendorActivity as TypedVendorWorkoutRow | null,
+            options.metric,
+            r.fallback,
+          );
+          if (!value) return;
           if (value) {
             out.push({
               date: r.dayKey,
@@ -295,28 +276,20 @@ const vizStacked = createServerFn({ method: "GET" })
         const date = new Date();
         if (options.range === "3m") {
           date.setMonth(date.getMonth() - 3);
-          wheres.push(
-            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
         }
         if (options.range === "6m") {
           date.setMonth(date.getMonth() - 6);
-          wheres.push(
-            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
         }
         if (options.range === "12m") {
           date.setFullYear(date.getFullYear() - 1);
-          wheres.push(
-            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
         }
         if (options.range === "ytd") {
           date.setMonth(0);
           date.setDate(0);
-          wheres.push(
-            gte(workoutEntries.dayKey, date.toISOString().split("T")[0]),
-          );
+          wheres.push(gte(workoutEntries.dayKey, date.toISOString().split("T")[0]));
         }
 
         wheres.push(inArray(workoutEntries.kind, ["bike", "run", "swim"]));
@@ -328,26 +301,29 @@ const vizStacked = createServerFn({ method: "GET" })
           .select({
             kind: workoutEntries.kind,
             dayKey: workoutEntries.dayKey,
-            vendorActivy: {
+            fallback: {
+              distance: workoutEntries.distance,
+              units: workoutEntries.distanceUnits,
+              time: workoutEntries.timeSeconds,
+            },
+            vendorActivity: {
               vendor: vendorActivities.vendor,
               data: vendorActivities.data,
             },
           })
           .from(workoutEntries)
-          .leftJoin(
-            vendorActivities,
-            eq(workoutEntries.vendorActivityId, vendorActivities.id),
-          )
+          .leftJoin(vendorActivities, eq(workoutEntries.vendorActivityId, vendorActivities.id))
           .where(and(...wheres))
           .orderBy(asc(workoutEntries.dayKey))
           .all();
 
         const out: (VizResult & { kind: "swim" | "bike" | "run" })[] = [];
         rows.forEach((r) => {
-          const { vendorActivy } = r;
-          if (!vendorActivy) return;
-          const va = vendorActivy as TypedVendorWorkoutRow;
-          const value = getVizValue(va, options.metric);
+          const value = getVizValue(
+            r.vendorActivity as TypedVendorWorkoutRow | null,
+            options.metric,
+            r.fallback,
+          );
           if (value) {
             out.push({
               date: r.dayKey,
@@ -416,10 +392,7 @@ const unlinked = createServerFn({ method: "GET" }).handler(
         const rows = await db
           .select({ vendorActivities })
           .from(vendorActivities)
-          .leftJoin(
-            workoutEntries,
-            eq(workoutEntries.vendorActivityId, vendorActivities.id),
-          )
+          .leftJoin(workoutEntries, eq(workoutEntries.vendorActivityId, vendorActivities.id))
           .where(isNull(workoutEntries.id))
           .orderBy(desc(vendorActivities.createdAt))
           .all();
@@ -438,106 +411,99 @@ const unlinked = createServerFn({ method: "GET" }).handler(
   },
 );
 
-const linkAll = createServerFn({ method: "POST" }).handler(
-  async (): Promise<LinkAllResponse> => {
-    return tracer.startActiveSpan("linkAll", async (span) => {
-      try {
-        const timezone = await cookieActions.getTimezone();
+const linkAll = createServerFn({ method: "POST" }).handler(async (): Promise<LinkAllResponse> => {
+  return tracer.startActiveSpan("linkAll", async (span) => {
+    try {
+      const timezone = await cookieActions.getTimezone();
 
-        const db = await getDb();
-        const now = new Date();
+      const db = await getDb();
+      const now = new Date();
 
-        const unlinkedActivities = await unlinked();
+      const unlinkedActivities = await unlinked();
 
-        const allPlans = await db
-          .select()
-          .from(workoutEntries)
-          .where(
-            and(
-              isNull(workoutEntries.vendorActivityId),
-              eq(workoutEntries.status, "planned"),
-            ),
-          )
-          .all();
+      const allPlans = await db
+        .select()
+        .from(workoutEntries)
+        .where(and(isNull(workoutEntries.vendorActivityId), eq(workoutEntries.status, "planned")))
+        .all();
 
-        const plansByDayKind = new Map<string, WorkoutEntryRow[]>();
-        for (const p of allPlans) {
-          const key = `${p.dayKey}:${p.kind}`;
-          const arr = plansByDayKind.get(key) ?? [];
-          arr.push(p);
-          plansByDayKind.set(key, arr);
-        }
+      const plansByDayKind = new Map<string, WorkoutEntryRow[]>();
+      for (const p of allPlans) {
+        const key = `${p.dayKey}:${p.kind}`;
+        const arr = plansByDayKind.get(key) ?? [];
+        arr.push(p);
+        plansByDayKind.set(key, arr);
+      }
 
-        const resolvedIds = [];
+      const resolvedIds = [];
 
-        for (const unlinkedActivity of unlinkedActivities) {
-          const activity = unlinkedActivity as TypedVendorWorkoutRow;
-          const dayKey = toIsoDate(activity.createdAt, timezone);
-          const planKind = vendorActivityToPlanKind(activity);
-          if (!planKind) continue;
+      for (const unlinkedActivity of unlinkedActivities) {
+        const activity = unlinkedActivity as TypedVendorWorkoutRow;
+        const dayKey = toIsoDate(activity.createdAt, timezone);
+        const planKind = vendorActivityToPlanKind(activity);
+        if (!planKind) continue;
 
-          const key = `${dayKey}:${planKind}`;
-          const candidates = plansByDayKind.get(key) ?? [];
-          const existing = candidates.shift(); // take the first available, remove it so next cw doesn't reuse it
+        const key = `${dayKey}:${planKind}`;
+        const candidates = plansByDayKind.get(key) ?? [];
+        const existing = candidates.shift(); // take the first available, remove it so next cw doesn't reuse it
 
-          if (existing) {
-            await db
-              .update(workoutEntries)
-              .set({
-                vendorActivityId: activity.id,
-                status: "completed",
-                updatedAt: now,
-              })
-              .where(eq(workoutEntries.id, existing.id))
-              .run();
-            existing.vendorActivityId = activity.id;
-            existing.status = "completed";
-          } else {
-            const id = crypto.randomUUID();
-            await db
-              .insert(workoutEntries)
-              .values({
-                id,
-                kind: planKind,
-                dayKey,
-                notes: null,
-                status: "completed",
-                routineVendor: activity.vendor,
-                routineId: null,
-                vendorActivityId: activity.id,
-                distance: null,
-                distanceUnits: null,
-                timeSeconds: null,
-                createdAt: now,
-                updatedAt: now,
-              })
-              .run();
-          }
-
-          resolvedIds.push(activity.id);
-        }
-
-        if (resolvedIds.length > 0) {
+        if (existing) {
           await db
-            .update(vendorActivities)
-            .set({ updatedAt: now })
-            .where(inArray(vendorActivities.id, resolvedIds))
+            .update(workoutEntries)
+            .set({
+              vendorActivityId: activity.id,
+              status: "completed",
+              updatedAt: now,
+            })
+            .where(eq(workoutEntries.id, existing.id))
+            .run();
+          existing.vendorActivityId = activity.id;
+          existing.status = "completed";
+        } else {
+          const id = crypto.randomUUID();
+          await db
+            .insert(workoutEntries)
+            .values({
+              id,
+              kind: planKind,
+              dayKey,
+              notes: null,
+              status: "completed",
+              routineVendor: activity.vendor,
+              routineId: null,
+              vendorActivityId: activity.id,
+              distance: null,
+              distanceUnits: null,
+              timeSeconds: null,
+              createdAt: now,
+              updatedAt: now,
+            })
             .run();
         }
 
-        return {
-          nLinked: resolvedIds.length,
-          nUnlinked: unlinkedActivities.length - resolvedIds.length,
-        };
-      } catch (err) {
-        span.recordException(err as Exception);
-        throw err;
-      } finally {
-        span.end();
+        resolvedIds.push(activity.id);
       }
-    });
-  },
-);
+
+      if (resolvedIds.length > 0) {
+        await db
+          .update(vendorActivities)
+          .set({ updatedAt: now })
+          .where(inArray(vendorActivities.id, resolvedIds))
+          .run();
+      }
+
+      return {
+        nLinked: resolvedIds.length,
+        nUnlinked: unlinkedActivities.length - resolvedIds.length,
+      };
+    } catch (err) {
+      span.recordException(err as Exception);
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
+});
 
 /** Server-fn registration only — DB implementation lives in `planner-db-operations.ts` (not client-bundled). */
 const get = createServerFn({ method: "GET" })
@@ -557,7 +523,7 @@ const get = createServerFn({ method: "GET" })
 
 const create = createServerFn({ method: "POST" })
   .inputValidator(createPlanSchema)
-  .handler(async ({ data }): Promise<{ id: string }> => {
+  .handler(async ({ data }): Promise<WorkoutEntryWithCompleted> => {
     return tracer.startActiveSpan("create", async (span) => {
       try {
         const cardio = ["run", "bike", "swim"].includes(data.kind);
@@ -583,7 +549,7 @@ const create = createServerFn({ method: "POST" })
             timeSeconds: data.timeSeconds,
           })
           .run();
-        return { id };
+        return activityServerFns.get({ id });
       } catch (err) {
         span.recordException(err as Exception);
         throw err;
@@ -595,7 +561,7 @@ const create = createServerFn({ method: "POST" })
 
 const createFromCompleted = createServerFn({ method: "POST" })
   .inputValidator(createFromCompletedSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<WorkoutEntryWithCompleted> => {
     return tracer.startActiveSpan("createFromCompleted", async (span) => {
       try {
         const db = await getDb();
@@ -613,9 +579,7 @@ const createFromCompleted = createServerFn({ method: "POST" })
           .get();
         if (linked) throw new Error("Activity is already linked");
 
-        const planKind = vendorActivityToPlanKind(
-          completed as TypedVendorWorkoutRow,
-        );
+        const planKind = vendorActivityToPlanKind(completed as TypedVendorWorkoutRow);
 
         if (!planKind) {
           throw new Error(
@@ -665,7 +629,7 @@ const createFromCompleted = createServerFn({ method: "POST" })
             .run();
         }
 
-        return { id };
+        return activityServerFns.get({ id });
       } catch (err) {
         span.recordException(err as Exception);
         throw err;
@@ -677,7 +641,7 @@ const createFromCompleted = createServerFn({ method: "POST" })
 
 const update = createServerFn({ method: "POST" })
   .inputValidator(updatePlanSchema)
-  .handler(async ({ data }): Promise<{ ok: boolean; note?: string }> => {
+  .handler(async ({ data }): Promise<WorkoutEntryWithCompleted> => {
     return tracer.startActiveSpan("update", async (span) => {
       try {
         const db = await getDb();
@@ -693,21 +657,18 @@ const update = createServerFn({ method: "POST" })
         if (data.notes !== undefined) updates.notes = data.notes;
 
         if (!row.vendorActivityId) {
+          if (data.status !== undefined) updates.status = data.status;
           if (data.dayKey !== undefined) updates.dayKey = data.dayKey;
           if (data.kind !== undefined) updates.kind = data.kind;
           if (data.distance !== undefined) updates.distance = data.distance;
-          if (data.distanceUnits !== undefined)
-            updates.distanceUnits = data.distanceUnits;
-          if (data.timeSeconds !== undefined)
-            updates.timeSeconds = data.timeSeconds;
+          if (data.distanceUnits !== undefined) updates.distanceUnits = data.distanceUnits;
+          if (data.timeSeconds !== undefined) updates.timeSeconds = data.timeSeconds;
           if (data.routineId !== undefined) {
             if (data.routineId && data.routineId !== row.routineId) {
               try {
                 await hevyFetchRoutineById(data.routineId);
               } catch {
-                throw new Error(
-                  "Could not verify routine — it may no longer exist in Hevy.",
-                );
+                throw new Error("Could not verify routine — it may no longer exist in Hevy.");
               }
               updates.routineId = data.routineId;
               updates.routineVendor = "hevy";
@@ -718,11 +679,9 @@ const update = createServerFn({ method: "POST" })
           }
         }
 
-        await db
-          .update(workoutEntries)
-          .set(updates)
-          .where(eq(workoutEntries.id, data.id));
-        return { ok: true };
+        await db.update(workoutEntries).set(updates).where(eq(workoutEntries.id, data.id));
+
+        return activityServerFns.get({ id: data.id });
       } catch (err) {
         span.recordException(err as Exception);
         throw err;
@@ -734,7 +693,7 @@ const update = createServerFn({ method: "POST" })
 
 const deletePlan = createServerFn({ method: "POST" })
   .inputValidator(idSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<{ ok: boolean }> => {
     return tracer.startActiveSpan("deletePlan", async (span) => {
       try {
         const db = await getDb();
@@ -745,15 +704,9 @@ const deletePlan = createServerFn({ method: "POST" })
           .get();
         if (!plan) throw new Error("plan not found");
         if (plan.completedWorkoutId) {
-          return {
-            ok: false,
-            note: "cannot delete a completed workout",
-          };
+          throw new Error("cannot delete a completed workout");
         }
-        await db
-          .delete(workoutEntries)
-          .where(eq(workoutEntries.id, data.id))
-          .run();
+        await db.delete(workoutEntries).where(eq(workoutEntries.id, data.id)).run();
         return { ok: true };
       } catch (err) {
         span.recordException(err as Exception);

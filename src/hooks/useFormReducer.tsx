@@ -19,10 +19,7 @@ export type FormReducerT<T> = {
   reset: () => void;
 };
 
-function formReducer<T>(
-  state: FormState<T>,
-  action: FormAction<T>,
-): FormState<T> {
+function formReducer<T>(state: FormState<T>, action: FormAction<T>): FormState<T> {
   switch (action.type) {
     case "SET_FIELD":
       return {

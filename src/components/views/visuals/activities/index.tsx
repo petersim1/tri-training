@@ -4,16 +4,10 @@ import { select } from "d3";
 import type React from "react";
 import { Suspense, useEffect, useRef, useState } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
-import queryKeys from "@/lib/query-keys";
+import { getters } from "@/lib/query-keys";
 import type { ChartDimensions } from "@/lib/utils/plots";
-import { activityActions } from "@/server-fcts/activities";
 import type { StackedVizResult, VizResult } from "@/types/responses/activities";
-import {
-  createStackedViz,
-  formatValue,
-  STACK_COLORS,
-  STACK_ORDER,
-} from "../stacked/plot";
+import { createStackedViz, formatValue, STACK_COLORS, STACK_ORDER } from "../stacked/plot";
 import { ActivityMetricsChartHeader } from "./header";
 import { BAR_FILL, createViz } from "./plot";
 
@@ -28,8 +22,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
   onSessionChartPatch,
   dimensions,
 }) => {
-  const [hoveredStackedPoint, setHoveredStackedPoint] =
-    useState<StackedVizResult | null>(null);
+  const [hoveredStackedPoint, setHoveredStackedPoint] = useState<StackedVizResult | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<VizResult | null>(null);
 
   return (
@@ -41,10 +34,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
         sessionChart={sessionChart}
         onSessionChartPatch={onSessionChartPatch}
       />
-      <div
-        className="w-full"
-        style={{ aspectRatio: `${dimensions.viewW}/${dimensions.viewH}` }}
-      >
+      <div className="w-full" style={{ aspectRatio: `${dimensions.viewW}/${dimensions.viewH}` }}>
         <div className="h-6 flex justify-end sm:justify-between items-center px-4 md:px-8">
           {sessionChart.stacked && (
             <div className="gap-1 items-center text-xs text-white/60 hidden sm:flex">
@@ -61,9 +51,7 @@ export const ActivityMetricsChart: React.FC<Props> = ({
           )}
           {sessionChart.stacked && hoveredStackedPoint && (
             <div className="flex gap-3 text-xs h-5">
-              {STACK_ORDER.filter(
-                (k) => (hoveredStackedPoint.values[k] ?? 0) > 0,
-              ).map((k) => {
+              {STACK_ORDER.filter((k) => (hoveredStackedPoint.values[k] ?? 0) > 0).map((k) => {
                 const val = hoveredStackedPoint.values[k];
                 const total = STACK_ORDER.reduce(
                   (sum, k) => sum + (hoveredStackedPoint.values[k] ?? 0),
@@ -118,9 +106,7 @@ const Loader: React.FC<{ dimensions: ChartDimensions }> = ({ dimensions }) => {
 type InnerProps = {
   sessionChart: SessionChartSettings;
   dimensions: ChartDimensions;
-  setHoveredStackedPoint: React.Dispatch<
-    React.SetStateAction<StackedVizResult | null>
-  >;
+  setHoveredStackedPoint: React.Dispatch<React.SetStateAction<StackedVizResult | null>>;
   setHoveredPoint: React.Dispatch<React.SetStateAction<VizResult | null>>;
 };
 
@@ -132,33 +118,9 @@ const Inner: React.FC<InnerProps> = ({
 }) => {
   const ref = useRef(null);
 
-  const { data: points } = useSuspenseQuery({
-    queryKey: queryKeys.activityViz(
-      sessionChart.kind,
-      sessionChart.range,
-      sessionChart.agg,
-      sessionChart.metric,
-      sessionChart.cumulative,
-    ),
-    queryFn: () =>
-      activityActions.viz({
-        data: { ...sessionChart },
-      }),
-  });
+  const { data: points } = useSuspenseQuery(getters.visuals.activity(sessionChart));
 
-  const { data: stackedPoints = [] } = useSuspenseQuery({
-    queryKey: queryKeys.stackedActivityViz(
-      sessionChart.range,
-      sessionChart.metric,
-      sessionChart.agg,
-      sessionChart.proportional,
-      sessionChart.cumulative,
-    ),
-    queryFn: () =>
-      activityActions.vizStacked({
-        data: { ...sessionChart },
-      }),
-  });
+  const { data: stackedPoints = [] } = useSuspenseQuery(getters.visuals.stack(sessionChart));
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: <>
   useEffect(() => {
@@ -190,15 +152,16 @@ const Inner: React.FC<InnerProps> = ({
     }
   }, [points, stackedPoints, sessionChart, dimensions]);
 
-  if (!sessionChart.stacked && points.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-zinc-500">
-          No data for the current filters.
-        </p>
-      </div>
-    );
-  }
+  const showEmpty = sessionChart.stacked ? stackedPoints.length === 0 : points.length === 0;
 
-  return <div ref={ref} />;
+  return (
+    <>
+      <div ref={ref} className={showEmpty ? "hidden" : undefined} />
+      {showEmpty && (
+        <div className="flex h-full items-center justify-center">
+          <p className="text-sm text-zinc-500">No data for the current filters.</p>
+        </div>
+      )}
+    </>
+  );
 };

@@ -4,10 +4,34 @@ import type { SessionChartAgg, SessionChartMetric } from "../constants/visuals";
 import type { TypedVendorWorkoutRow } from "../db/schema.server";
 
 export const getVizValue = (
-  activity: TypedVendorWorkoutRow,
+  activity: TypedVendorWorkoutRow | null,
   metric: SessionChartMetric,
+  fallback: {
+    distance: number | null;
+    units: CardioDistanceUnit | null;
+    time: number | null;
+  },
 ): number | null => {
-  if (activity.vendor === "strava") {
+  if (activity === null) {
+    switch (metric) {
+      case "time":
+        if (!fallback.time) return null;
+        return convertTime(fallback.time, "s", "m");
+      case "distance":
+        if (!fallback.distance || !fallback.units) return null;
+        return convertDistance(fallback.distance, fallback.units, "mi");
+      case "pace":
+        if (!fallback.time || !fallback.distance || !fallback.units) return null;
+        return (
+          convertDistance(fallback.distance, fallback.units, "mi") /
+          convertTime(fallback.time, "s", "hr")
+        );
+      case "efficiency":
+        return null;
+      default:
+        return null;
+    }
+  } else if (activity.vendor === "strava") {
     switch (metric) {
       case "time":
         return convertTime(activity.data.moving_time, "s", "m");
@@ -32,8 +56,7 @@ export const getVizValue = (
     switch (metric) {
       case "time":
         return convertTime(
-          new Date(activity.data.end_time).getTime() -
-            new Date(activity.data.start_time).getTime(),
+          new Date(activity.data.end_time).getTime() - new Date(activity.data.start_time).getTime(),
           "ms",
           "m",
         );
@@ -45,9 +68,7 @@ export const getVizValue = (
               exercise.sets.reduce(
                 (setTotal, set) =>
                   set.reps && set.weight_kg
-                    ? setTotal +
-                      Number(set.reps) *
-                        convertWeight(Number(set.weight_kg), "kg", "lb")
+                    ? setTotal + Number(set.reps) * convertWeight(Number(set.weight_kg), "kg", "lb")
                     : setTotal,
                 0,
               ),

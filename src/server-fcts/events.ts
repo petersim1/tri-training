@@ -3,10 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/index.server";
 import { type SportEventRow, sportEvents } from "@/lib/db/schema.server";
-import {
-  createSportEventSchema,
-  updateSportEventSchema,
-} from "@/types/requests/events";
+import { createSportEventSchema, updateSportEventSchema } from "@/types/requests/events";
 import { idSchema } from "@/types/requests/shared";
 
 const tracer = trace.getTracer("bevor.events");
@@ -17,11 +14,7 @@ const get = createServerFn({ method: "GET" })
     return tracer.startActiveSpan("get", async (span) => {
       try {
         const db = await getDb();
-        const row = await db
-          .select()
-          .from(sportEvents)
-          .where(eq(sportEvents.id, data.id))
-          .get();
+        const row = await db.select().from(sportEvents).where(eq(sportEvents.id, data.id)).get();
 
         if (!row) {
           throw new Error("not found");
@@ -37,37 +30,35 @@ const get = createServerFn({ method: "GET" })
     });
   });
 
-const list = createServerFn({ method: "GET" }).handler(
-  async (): Promise<SportEventRow[]> => {
-    return tracer.startActiveSpan("list", async (span) => {
-      try {
-        const db = await getDb();
-        return await db
-          .select()
-          .from(sportEvents)
-          .orderBy(asc(sportEvents.eventDayKey))
-          .limit(20)
-          .all();
-      } catch (err) {
-        span.recordException(err as Exception);
-        throw err;
-      } finally {
-        span.end();
-      }
-    });
-  },
-);
+const list = createServerFn({ method: "GET" }).handler(async (): Promise<SportEventRow[]> => {
+  return tracer.startActiveSpan("list", async (span) => {
+    try {
+      const db = await getDb();
+      return await db
+        .select()
+        .from(sportEvents)
+        .orderBy(asc(sportEvents.eventDayKey))
+        .limit(20)
+        .all();
+    } catch (err) {
+      span.recordException(err as Exception);
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
+});
 
 const add = createServerFn({ method: "POST" })
   .inputValidator(createSportEventSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<SportEventRow> => {
     return tracer.startActiveSpan("add", async (span) => {
       try {
         const db = await getDb();
 
         const now = new Date();
         const id = crypto.randomUUID();
-        await db
+        const [event] = await db
           .insert(sportEvents)
           .values({
             id,
@@ -81,8 +72,11 @@ const add = createServerFn({ method: "POST" })
             createdAt: now,
             updatedAt: now,
           })
-          .run();
-        return { id };
+          .returning();
+        if (!event) {
+          throw new Error("Failed to create event");
+        }
+        return event;
       } catch (err) {
         span.recordException(err as Exception);
         throw err;
@@ -94,7 +88,7 @@ const add = createServerFn({ method: "POST" })
 
 const update = createServerFn({ method: "POST" })
   .inputValidator(updateSportEventSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<SportEventRow> => {
     return tracer.startActiveSpan("update", async (span) => {
       try {
         const db = await getDb();
@@ -106,22 +100,25 @@ const update = createServerFn({ method: "POST" })
 
         if (!existing) throw new Error("Event not found");
 
-        await db
+        const [event] = await db
           .update(sportEvents)
           .set({
             name: data.name ?? existing.name,
             eventDayKey: data.dayKey ?? existing.eventDayKey,
-            discipline: data.discipline ?? existing.discipline,
+            discipline: data.discipline === undefined ? existing.discipline : data.discipline,
             status: data.status ?? existing.status,
-            notes: data.notes ?? existing.notes,
+            notes: data.notes === undefined ? existing.notes : data.notes,
             targets: data.targets ?? existing.targets,
-            url: data.url ?? existing.url,
+            url: data.url === undefined ? existing.url : data.url,
             updatedAt: new Date(),
           })
           .where(eq(sportEvents.id, data.id))
-          .run();
+          .returning();
 
-        return { ok: true, id: data.id };
+        if (!event) {
+          throw new Error("Failed to update event");
+        }
+        return event;
       } catch (err) {
         span.recordException(err as Exception);
         throw err;

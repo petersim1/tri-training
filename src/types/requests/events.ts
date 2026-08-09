@@ -30,12 +30,6 @@ export const updateSportEventSchema = createSportEventSchema.partial().extend({
   status: z.enum(PLAN_STATUS_VALUES).optional(),
 });
 
-export type SportEventTargetSchemaValues = z.infer<
-  typeof sportEventTargetSegmentSchema
->;
-export type CreateSportEventSchemaValues = z.infer<
-  typeof createSportEventSchema
->;
-export type UpdateSportEventSchemaValues = z.infer<
-  typeof updateSportEventSchema
->;
+export type SportEventTargetSchemaValues = z.infer<typeof sportEventTargetSegmentSchema>;
+export type CreateSportEventSchemaValues = z.infer<typeof createSportEventSchema>;
+export type UpdateSportEventSchemaValues = z.infer<typeof updateSportEventSchema>;

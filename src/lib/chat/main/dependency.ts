@@ -1,8 +1,4 @@
-import type {
-  ChatThreadRow,
-  CoachingStateRow,
-  SportEventRow,
-} from "@/lib/db/schema.server";
+import type { ChatThreadRow, CoachingStateRow, SportEventRow } from "@/lib/db/schema.server";
 import type { ToolName } from "@/types/chats/tools";
 
 export type ChatRunContext = {

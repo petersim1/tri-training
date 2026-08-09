@@ -3,9 +3,7 @@ import { Link } from "@tanstack/react-router";
 export function NotFound({ children }: { children?: React.ReactNode }) {
   return (
     <div className="space-y-2 p-2">
-      <div className="text-zinc-400">
-        {children ?? <p>That page does not exist.</p>}
-      </div>
+      <div className="text-zinc-400">{children ?? <p>That page does not exist.</p>}</div>
       <p className="flex flex-wrap items-center gap-2">
         <button
           type="button"

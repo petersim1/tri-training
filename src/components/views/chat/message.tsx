@@ -1,9 +1,4 @@
-import {
-  isValidElement,
-  type ReactElement,
-  type ReactNode,
-  useMemo,
-} from "react";
+import { isValidElement, type ReactElement, type ReactNode, useMemo } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,10 +16,7 @@ function textFromNodes(node: ReactNode): string {
   if (Array.isArray(node)) {
     return node.map(textFromNodes).join("");
   }
-  if (
-    isValidElement<{ children?: ReactNode }>(node) &&
-    node.props.children != null
-  ) {
+  if (isValidElement<{ children?: ReactNode }>(node) && node.props.children != null) {
     return textFromNodes(node.props.children);
   }
   return "";
@@ -43,12 +35,8 @@ function mdComponentsForTone(tone: Tone): Components {
     : "my-2 max-h-[min(40vh,16rem)] max-w-[min(19rem,calc(100vw-10rem))] overflow-x-auto overflow-y-auto rounded-lg bg-black/40 px-3 py-2.5 text-[12.65px] leading-relaxed ring-1 ring-zinc-800/95 [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:thin] first:mt-0 last:mb-0 sm:max-w-none";
 
   return {
-    p: ({ children }) => (
-      <p className={`my-2 first:mt-0 last:mb-0 ${bodyText}`}>{children}</p>
-    ),
-    strong: ({ children }) => (
-      <strong className="font-semibold text-inherit">{children}</strong>
-    ),
+    p: ({ children }) => <p className={`my-2 first:mt-0 last:mb-0 ${bodyText}`}>{children}</p>,
+    strong: ({ children }) => <strong className="font-semibold text-inherit">{children}</strong>,
     em: ({ children }) => <em className="italic">{children}</em>,
     a: ({ children, href }) => (
       <a
@@ -65,14 +53,10 @@ function mdComponentsForTone(tone: Tone): Components {
       </a>
     ),
     ul: ({ children }) => (
-      <ul className={`my-2 list-disc pl-5 first:mt-0 last:mb-0 ${bodyText}`}>
-        {children}
-      </ul>
+      <ul className={`my-2 list-disc pl-5 first:mt-0 last:mb-0 ${bodyText}`}>{children}</ul>
     ),
     ol: ({ children }) => (
-      <ol className={`my-2 list-decimal pl-5 first:mt-0 last:mb-0 ${bodyText}`}>
-        {children}
-      </ol>
+      <ol className={`my-2 list-decimal pl-5 first:mt-0 last:mb-0 ${bodyText}`}>{children}</ol>
     ),
     li: ({ children }) => <li className="my-0.5">{children}</li>,
     blockquote: ({ children }) => (
@@ -103,11 +87,7 @@ function mdComponentsForTone(tone: Tone): Components {
         {children}
       </h3>
     ),
-    hr: () => (
-      <hr
-        className={`my-3 ${user ? "border-white/28" : "border-zinc-700/95"}`}
-      />
-    ),
+    hr: () => <hr className={`my-3 ${user ? "border-white/28" : "border-zinc-700/95"}`} />,
     pre: ({ children }) => (
       <pre className={`${blockShell} font-mono wrap-anywhere`}>{children}</pre>
     ),
@@ -120,34 +100,20 @@ function mdComponentsForTone(tone: Tone): Components {
 
       if (isBlockLike) {
         return (
-          <code
-            className={`block whitespace-pre font-mono wrap-anywhere ${bodyText}`}
-          >
+          <code className={`block whitespace-pre font-mono wrap-anywhere ${bodyText}`}>
             {children}
           </code>
         );
       }
-      return (
-        <code className={`font-mono wrap-anywhere ${inlineCode}`}>
-          {children}
-        </code>
-      );
+      return <code className={`font-mono wrap-anywhere ${inlineCode}`}>{children}</code>;
     },
     table: ({ children }) => (
       <div className="my-2 max-w-full overflow-x-auto first:mt-0 last:mb-0">
-        <table className="w-max min-w-full border-collapse text-left">
-          {children}
-        </table>
+        <table className="w-max min-w-full border-collapse text-left">{children}</table>
       </div>
     ),
     thead: ({ children }) => (
-      <thead
-        className={
-          user
-            ? "border-b border-emerald-700/95"
-            : "border-b border-zinc-600/98"
-        }
-      >
+      <thead className={user ? "border-b border-emerald-700/95" : "border-b border-zinc-600/98"}>
         {children}
       </thead>
     ),
@@ -170,14 +136,8 @@ function mdComponentsForTone(tone: Tone): Components {
 
 const REMARK_PLUGINS = [remarkGfm];
 
-export function ChatMarkdownBody(props: {
-  tone: Tone;
-  text: string;
-}): ReactElement | null {
-  const components = useMemo(
-    () => mdComponentsForTone(props.tone),
-    [props.tone],
-  );
+export function ChatMarkdownBody(props: { tone: Tone; text: string }): ReactElement | null {
+  const components = useMemo(() => mdComponentsForTone(props.tone), [props.tone]);
 
   if (!props.text.trim()) {
     return null;
@@ -207,8 +167,7 @@ export const MessageBubble: React.FC<Props> = ({
   proposalSet,
   onProposalSubmit,
 }) => {
-  const body =
-    text.trim() !== "" ? <ChatMarkdownBody tone={bubble} text={text} /> : null;
+  const body = text.trim() !== "" ? <ChatMarkdownBody tone={bubble} text={text} /> : null;
   const showCtx = Boolean(contextLine?.trim());
 
   return (
@@ -247,9 +206,7 @@ export const MessageBubble: React.FC<Props> = ({
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
                   Proposal
                 </p>
-                <p className="text-[10px] text-zinc-500 capitalize">
-                  {ops.join(" · ")}
-                </p>
+                <p className="text-[10px] text-zinc-500 capitalize">{ops.join(" · ")}</p>
               </div>
               {status === "pending" ? (
                 <div className="flex items-center gap-1.5">

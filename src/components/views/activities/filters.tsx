@@ -25,8 +25,7 @@ export const ActivityFilters: React.FC<{
     !!formReducer.formState.values.dateTo;
 
   const exportDateRangeOk = Boolean(
-    !!formReducer.formState.values.dateFrom ||
-      !!formReducer.formState.values.dateTo,
+    !!formReducer.formState.values.dateFrom || !!formReducer.formState.values.dateTo,
   );
 
   const copyMutation = useMutation({
@@ -35,8 +34,7 @@ export const ActivityFilters: React.FC<{
       setExportFeedback(null);
     },
     onSuccess: async ({ markdown, rowCount }) => {
-      const text =
-        markdown.trim() !== "" ? markdown : "_No activities in this range._";
+      const text = markdown.trim() !== "" ? markdown : "_No activities in this range._";
       await navigator.clipboard.writeText(text);
       setExportFeedback({
         kind: "ok",
@@ -61,10 +59,7 @@ export const ActivityFilters: React.FC<{
     >
       <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
         <div className="flex flex-col gap-0.5">
-          <span
-            className="text-[11px] font-medium text-zinc-500"
-            id="activities-filter-kind-label"
-          >
+          <span className="text-[11px] font-medium text-zinc-500" id="activities-filter-kind-label">
             Kind
           </span>
           <FilterSelect
@@ -99,13 +94,8 @@ export const ActivityFilters: React.FC<{
           </FilterSelect>
         </div>
         <div className="flex flex-wrap items-end gap-1.5">
-          <label
-            className="flex flex-col gap-0.5"
-            htmlFor="activities-day-from"
-          >
-            <span className="text-[11px] font-medium text-zinc-500">
-              Day from
-            </span>
+          <label className="flex flex-col gap-0.5" htmlFor="activities-day-from">
+            <span className="text-[11px] font-medium text-zinc-500">Day from</span>
             <input
               id="activities-day-from"
               type="date"
@@ -118,9 +108,7 @@ export const ActivityFilters: React.FC<{
             –
           </span>
           <label className="flex flex-col gap-0.5" htmlFor="activities-day-to">
-            <span className="text-[11px] font-medium text-zinc-500">
-              Day to
-            </span>
+            <span className="text-[11px] font-medium text-zinc-500">Day to</span>
             <input
               id="activities-day-to"
               type="date"
@@ -161,8 +149,7 @@ export const ActivityFilters: React.FC<{
         </button>
         {!exportDateRangeOk ? (
           <span className="text-[11px] text-zinc-600">
-            Set day from and/or day to (uses kind + status above; ignores
-            pagination).
+            Set day from and/or day to (uses kind + status above; ignores pagination).
           </span>
         ) : null}
         {exportFeedback ? (

@@ -11,14 +11,11 @@ import { WeightTrendChart } from "./weights";
 export const Visualizer: React.FC<{
   initialChartSettings: SessionChartSettings;
 }> = ({ initialChartSettings }) => {
-  const runSetSessionChartSettings = useServerFn(
-    cookieActions.setSessionChartSettings,
-  );
+  const runSetSessionChartSettings = useServerFn(cookieActions.setSessionChartSettings);
 
   const holderRef = useRef(null);
 
-  const [sessionChartSettings, setSessionChartSettings] =
-    useState(initialChartSettings);
+  const [sessionChartSettings, setSessionChartSettings] = useState(initialChartSettings);
 
   const [dimensions, setDimensions] = useState(getDimensions(650));
 
@@ -33,8 +30,7 @@ export const Visualizer: React.FC<{
   }, []);
 
   const patchSessionChartMutation = useMutation({
-    mutationFn: async (patch: SessionChartSettings) =>
-      runSetSessionChartSettings({ data: patch }),
+    mutationFn: async (patch: SessionChartSettings) => runSetSessionChartSettings({ data: patch }),
   });
 
   const handlePlotChange = (patch: Partial<SessionChartSettings>) => {

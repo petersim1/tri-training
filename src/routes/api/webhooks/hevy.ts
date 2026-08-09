@@ -17,20 +17,14 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
         const secret = process.env.HEVY_WEBHOOK_BEARER_SECRET?.trim();
         if (!secret) {
           console.log("[hevy webhook] authorization header is not set");
-          return new Response(
-            JSON.stringify({ error: "HEVY_WEBHOOK_BEARER_SECRET is not set" }),
-            {
-              status: 503,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
+          return new Response(JSON.stringify({ error: "HEVY_WEBHOOK_BEARER_SECRET is not set" }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          });
         }
         const auth = request.headers.get("authorization");
         if (auth !== secret) {
-          console.log(
-            "[hevy webhook] authorization header did not match",
-            auth,
-          );
+          console.log("[hevy webhook] authorization header did not match", auth);
           return new Response(JSON.stringify({ error: "Unauthorized" }), {
             status: 401,
             headers: { "Content-Type": "application/json" },
@@ -70,9 +64,7 @@ export const Route = createFileRoute("/api/webhooks/hevy")({
         }
 
         const payloadJson =
-          typeof body === "object" && body !== null
-            ? JSON.stringify(body)
-            : rawBody;
+          typeof body === "object" && body !== null ? JSON.stringify(body) : rawBody;
 
         try {
           const result = await webhookServerFns.processHevyWebhook(workoutId);

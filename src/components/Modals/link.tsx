@@ -1,13 +1,9 @@
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import type { TypedVendorWorkoutRow } from "@/lib/db/schema.server";
 import { completedWorkoutTitle } from "@/lib/plans/completed-workout-data";
-import queryKeys from "@/lib/query-keys";
+import { getters, invalidators } from "@/lib/query-keys";
 import { rawActivityType } from "@/lib/utils/vendors";
 import { activityActions } from "@/server-fcts/activities";
 import { XIcon } from "../assets";
@@ -24,10 +20,7 @@ export const LinkModal: React.FC<{
 
   // shouldn't suspend as this is hydrated in the parent component where the modal is used
   // prior to even making the button available
-  const { data } = useSuspenseQuery({
-    queryKey: queryKeys.unlinkedActivities,
-    queryFn: () => activityActions.unlinked(),
-  });
+  const { data } = useSuspenseQuery(getters.activities.unlinked());
 
   const linkAllMutation = useMutation({
     mutationFn: () => linkAll(),
@@ -36,15 +29,10 @@ export const LinkModal: React.FC<{
       setLinkAllInfo(null);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.unlinkedActivities });
-      queryClient.invalidateQueries({ queryKey: ["calendar"] });
-      queryClient.invalidateQueries({ queryKey: ["activities"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-viz"] });
+      invalidators.activities.refresh(queryClient);
     },
     onError: (e) => {
-      setLinkAllError(
-        e instanceof Error ? e.message : "Could not link sessions",
-      );
+      setLinkAllError(e instanceof Error ? e.message : "Could not link sessions");
     },
   });
 
@@ -63,10 +51,7 @@ export const LinkModal: React.FC<{
     <Modal onClose={onClose}>
       <ModalContent>
         <div className="flex items-start justify-between pb-6">
-          <h2
-            id="activities-link-all-title"
-            className="text-lg font-semibold text-zinc-100"
-          >
+          <h2 id="activities-link-all-title" className="text-lg font-semibold text-zinc-100">
             Link <span>{data.length}</span> sessions
           </h2>
           <button type="button" onClick={onClose}>
@@ -94,12 +79,8 @@ export const LinkModal: React.FC<{
             );
           })}
         </ul>
-        {linkAllInfo ? (
-          <p className="text-sm text-zinc-400">{linkAllInfo}</p>
-        ) : null}
-        {linkAllError ? (
-          <p className="text-sm text-red-400">{linkAllError}</p>
-        ) : null}
+        {linkAllInfo ? <p className="text-sm text-zinc-400">{linkAllInfo}</p> : null}
+        {linkAllError ? <p className="text-sm text-red-400">{linkAllError}</p> : null}
         <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-800/80 pt-3 mt-3">
           <div>
             {linkAllMutation.isSuccess && (

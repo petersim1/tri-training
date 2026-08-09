@@ -1,9 +1,4 @@
-import {
-  context,
-  type Exception,
-  propagation,
-  trace,
-} from "@opentelemetry/api";
+import { context, type Exception, propagation, trace } from "@opentelemetry/api";
 import { redirect } from "@tanstack/react-router";
 import { createMiddleware } from "@tanstack/react-start";
 import { getSessionOk } from "../utils/session.server";
@@ -31,9 +26,7 @@ function isPublicPath(pathname: string): boolean {
 /** API routes that return 401 JSON from the handler instead of a login redirect. */
 function isApiHandlerAuthedPath(pathname: string): boolean {
   const p = normalizePathname(pathname);
-  return (
-    p === "/api/planned-workouts/bulk" || p === "/api/planning-chat/stream"
-  );
+  return p === "/api/planned-workouts/bulk" || p === "/api/planning-chat/stream";
 }
 
 /**
@@ -65,9 +58,7 @@ export const requireSessionFnMiddleware = createMiddleware().server(
         try {
           span.setAttributes({
             "http.target": pathname,
-            "middleware.type": isServerFnHttpRequest(request, pathname)
-              ? "server_fn"
-              : "page",
+            "middleware.type": isServerFnHttpRequest(request, pathname) ? "server_fn" : "page",
           });
 
           if (isServerFnHttpRequest(request, pathname)) {

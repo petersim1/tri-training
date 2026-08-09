@@ -1,12 +1,5 @@
 import { sql } from "drizzle-orm";
-import {
-  index,
-  integer,
-  real,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type {
   ChatProposal,
   CoachingStateSchemaValues,
@@ -18,19 +11,13 @@ import type {
   PlanStatus,
   WorkoutVendor,
 } from "../constants/activities";
-import type {
-  SportEventDiscipline,
-  SportEventTargetSegment,
-} from "../constants/events";
+import type { SportEventDiscipline, SportEventTargetSegment } from "../constants/events";
 import type { HevyWorkout } from "../hevy/types";
 import type { StravaActivity } from "../strava/types";
 
 /** JSON value — structured so TanStack Start can serialize server responses. */
 export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue =
-  | JsonPrimitive
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 const pkUUIDField = {
   id: text("id")
@@ -57,13 +44,9 @@ export const vendorActivities = sqliteTable(
     ...baseTimestamps,
     vendor: text("vendor").$type<WorkoutVendor>().notNull(),
     vendorId: text("vendor_id").notNull(),
-    data: text("data", { mode: "json" })
-      .notNull()
-      .$type<StravaActivity | HevyWorkout>(),
+    data: text("data", { mode: "json" }).notNull().$type<StravaActivity | HevyWorkout>(),
   },
-  (t) => [
-    uniqueIndex("completed_workouts_vendor_vendor_id").on(t.vendor, t.vendorId),
-  ],
+  (t) => [uniqueIndex("completed_workouts_vendor_vendor_id").on(t.vendor, t.vendorId)],
 );
 
 export type VendorActivityRow = typeof vendorActivities.$inferSelect;
@@ -93,10 +76,9 @@ export const workoutEntries = sqliteTable(
     status: text("status").$type<PlanStatus>().notNull().default("planned"),
     routineVendor: text("routine_vendor").$type<WorkoutVendor>(),
     routineId: text("routine_id"),
-    vendorActivityId: text("vendor_activity_id").references(
-      () => vendorActivities.id,
-      { onDelete: "set null" },
-    ),
+    vendorActivityId: text("vendor_activity_id").references(() => vendorActivities.id, {
+      onDelete: "set null",
+    }),
     distance: real("distance"),
     distanceUnits: text("distance_units").$type<CardioDistanceUnit | null>(),
     timeSeconds: integer("time_seconds"),
@@ -183,9 +165,7 @@ export const chatMessages = sqliteTable(
     isSuccess: integer("is_success").notNull().default(1),
     /** Latest assistant message that holds the pending calendar proposal (cross-turn retrieval). */
     proposal: text("proposal", { mode: "json" }).$type<ChatProposal>(),
-    isCoachingStateUpdate: integer("is_coaching_state_update")
-      .default(0)
-      .notNull(),
+    isCoachingStateUpdate: integer("is_coaching_state_update").default(0).notNull(),
   },
   (t) => [index("ix_chat_messages_thread_id").on(t.threadId)],
 );
@@ -203,9 +183,7 @@ export const coachingState = sqliteTable("coaching_state", {
   state: text("state", { mode: "json" })
     .notNull()
     .$type<CoachingStateSchemaValues>()
-    .default(
-      sql`'{"physicalState":[],"disciplineState":{},"preferences":[],"directives":[]}'`,
-    ),
+    .default(sql`'{"physicalState":[],"disciplineState":{},"preferences":[],"directives":[]}'`),
 });
 
 export type CoachingStateRow = typeof coachingState.$inferSelect;
@@ -222,9 +200,7 @@ export const sportEvents = sqliteTable(
     status: text("status").$type<PlanStatus>().notNull().default("planned"),
     discipline: text("discipline").$type<SportEventDiscipline | null>(),
     notes: text("notes"),
-    targets: text("targets", { mode: "json" })
-      .notNull()
-      .$type<SportEventTargetSegment[]>(),
+    targets: text("targets", { mode: "json" }).notNull().$type<SportEventTargetSegment[]>(),
     /** Registration or event page (`http` / `https` only when set). */
     url: text("url"),
   },

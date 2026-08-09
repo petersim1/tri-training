@@ -1,12 +1,7 @@
 import type { PlanKind } from "../constants/activities";
-import type {
-  TypedVendorWorkoutRow,
-  VendorActivityRow,
-} from "../db/schema.server";
+import type { TypedVendorWorkoutRow, VendorActivityRow } from "../db/schema.server";
 
-export const vendorActivityToPlanKind = (
-  activity: VendorActivityRow,
-): PlanKind | null => {
+export const vendorActivityToPlanKind = (activity: VendorActivityRow): PlanKind | null => {
   const typedActivity = activity as TypedVendorWorkoutRow;
 
   if (typedActivity.vendor === "hevy") {

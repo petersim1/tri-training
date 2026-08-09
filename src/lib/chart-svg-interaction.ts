@@ -1,11 +1,7 @@
 import type { MouseEvent } from "react";
 
 /** Pick the series index whose x is closest to the pointer (same for hover line + click). */
-export function nearestIndexFromSvgX(
-  x: number,
-  n: number,
-  xAt: (i: number) => number,
-): number {
+export function nearestIndexFromSvgX(x: number, n: number, xAt: (i: number) => number): number {
   if (n <= 0) {
     return 0;
   }
@@ -52,10 +48,7 @@ export function nearestSessionIndexFromSvgX(
   return best;
 }
 
-export function svgLocalXFromMouse(
-  e: MouseEvent,
-  svg: SVGSVGElement | null,
-): number | null {
+export function svgLocalXFromMouse(e: MouseEvent, svg: SVGSVGElement | null): number | null {
   if (!svg) {
     return null;
   }

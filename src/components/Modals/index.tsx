@@ -7,12 +7,7 @@ type ModalProps = React.HTMLAttributes<HTMLDivElement> & {
   onClose: () => void;
 };
 
-export const Modal: React.FC<ModalProps> = ({
-  className,
-  children,
-  onClose,
-  ...props
-}) => {
+export const Modal: React.FC<ModalProps> = ({ className, children, onClose, ...props }) => {
   useEffect(() => {
     document.body.classList.add("overflow-hidden");
     return () => document.body.classList.remove("overflow-hidden");

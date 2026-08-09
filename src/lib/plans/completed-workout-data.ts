@@ -1,7 +1,4 @@
-import type {
-  TypedVendorWorkoutRow,
-  VendorActivityRow,
-} from "../db/schema.server";
+import type { TypedVendorWorkoutRow, VendorActivityRow } from "../db/schema.server";
 import { durationSecondsFromIsoRange, toIsoDate } from "../utils/dates";
 
 /**
@@ -48,19 +45,14 @@ export function completedWorkoutDistanceM(c: VendorActivityRow): number | null {
   return null;
 }
 
-export function completedWorkoutMovingSeconds(
-  c: VendorActivityRow,
-): number | null {
+export function completedWorkoutMovingSeconds(c: VendorActivityRow): number | null {
   const typedActivity = c as TypedVendorWorkoutRow;
 
   if (typedActivity.vendor === "strava") {
     return typedActivity.data.moving_time;
   }
   if (typedActivity.vendor === "hevy") {
-    return durationSecondsFromIsoRange(
-      typedActivity.data.start_time,
-      typedActivity.data.end_time,
-    );
+    return durationSecondsFromIsoRange(typedActivity.data.start_time, typedActivity.data.end_time);
   }
   return null;
 }
@@ -74,9 +66,7 @@ function completedWorkoutCalories(c: VendorActivityRow): number | null {
 }
 
 /** Strava-only; BPM when the activity JSON includes HR. */
-export function completedWorkoutAverageHeartrateBpm(
-  c: VendorActivityRow,
-): number | null {
+export function completedWorkoutAverageHeartrateBpm(c: VendorActivityRow): number | null {
   const typedActivity = c as TypedVendorWorkoutRow;
   if (typedActivity.vendor === "strava") {
     return typedActivity.data.average_heartrate ?? null;
@@ -88,9 +78,7 @@ const MAX_PLANNER_LIFT_EXERCISES = 14;
 const MAX_PLANNER_LIFT_SETS_PER_EXERCISE = 10;
 
 /** Compact Hevy lift lines for planning / tooling (movement + set previews). */
-export function completedWorkoutHevyLiftExerciseLinesPlanner(
-  c: VendorActivityRow,
-): string[] {
+export function completedWorkoutHevyLiftExerciseLinesPlanner(c: VendorActivityRow): string[] {
   const typedActivity = c as TypedVendorWorkoutRow;
   if (typedActivity.vendor === "strava") {
     return [];
@@ -205,8 +193,7 @@ export function formatCompletedSessionBrief(
         : `${m}:${String(sec).padStart(2, "0")}`;
   }
   const kcalRaw = completedWorkoutCalories(c);
-  const kcal =
-    kcalRaw != null && Number.isFinite(kcalRaw) ? Math.round(kcalRaw) : null;
+  const kcal = kcalRaw != null && Number.isFinite(kcalRaw) ? Math.round(kcalRaw) : null;
   const parts: string[] = [];
   if (distLabel) {
     parts.push(distLabel);
@@ -223,10 +210,7 @@ export function formatCompletedSessionBrief(
       parts.push(`${Math.round(hr)} bpm avg`);
     }
   } else if (c.vendor === "hevy") {
-    const vol = completedWorkoutHevyLiftVolumeKgReps(
-      c,
-      opts?.surrogateBodyWeightKg ?? null,
-    );
+    const vol = completedWorkoutHevyLiftVolumeKgReps(c, opts?.surrogateBodyWeightKg ?? null);
     if (vol != null && Number.isFinite(vol) && vol > 0) {
       parts.push(`${Math.round(vol).toLocaleString()} kg×reps`);
     }

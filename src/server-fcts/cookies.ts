@@ -1,10 +1,6 @@
 import { type Exception, trace } from "@opentelemetry/api";
 import { createServerFn } from "@tanstack/react-start";
-import {
-  deleteCookie,
-  getCookie,
-  setCookie,
-} from "@tanstack/react-start/server";
+import { deleteCookie, getCookie, setCookie } from "@tanstack/react-start/server";
 import {
   DEFAULT_CALENDAR_SCOPE,
   DEFAULT_SESSION_CHART_SETTINGS,
@@ -95,9 +91,7 @@ const getVizSettings = createServerFn({ method: "POST" }).handler(
           const o = JSON.parse(raw) as Record<string, unknown>;
           return {
             ...DEFAULT_SESSION_CHART_SETTINGS,
-            ...Object.fromEntries(
-              Object.entries(o).filter(([, v]) => v !== undefined),
-            ),
+            ...Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)),
           };
         } catch {
           return { ...DEFAULT_SESSION_CHART_SETTINGS };

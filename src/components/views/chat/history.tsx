@@ -1,17 +1,29 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { PlusIcon } from "@/components/assets";
+import { invalidators } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { useChat } from "@/providers/chat";
+import { chatActions } from "@/server-fcts/chat";
 import { formatChatListTime, threadListTitle } from "./displays";
 
 export const ThreadsHistoryPane: React.FC = () => {
-  const {
-    threadsQuery,
-    deleteThread,
-    selectedThreadId,
-    selectThreadId,
-    setOpen,
-    setCurView,
-  } = useChat();
+  const qc = useQueryClient();
+  const deleteThreadFn = useServerFn(chatActions.deleteThread);
+
+  const { threadsQuery, selectedThreadId, selectThreadId, setOpen, setCurView } = useChat();
+
+  const deleteThread = useMutation({
+    mutationFn: (threadId: string) => deleteThreadFn({ data: { threadId } }),
+    onSuccess: (res, threadId) => {
+      if (res.deleted) {
+        invalidators.chats.delete(qc, { threadId, curThreadId: selectedThreadId });
+        if (threadId === selectedThreadId) {
+          selectThreadId(null);
+        }
+      }
+    },
+  });
 
   const handleSelect = (tid: string) => {
     selectThreadId(tid);
@@ -89,11 +101,7 @@ export const ThreadsHistoryPane: React.FC = () => {
               </div>
               <div className="mt-0.5 text-[11px] text-zinc-500">
                 <time
-                  dateTime={
-                    t.updatedAt instanceof Date
-                      ? t.updatedAt.toISOString()
-                      : undefined
-                  }
+                  dateTime={t.updatedAt instanceof Date ? t.updatedAt.toISOString() : undefined}
                 >
                   {formatChatListTime(t.updatedAt)}
                 </time>

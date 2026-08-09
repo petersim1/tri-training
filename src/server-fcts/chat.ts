@@ -37,11 +37,7 @@ const getThread = createServerFn({ method: "GET" })
     return tracer.startActiveSpan("getThread", async (span) => {
       try {
         const db = await getDb();
-        const thread = await db
-          .select()
-          .from(chatThreads)
-          .where(eq(chatThreads.id, data.id))
-          .get();
+        const thread = await db.select().from(chatThreads).where(eq(chatThreads.id, data.id)).get();
 
         if (!thread) {
           throw new Error("not found");
@@ -79,25 +75,19 @@ const listThreads = createServerFn({
 
 const createThread = createServerFn({
   method: "POST",
-}).handler(async (): Promise<string> => {
+}).handler(async (): Promise<ChatThreadRow> => {
   return tracer.startActiveSpan("createThread", async (span) => {
     try {
       const db = await getDb();
-      const [row] = await db
-        .insert(chatThreads)
-        .values({})
-        .returning({ id: chatThreads.id });
+      const [row] = await db.insert(chatThreads).values({}).returning();
       if (!row) {
         throw new Error("Failed to create planning thread");
       }
-      const existing = await db
-        .select({ id: coachingState.id })
-        .from(coachingState)
-        .get();
+      const existing = await db.select({ id: coachingState.id }).from(coachingState).get();
       if (!existing) {
         await db.insert(coachingState).values({}).run();
       }
-      return row.id;
+      return row;
     } catch (err) {
       span.recordException(err as Exception);
       throw err;
@@ -124,21 +114,13 @@ const listMessages = createServerFn({
           .select()
           .from(chatMessages)
           .where(
-            and(
-              eq(chatMessages.threadId, tid),
-              inArray(chatMessages.role, ["assistant", "user"]),
-            ),
+            and(eq(chatMessages.threadId, tid), inArray(chatMessages.role, ["assistant", "user"])),
           )
           .orderBy(
-            data.orderBy === "desc"
-              ? desc(chatMessages.createdAt)
-              : asc(chatMessages.createdAt),
+            data.orderBy === "desc" ? desc(chatMessages.createdAt) : asc(chatMessages.createdAt),
           );
 
-        const messages = await (data.limit
-          ? baseQuery.limit(data.limit)
-          : baseQuery
-        ).all();
+        const messages = await (data.limit ? baseQuery.limit(data.limit) : baseQuery).all();
 
         const seqs = Array.from(new Set(messages.map((m) => m.seq)));
 
@@ -165,9 +147,7 @@ const listMessages = createServerFn({
             role: m.role as "user" | "assistant",
             proposalSet: proposals.map((p) => {
               return {
-                // biome-ignore lint/style/noNonNullAssertion: <guaranteed from the query>
                 op: p.proposal!.item.op,
-                // biome-ignore lint/style/noNonNullAssertion: <guaranteed from the query>
                 status: p.proposal!.status,
               };
             }),
@@ -269,9 +249,7 @@ const chat = createServerFn({ method: "POST" })
           event = ev;
         }
 
-        const client = getPlanningOpenAiClient(
-          process.env.OPENAI_KEY as string,
-        );
+        const client = getPlanningOpenAiClient(process.env.OPENAI_KEY as string);
 
         const messages = await listMessages({
           data: { threadId: thread.id, orderBy: "desc", limit: 6 },
@@ -304,13 +282,7 @@ const chat = createServerFn({ method: "POST" })
 
             let dbMessagesStore: NewChatMessageRow[] = [];
             try {
-              dbMessagesStore = await runPlanningTurn(
-                client,
-                ctx,
-                messages,
-                data.message,
-                emit,
-              );
+              dbMessagesStore = await runPlanningTurn(client, ctx, messages, data.message, emit);
             } catch (e) {
               emit({
                 type: "error",
@@ -329,20 +301,8 @@ const chat = createServerFn({ method: "POST" })
                 );
                 emit({ type: "message", message: userDbMessage });
                 emit({ type: "message", message: sysDbMessage });
-                runReplaySummary(
-                  client,
-                  ctx,
-                  messages,
-                  data.message,
-                  sysDbMessage,
-                );
-                runCoachingStateSummary(
-                  client,
-                  ctx,
-                  messages,
-                  data.message,
-                  sysDbMessage,
-                );
+                runReplaySummary(client, ctx, messages, data.message, sysDbMessage);
+                runCoachingStateSummary(client, ctx, messages, data.message, sysDbMessage);
               } catch (e) {
                 console.error(e);
               }

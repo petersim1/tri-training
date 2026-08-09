@@ -1,11 +1,4 @@
-import {
-  type UseMutationResult,
-  type UseQueryResult,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import React, {
   createContext,
   type ReactNode,
@@ -18,8 +11,7 @@ import React, {
 import { ChatBubbleIcon } from "@/components/assets";
 import { Panel } from "@/components/views/chat/panel";
 import type { ChatThreadRow } from "@/lib/db/schema.server";
-import queryKeys from "@/lib/query-keys";
-import { chatActions } from "@/server-fcts/chat";
+import { getters } from "@/lib/query-keys";
 
 export type PlanningDockContextValue = {
   open: boolean;
@@ -28,21 +20,11 @@ export type PlanningDockContextValue = {
   selectedThreadId: string | null;
   selectThreadId: (id: string | null) => void;
   threadsQuery: UseQueryResult<ChatThreadRow[], Error>;
-  deleteThread: UseMutationResult<
-    {
-      deleted: boolean;
-    },
-    Error,
-    string,
-    unknown
-  >;
-  createThreadAsync: () => Promise<string>;
   curView: "chat" | "history";
   setCurView: React.Dispatch<React.SetStateAction<"chat" | "history">>;
 };
 
-export const PlanningDockContext =
-  createContext<PlanningDockContextValue | null>(null);
+export const PlanningDockContext = createContext<PlanningDockContextValue | null>(null);
 
 export const PlanningChrome: React.FC = () => {
   const { open, toggle } = useChat();
@@ -66,52 +48,13 @@ export const PlanningChrome: React.FC = () => {
 };
 
 export const PlanningChatProvider = ({ children }: { children: ReactNode }) => {
-  const qc = useQueryClient();
-  const deleteThreadFn = useServerFn(chatActions.deleteThread);
-  const createThreadFn = useServerFn(chatActions.createThread);
   const [open, setOpenState] = useState(false);
   const [curView, setCurView] = useState<"chat" | "history">("chat");
   const [selectedThreadId, selectThreadId] = useState<string | null>(null);
 
-  const justDeletedRef = useRef(false);
   const hasInitialized = useRef(false);
 
-  const threadsQuery = useQuery({
-    queryKey: queryKeys.chatThreads,
-    queryFn: () => chatActions.listThreads(),
-  });
-
-  const createThreadAsync = async (): Promise<string> => {
-    const tid = await createThreadFn();
-    window.localStorage.setItem("recent_chat", tid);
-    selectThreadId(tid);
-    void qc.invalidateQueries({ queryKey: queryKeys.chatThreads });
-    return tid;
-  };
-
-  const deleteThread = useMutation({
-    mutationFn: (threadId: string) => deleteThreadFn({ data: { threadId } }),
-    onSuccess: (res, threadId) => {
-      if (res.deleted) {
-        justDeletedRef.current = true;
-        if (selectedThreadId === threadId) {
-          selectThreadId(null);
-          window.localStorage.removeItem("recent_chat");
-        }
-        void qc.invalidateQueries({ queryKey: queryKeys.chatThreads });
-        const tid = threadId?.trim();
-        if (tid) {
-          void qc.invalidateQueries({
-            queryKey: queryKeys.messagesQueryKey(tid),
-          });
-        }
-        void qc.invalidateQueries({
-          predicate: ({ queryKey }) =>
-            queryKey.length > 0 && queryKey[0] === "activities",
-        });
-      }
-    },
-  });
+  const threadsQuery = useQuery(getters.chats.list());
 
   useEffect(() => {
     // treat this PURELY as an initial mount rendering. After that, it'll be completely controlled.
@@ -154,12 +97,10 @@ export const PlanningChatProvider = ({ children }: { children: ReactNode }) => {
       selectedThreadId,
       selectThreadId,
       threadsQuery,
-      deleteThread,
-      createThreadAsync,
       curView,
       setCurView,
     }),
-    [open, selectedThreadId, threadsQuery, deleteThread],
+    [open, selectedThreadId, threadsQuery],
   );
 
   return (

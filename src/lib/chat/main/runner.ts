@@ -33,9 +33,7 @@ const accumulateToolCalls = (
   }
 };
 
-const finalizeToolCalls = (
-  acc: Map<number, PartialToolCall>,
-): PartialToolCall[] =>
+const finalizeToolCalls = (acc: Map<number, PartialToolCall>): PartialToolCall[] =>
   [...acc.entries()]
     .sort(([a], [b]) => a - b)
     .map(([, tc]) => tc)
@@ -67,13 +65,8 @@ export const runPlanningTurn = async (
     });
 
     let contentChunk = "";
-    let finishReason:
-      | "tool_calls"
-      | "length"
-      | "stop"
-      | "content_filter"
-      | "function_call"
-      | null = null;
+    let finishReason: "tool_calls" | "length" | "stop" | "content_filter" | "function_call" | null =
+      null;
     for await (const chunk of streamResp) {
       const choice = chunk.choices[0];
       if (!choice) continue;

@@ -1,8 +1,5 @@
 import type { PlanKind, PlanStatus } from "@/lib/constants/activities";
-import type {
-  VendorActivityRow,
-  WorkoutEntryWithCompleted,
-} from "@/lib/db/schema.server";
+import type { VendorActivityRow, WorkoutEntryWithCompleted } from "@/lib/db/schema.server";
 
 export type PlannedWorkoutsPageResult = {
   rows: WorkoutEntryWithCompleted[];

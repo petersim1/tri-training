@@ -1,10 +1,4 @@
-export const PLAN_KIND_VALUES = [
-  "lift",
-  "run",
-  "bike",
-  "swim",
-  "recovery",
-] as const;
+export const PLAN_KIND_VALUES = ["lift", "run", "bike", "swim", "recovery"] as const;
 export type PlanKind = (typeof PLAN_KIND_VALUES)[number];
 
 /** Strava vs Hevy — `completed_workouts.vendor`, `planned_workouts.routine_vendor`, webhooks. */

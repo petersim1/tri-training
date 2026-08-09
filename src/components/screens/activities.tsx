@@ -2,11 +2,11 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import type React from "react";
 import { Suspense, useDeferredValue, useState } from "react";
 import { useFormReducer } from "@/hooks/useFormReducer";
-import type { WorkoutEntryWithCompleted } from "@/lib/db/schema.server";
+import { WorkoutEntryWithCompleted } from "@/lib/db/schema.server";
 import { hevyWebRootUrl } from "@/lib/hevy/links";
-import queryKeys from "@/lib/query-keys";
-import { activityActions } from "@/server-fcts/activities";
+import { getters, invalidators } from "@/lib/query-keys";
 import type { ActivityListSchemaValues } from "@/types/requests/activities";
+import { Modal, ModalContent } from "../Modals";
 import { EditModal } from "../Modals/edit";
 import { LinkModal } from "../Modals/link";
 import { MarkdownModal } from "../Modals/markdown";
@@ -20,10 +20,7 @@ const MAIN_COLUMN = "mx-auto w-full max-w-6xl";
 const LinkAllButton: React.FC<{
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }> = ({ setOpen }) => {
-  const { data } = useSuspenseQuery({
-    queryKey: queryKeys.unlinkedActivities,
-    queryFn: () => activityActions.unlinked(),
-  });
+  const { data } = useSuspenseQuery(getters.activities.unlinked());
 
   if (data.length === 0) {
     return null;
@@ -42,35 +39,18 @@ const LinkAllButton: React.FC<{
 
 const ActivityList: React.FC<{
   filter: ActivityListSchemaValues;
-  setEditPlan: React.Dispatch<
-    React.SetStateAction<WorkoutEntryWithCompleted | undefined>
-  >;
-}> = ({ filter, setEditPlan }) => {
-  const { data } = useSuspenseQuery({
-    queryKey: queryKeys.activitiesList(filter),
-    queryFn: () =>
-      activityActions.list({
-        data: filter,
-      }),
-  });
+  handleSelect: (plan: WorkoutEntryWithCompleted) => void;
+}> = ({ filter, handleSelect }) => {
+  const { data } = useSuspenseQuery(getters.activities.list(filter));
 
   if (data.rows.length === 0) {
-    return (
-      <p className="text-sm text-zinc-500">
-        No planned workouts match these filters.
-      </p>
-    );
+    return <p className="text-sm text-zinc-500">No planned workouts match these filters.</p>;
   }
 
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
       {data.rows.map((p) => (
-        <ActivityElement
-          key={p.id}
-          workout={p}
-          onEdit={() => setEditPlan(p)}
-          isCard
-        />
+        <ActivityElement key={p.id} workout={p} onEdit={(_id: string) => handleSelect(p)} isCard />
       ))}
     </div>
   );
@@ -81,13 +61,7 @@ const ActivityToggle: React.FC<{
   incPage: () => void;
   decPage: () => void;
 }> = ({ filter, incPage, decPage }) => {
-  const { data } = useSuspenseQuery({
-    queryKey: queryKeys.activitiesList(filter),
-    queryFn: () =>
-      activityActions.list({
-        data: filter,
-      }),
-  });
+  const { data } = useSuspenseQuery(getters.activities.list(filter));
 
   if (data.totalPages <= 1) {
     return null;
@@ -124,25 +98,24 @@ export const ActivitiesContent: React.FC<{
   const queryClient = useQueryClient();
 
   const formReducer = useFormReducer(initialQuery);
-
   const defferredFilter = useDeferredValue(formReducer.formState.values);
 
-  const [linkAllOpen, setLinkAllOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState<"link" | "upload" | "edit" | undefined>(undefined);
+  const [selectedPlan, setSelectedPlan] = useState<WorkoutEntryWithCompleted | undefined>(
+    undefined,
+  );
 
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [editPlan, setEditPlan] = useState<
-    WorkoutEntryWithCompleted | undefined
-  >(undefined);
+  const handleSelect = (plan: WorkoutEntryWithCompleted) => {
+    setSelectedPlan(plan);
+    setModalOpen("edit");
+  };
 
-  function refresh() {
-    queryClient.invalidateQueries({ queryKey: ["calendar"] });
-    queryClient.invalidateQueries({ queryKey: ["activities"] });
-    queryClient.invalidateQueries({ queryKey: ["weight-viz"] });
-    queryClient.invalidateQueries({ queryKey: ["activity-viz"] });
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.unlinkedActivities,
-    });
-  }
+  const closeModal = () => {
+    setModalOpen(undefined);
+    setSelectedPlan(undefined);
+  };
+
+  const refresh = () => invalidators.activities.refresh(queryClient);
 
   return (
     <div className={`${MAIN_COLUMN} space-y-5`}>
@@ -173,33 +146,20 @@ export const ActivitiesContent: React.FC<{
             Refresh
           </button>
           <Suspense fallback={null}>
-            <LinkAllButton setOpen={setLinkAllOpen} />
+            <LinkAllButton setOpen={() => setModalOpen("link")} />
           </Suspense>
         </div>
       </div>
 
-      <ActivityFilters
-        formReducer={formReducer}
-        openUpload={() => setUploadOpen(true)}
-      />
+      <ActivityFilters formReducer={formReducer} openUpload={() => setModalOpen("upload")} />
 
       <div className="sticky top-0 z-30 mt-1 border-b border-zinc-800/80 bg-zinc-950/95 py-2 backdrop-blur-md">
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <Suspense fallback={null}>
             <ActivityToggle
               filter={defferredFilter}
-              decPage={() =>
-                formReducer.setField(
-                  "page",
-                  formReducer.formState.values.page - 1,
-                )
-              }
-              incPage={() =>
-                formReducer.setField(
-                  "page",
-                  formReducer.formState.values.page + 1,
-                )
-              }
+              decPage={() => formReducer.setField("page", formReducer.formState.values.page - 1)}
+              incPage={() => formReducer.setField("page", formReducer.formState.values.page + 1)}
             />
           </Suspense>
         </div>
@@ -214,16 +174,18 @@ export const ActivitiesContent: React.FC<{
           </div>
         }
       >
-        <ActivityList filter={defferredFilter} setEditPlan={setEditPlan} />
+        <ActivityList filter={defferredFilter} handleSelect={handleSelect} />
       </Suspense>
 
-      {uploadOpen && <MarkdownModal onClose={() => setUploadOpen(false)} />}
-
-      {editPlan && (
-        <EditModal plan={editPlan} onClose={() => setEditPlan(undefined)} />
+      {modalOpen === "upload" && <MarkdownModal onClose={closeModal} />}
+      {modalOpen === "link" && <LinkModal onClose={closeModal} />}
+      {modalOpen === "edit" && selectedPlan && (
+        <Modal onClose={closeModal}>
+          <ModalContent>
+            <EditModal plan={selectedPlan} onClose={closeModal} />
+          </ModalContent>
+        </Modal>
       )}
-
-      {linkAllOpen && <LinkModal onClose={() => setLinkAllOpen(false)} />}
     </div>
   );
 };

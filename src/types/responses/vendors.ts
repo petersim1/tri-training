@@ -1,7 +1,4 @@
-import type {
-  HevyRoutineFolderSummary,
-  HevyRoutineSummary,
-} from "@/lib/hevy/types";
+import type { HevyRoutineFolderSummary, HevyRoutineSummary } from "@/lib/hevy/types";
 
 export type StartStravaOAuthResult =
   | { ok: true; authorizeUrl: string }

@@ -21,9 +21,7 @@ export type PlannedCardioTargetsShape = {
 };
 
 /** Distance + duration targets for display (run / bike / swim plans). */
-export function formatPlannedCardioTargets(
-  p: PlannedCardioTargetsShape,
-): string | null {
+export function formatPlannedCardioTargets(p: PlannedCardioTargetsShape): string | null {
   if (!["run", "bike", "swim"].includes(p.kind)) {
     return null;
   }

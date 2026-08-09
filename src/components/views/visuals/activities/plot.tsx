@@ -1,15 +1,5 @@
-import {
-  axisBottom,
-  axisLeft,
-  line,
-  pointer,
-  scaleLinear,
-  scaleTime,
-} from "d3";
-import type {
-  SessionChartMetric,
-  SessionChartRange,
-} from "@/lib/constants/visuals";
+import { axisBottom, axisLeft, line, pointer, scaleLinear, scaleTime } from "d3";
+import type { SessionChartMetric, SessionChartRange } from "@/lib/constants/visuals";
 import { DEFAULT_VIZ_UNIT } from "@/lib/utils/calculations";
 import { type ChartDimensions, monthLabel } from "@/lib/utils/plots";
 import type { VizResult } from "@/types/responses/activities";
@@ -32,8 +22,7 @@ const formatValue = (v: number, metric: SessionChartMetric): string => {
 const rangeToDateBounds = (range: string): { from: Date; to: Date } | null => {
   const now = new Date();
   if (range === "all") return null;
-  if (range === "ytd")
-    return { from: new Date(now.getFullYear(), 0, 1), to: now };
+  if (range === "ytd") return { from: new Date(now.getFullYear(), 0, 1), to: now };
   const months = range === "3m" ? 3 : range === "6m" ? 6 : 12;
   return {
     from: new Date(now.getFullYear(), now.getMonth() - months, now.getDate()),
@@ -60,13 +49,10 @@ export const createViz = (
 
   const bounds = rangeToDateBounds(range);
   const xFrom =
-    bounds?.from ??
-    (points.length > 0 ? new Date(`${points[0].date}T12:00:00`) : new Date());
+    bounds?.from ?? (points.length > 0 ? new Date(`${points[0].date}T12:00:00`) : new Date());
   const xTo =
     bounds?.to ??
-    (points.length > 0
-      ? new Date(`${points[points.length - 1].date}T12:00:00`)
-      : new Date());
+    (points.length > 0 ? new Date(`${points[points.length - 1].date}T12:00:00`) : new Date());
 
   const innerW = dimensions.viewW - dimensions.pad.l - dimensions.pad.r;
   const innerH = dimensions.viewH - dimensions.pad.t - dimensions.pad.b;
@@ -80,10 +66,7 @@ export const createViz = (
   const yScale = scaleLinear()
     .domain([0, yMax])
     .range([dimensions.pad.t + innerH, dimensions.pad.t]);
-  const barW = Math.min(
-    10,
-    Math.max(2, (innerW / Math.max(points.length, 1)) * 0.5),
-  );
+  const barW = Math.min(10, Math.max(2, (innerW / Math.max(points.length, 1)) * 0.5));
 
   const enriched: EnrichedPoint[] = points.map((p, i) => ({
     ...p,

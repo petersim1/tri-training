@@ -2,9 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo } from "react";
 import { Skeleton } from "@/components/Skeleton";
-import queryKeys from "@/lib/query-keys";
+import { getters } from "@/lib/query-keys";
 import { getDateRange, getTimezone, toIsoDate } from "@/lib/utils/dates";
-import { activityActions } from "@/server-fcts/activities";
 import { cookieActions } from "@/server-fcts/cookies";
 import type { CalendarScope } from "@/types/requests/activities";
 
@@ -40,31 +39,22 @@ export const CalendarToggle: React.FC<{
     if (!anchor) return;
     const prevAnchor = calStep(-1);
     const nextAnchor = calStep(1);
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.calendarQueryKey(period, prevAnchor),
-      queryFn: () =>
-        activityActions.calendar({
-          data: {
-            period,
-            anchor: prevAnchor,
-          },
-        }),
-    });
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.calendarQueryKey(period, nextAnchor),
-      queryFn: () =>
-        activityActions.calendar({
-          data: {
-            period,
-            anchor: nextAnchor,
-          },
-        }),
-    });
+    queryClient.prefetchQuery(
+      getters.calendar.list({
+        period,
+        anchor: prevAnchor,
+      }),
+    );
+    queryClient.prefetchQuery(
+      getters.calendar.list({
+        period,
+        anchor: nextAnchor,
+      }),
+    );
   }, [period, anchor, calStep]);
 
   const persistCalendarScopeMutation = useMutation({
-    mutationFn: (scope: CalendarScope) =>
-      runSetCalendarScope({ data: { scope } }),
+    mutationFn: (scope: CalendarScope) => runSetCalendarScope({ data: { scope } }),
     onSuccess: (_, scope) => {
       setPeriod(scope);
     },
@@ -86,8 +76,7 @@ export const CalendarToggle: React.FC<{
     });
     const start = new Date(`${dateFrom}T12:00:00`);
     const end = new Date(`${dateTo}T12:00:00`);
-    const fmt = (d: Date) =>
-      d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     return `${fmt(start)} – ${fmt(end)}`;
   }, [period, anchor]);
 
@@ -133,9 +122,7 @@ export const CalendarToggle: React.FC<{
             disabled={persistCalendarScopeMutation.isPending}
             onClick={() => persistCalendarScopeMutation.mutate("month")}
             className={`touch-manipulation rounded px-2.5 py-1 disabled:opacity-50 ${
-              period === "month"
-                ? "bg-zinc-800 font-medium text-zinc-100"
-                : "hover:bg-zinc-900/80"
+              period === "month" ? "bg-zinc-800 font-medium text-zinc-100" : "hover:bg-zinc-900/80"
             }`}
           >
             <span className="hidden sm:block">Month</span>
@@ -147,9 +134,7 @@ export const CalendarToggle: React.FC<{
             disabled={persistCalendarScopeMutation.isPending}
             onClick={() => persistCalendarScopeMutation.mutate("week")}
             className={`touch-manipulation rounded px-2.5 py-1 disabled:opacity-50 ${
-              period === "week"
-                ? "bg-zinc-800 font-medium text-zinc-100"
-                : "hover:bg-zinc-900/80"
+              period === "week" ? "bg-zinc-800 font-medium text-zinc-100" : "hover:bg-zinc-900/80"
             }`}
           >
             <span className="hidden sm:block">Week</span>

@@ -1,16 +1,9 @@
 import { PlanActivityKindIcon, WeightIcon } from "@/components/assets";
 import { cn } from "@/lib/utils";
 import type { CalendarScope } from "@/types/requests/activities";
-import type {
-  ActivityItem,
-  CalendarPageItem,
-} from "@/types/responses/activities";
+import type { ActivityItem, CalendarPageItem } from "@/types/responses/activities";
 
-const CalendarDayActivityIcons = ({
-  dayPlans,
-}: {
-  dayPlans: ActivityItem[];
-}) => {
+const CalendarDayActivityIcons = ({ dayPlans }: { dayPlans: ActivityItem[] }) => {
   if (dayPlans.length === 0) {
     return (
       <span className="text-sm leading-none text-zinc-600" aria-hidden>
@@ -38,8 +31,7 @@ const CalendarDayActivityIcons = ({
   );
 };
 
-const CAL_DAY_DOT_BASE =
-  "inline-flex size-2 shrink-0 rounded-full ring-1 ring-inset ring-black/25";
+const CAL_DAY_DOT_BASE = "inline-flex size-2 shrink-0 rounded-full ring-1 ring-inset ring-black/25";
 const CAL_DAY_DOT_UNLINKED = `${CAL_DAY_DOT_BASE} bg-violet-400`;
 
 export type CalendarCell = CalendarPageItem & {

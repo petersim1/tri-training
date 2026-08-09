@@ -1,15 +1,12 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type React from "react";
 import { useDeferredValue } from "react";
-import queryKeys from "@/lib/query-keys";
+import { getters } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
-import { activityActions } from "@/server-fcts/activities";
 import type { CalendarScope } from "@/types/requests/activities";
 import { CalendarDayItem } from "./day";
 
-export const CalendarGridLoading: React.FC<{ period: CalendarScope }> = ({
-  period,
-}) => {
+export const CalendarGridLoading: React.FC<{ period: CalendarScope }> = ({ period }) => {
   return (
     <>
       {Array.from({ length: period === "week" ? 7 : 35 }).map((_, i) => (
@@ -35,16 +32,12 @@ export const CalendarGrid: React.FC<{
   const periodUse = useDeferredValue(period);
   const anchorUse = useDeferredValue(anchor);
 
-  const { data } = useSuspenseQuery({
-    queryKey: queryKeys.calendarQueryKey(periodUse, anchorUse),
-    queryFn: () =>
-      activityActions.calendar({
-        data: {
-          period: periodUse,
-          anchor: anchorUse,
-        },
-      }),
-  });
+  const { data } = useSuspenseQuery(
+    getters.calendar.list({
+      period: periodUse,
+      anchor: anchorUse,
+    }),
+  );
 
   return (
     <>

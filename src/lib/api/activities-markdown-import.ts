@@ -48,8 +48,7 @@ function parseDistanceValue(
   if (!m || m.index !== 0) {
     return {
       line,
-      message:
-        "distance: expected number and unit (km, m, mi, yd), e.g. 5 km or 800 m",
+      message: "distance: expected number and unit (km, m, mi, yd), e.g. 5 km or 800 m",
     };
   }
   const u = m[2].toLowerCase();
@@ -66,10 +65,7 @@ function parseDistanceValue(
   return { num: parseFloat(m[1]), unit: u as CardioDistanceUnit };
 }
 
-function parseTimeValue(
-  raw: string,
-  line: number,
-): number | MarkdownImportIssue {
+function parseTimeValue(raw: string, line: number): number | MarkdownImportIssue {
   const v = raw.trim();
   if (v === "") {
     return { line, message: "time: needs a value" };
@@ -84,8 +80,7 @@ function parseTimeValue(
   }
 
   const minWord =
-    /^(\d+(?:\.\d+)?)\s*(minutes?|mins?)\s*$/i.exec(v) ??
-    /^(\d+(?:\.\d+)?)\s*min\s*$/i.exec(v);
+    /^(\d+(?:\.\d+)?)\s*(minutes?|mins?)\s*$/i.exec(v) ?? /^(\d+(?:\.\d+)?)\s*min\s*$/i.exec(v);
   if (minWord) {
     return Math.round(parseFloat(minWord[1]) * 60);
   }
@@ -119,16 +114,12 @@ function parseTimeValue(
   };
 }
 
-function parseKind(
-  inner: string,
-  line: number,
-): PlanKind | MarkdownImportIssue {
+function parseKind(inner: string, line: number): PlanKind | MarkdownImportIssue {
   const k = inner.trim().toLowerCase();
   if (k === "") {
     return {
       line,
-      message:
-        "Missing activity type; use - run, - lift, - bike, - swim, or - recovery",
+      message: "Missing activity type; use - run, - lift, - bike, - swim, or - recovery",
     };
   }
   if (!PLAN_KIND_VALUES.includes(k as PlanKind)) {
@@ -181,9 +172,7 @@ function draftToItem(d: Draft): NewWorkoutEntryRow {
 
 export function parseActivitiesMarkdownForBulkImport(
   markdown: string,
-):
-  | { ok: true; items: NewWorkoutEntryRow[] }
-  | { ok: false; issues: MarkdownImportIssue[] } {
+): { ok: true; items: NewWorkoutEntryRow[] } | { ok: false; issues: MarkdownImportIssue[] } {
   const issues: MarkdownImportIssue[] = [];
   const items: NewWorkoutEntryRow[] = [];
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
@@ -308,8 +297,7 @@ export function parseActivitiesMarkdownForBulkImport(
 
     issues.push({
       line: lineNum,
-      message:
-        "Expected [YYYY-MM-DD], a line like - run / - lift, or - distance:/time:/note:",
+      message: "Expected [YYYY-MM-DD], a line like - run / - lift, or - distance:/time:/note:",
     });
   }
 

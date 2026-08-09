@@ -5,12 +5,9 @@ import type {
   HevyRoutineFolderSummary,
   HevyRoutineSummary,
 } from "@/lib/hevy/types";
-import queryKeys from "@/lib/query-keys";
-import { vendorActions } from "@/server-fcts/vendors";
+import { getters } from "@/lib/query-keys";
 
-export const routineTitleMap = (
-  routines: HevyRoutineSummary[],
-): Map<string, string> => {
+export const routineTitleMap = (routines: HevyRoutineSummary[]): Map<string, string> => {
   const map = new Map<string, string>();
   for (const r of routines) {
     if (r.id && r.title) {
@@ -34,15 +31,11 @@ export const LiftRoutinePicker: React.FC<{
   onSelect: (id: string | null) => void;
 }> = ({ groups, unfoldered, selectedId, onSelect }) => {
   const routineQuery = useQuery({
-    // biome-ignore lint/style/noNonNullAssertion: <enabled flag exists.>
-    queryKey: queryKeys.routineDetail(selectedId!),
-    queryFn: () =>
-      vendorActions.getRoutine({ data: { routineId: selectedId as string } }),
+    ...getters.routines.one(selectedId!),
     enabled: Boolean(selectedId),
   });
 
-  const total =
-    groups.reduce((n, g) => n + g.routines.length, 0) + unfoldered.length;
+  const total = groups.reduce((n, g) => n + g.routines.length, 0) + unfoldered.length;
 
   const exercises = useMemo(() => {
     const raw = routineQuery.data?.exercises ?? [];
@@ -94,20 +87,12 @@ export const LiftRoutinePicker: React.FC<{
       {total === 0 ? (
         <p className="text-xs text-zinc-500">No routines loaded from Hevy.</p>
       ) : (
-        <div
-          className={
-            selectedId
-              ? "space-y-4 pr-1"
-              : "max-h-48 space-y-4 overflow-y-auto pr-1"
-          }
-        >
+        <div className={selectedId ? "space-y-4 pr-1" : "max-h-48 space-y-4 overflow-y-auto pr-1"}>
           {visibleGroups.map(({ folder, routines }, gi) =>
             routines.length > 0 ? (
               <div
                 key={
-                  folder.id != null
-                    ? `fg-${String(folder.id)}`
-                    : `fg-${gi}-${folder.title ?? ""}`
+                  folder.id != null ? `fg-${String(folder.id)}` : `fg-${gi}-${folder.title ?? ""}`
                 }
                 className="space-y-1.5"
               >
@@ -142,9 +127,7 @@ export const LiftRoutinePicker: React.FC<{
           )}
           {visibleUnfoldered.length > 0 ? (
             <div className="space-y-1.5">
-              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                Other
-              </p>
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Other</p>
               <div className="flex flex-col gap-1">
                 {visibleUnfoldered.map((r) => {
                   const id = r.id;
@@ -170,9 +153,7 @@ export const LiftRoutinePicker: React.FC<{
               </div>
             </div>
           ) : null}
-          {selectedId &&
-          visibleGroups.length === 0 &&
-          visibleUnfoldered.length === 0 ? (
+          {selectedId && visibleGroups.length === 0 && visibleUnfoldered.length === 0 ? (
             <p className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-300">
               {selectedTitle ?? selectedId}
             </p>
@@ -185,10 +166,7 @@ export const LiftRoutinePicker: React.FC<{
           <p className="text-xs font-medium text-zinc-500">
             Exercises
             {selectedTitle ? (
-              <span className="font-normal text-zinc-400">
-                {" "}
-                · {selectedTitle}
-              </span>
+              <span className="font-normal text-zinc-400"> · {selectedTitle}</span>
             ) : null}
           </p>
           {routineQuery.isPending ? (
@@ -196,21 +174,16 @@ export const LiftRoutinePicker: React.FC<{
           ) : routineQuery.isError || !routineQuery.data ? (
             <p className="text-sm text-amber-500/90">Could not load routine.</p>
           ) : exercises.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              No exercises in this routine.
-            </p>
+            <p className="text-sm text-zinc-500">No exercises in this routine.</p>
           ) : (
             <ol className="max-h-56 space-y-2 overflow-y-auto pr-1">
               {exercises.map((ex, i) => {
                 const nSets = ex.sets?.length ?? 0;
                 const rowKey =
-                  ex.exercise_template_id ??
-                  `ex-${String(ex.index ?? i)}-${exerciseLabel(ex)}`;
+                  ex.exercise_template_id ?? `ex-${String(ex.index ?? i)}-${exerciseLabel(ex)}`;
                 return (
                   <li key={rowKey} className="flex gap-2 text-sm">
-                    <span className="w-6 shrink-0 tabular-nums text-zinc-600">
-                      {i + 1}.
-                    </span>
+                    <span className="w-6 shrink-0 tabular-nums text-zinc-600">{i + 1}.</span>
                     <div className="min-w-0 flex-1">
                       <div className="text-zinc-100">{exerciseLabel(ex)}</div>
                       {nSets > 0 ? (
@@ -236,9 +209,7 @@ export const LiftRoutineReadOnlyPreview: React.FC<{
   titleFromList: string | null;
 }> = ({ routineId, titleFromList }) => {
   const routineQuery = useQuery({
-    queryKey: queryKeys.routineDetail(routineId as string),
-    queryFn: () =>
-      vendorActions.getRoutine({ data: { routineId: routineId as string } }),
+    ...getters.routines.one(routineId!),
     enabled: Boolean(routineId),
   });
 
@@ -258,9 +229,7 @@ export const LiftRoutineReadOnlyPreview: React.FC<{
 
   return (
     <div className="space-y-2">
-      {title ? (
-        <p className="text-sm font-medium text-zinc-200">{title}</p>
-      ) : null}
+      {title ? <p className="text-sm font-medium text-zinc-200">{title}</p> : null}
       {routineQuery.isPending ? (
         <p className="text-xs text-zinc-500">Loading routine…</p>
       ) : routineQuery.isError || !routineQuery.data ? (
@@ -272,13 +241,10 @@ export const LiftRoutineReadOnlyPreview: React.FC<{
           {exercises.map((ex, i) => {
             const nSets = ex.sets?.length ?? 0;
             const rowKey =
-              ex.exercise_template_id ??
-              `ex-${String(ex.index ?? i)}-${exerciseLabel(ex)}`;
+              ex.exercise_template_id ?? `ex-${String(ex.index ?? i)}-${exerciseLabel(ex)}`;
             return (
               <li key={rowKey} className="flex gap-2 text-sm">
-                <span className="w-6 shrink-0 tabular-nums text-zinc-600">
-                  {i + 1}.
-                </span>
+                <span className="w-6 shrink-0 tabular-nums text-zinc-600">{i + 1}.</span>
                 <div className="min-w-0 flex-1">
                   <div className="text-zinc-100">{exerciseLabel(ex)}</div>
                   {nSets > 0 ? (

@@ -54,9 +54,7 @@ export const Route = createFileRoute("/api/webhooks/strava")({
         }
 
         const payloadJson =
-          typeof body === "object" && body !== null
-            ? JSON.stringify(body)
-            : rawBody;
+          typeof body === "object" && body !== null ? JSON.stringify(body) : rawBody;
         const sub = ev.subscription_id ?? 0;
         const oid = ev.object_id ?? 0;
         const aspect = ev.aspect_type ?? "";
@@ -70,9 +68,7 @@ export const Route = createFileRoute("/api/webhooks/strava")({
           }
           const detail = result.detail;
           const outcome: "ok" | "ignored" =
-            detail.includes("ignored") || detail.includes("duplicate")
-              ? "ignored"
-              : "ok";
+            detail.includes("ignored") || detail.includes("duplicate") ? "ignored" : "ok";
           await webhookServerFns.logWebhookDelivery({
             source: "strava",
             idempotencyKey,

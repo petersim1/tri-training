@@ -37,17 +37,11 @@ function LoginPage() {
 
   const stravaBanner =
     stravaOAuthMsg === "forbidden" ? (
-      <p className="text-sm text-red-400">
-        This Strava account is not allowed to use this app.
-      </p>
+      <p className="text-sm text-red-400">This Strava account is not allowed to use this app.</p>
     ) : stravaOAuthMsg === "misconfigured" ? (
-      <p className="text-sm text-zinc-500">
-        Strava OAuth is not configured (STRAVA_CLIENT_ID).
-      </p>
+      <p className="text-sm text-zinc-500">Strava OAuth is not configured (STRAVA_CLIENT_ID).</p>
     ) : stravaOAuthMsg ? (
-      <p className="wrap-break-words text-sm text-red-400">
-        Strava OAuth: {stravaOAuthMsg}
-      </p>
+      <p className="wrap-break-words text-sm text-red-400">Strava OAuth: {stravaOAuthMsg}</p>
     ) : null;
 
   return (
@@ -64,9 +58,7 @@ function LoginPage() {
           onClick={() => loginMutation.mutate()}
           className="inline-block rounded bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-60"
         >
-          {loginMutation.isPending
-            ? "Continuing to Strava…"
-            : "Sign in with Strava"}
+          {loginMutation.isPending ? "Continuing to Strava…" : "Sign in with Strava"}
         </button>
       </div>
     </main>

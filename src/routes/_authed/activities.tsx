@@ -1,16 +1,8 @@
-import {
-  type DehydratedState,
-  dehydrate,
-  HydrationBoundary,
-} from "@tanstack/react-query";
+import { type DehydratedState, dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { ActivitiesContent } from "@/components/screens/activities";
-import queryKeys from "@/lib/query-keys";
-import { activityActions } from "@/server-fcts/activities";
-import {
-  type ActivityListSchemaValues,
-  activityListSchema,
-} from "@/types/requests/activities";
+import { getters } from "@/lib/query-keys";
+import { type ActivityListSchemaValues, activityListSchema } from "@/types/requests/activities";
 
 export const Route = createFileRoute("/_authed/activities")({
   validateSearch: activityListSchema,
@@ -26,14 +18,8 @@ export const Route = createFileRoute("/_authed/activities")({
     initialQuery: ActivityListSchemaValues;
   }> => {
     const { queryClient } = context;
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.activitiesList(deps),
-      queryFn: () => activityActions.list({ data: deps }),
-    });
-    void queryClient.prefetchQuery({
-      queryKey: queryKeys.unlinkedActivities,
-      queryFn: () => activityActions.unlinked(),
-    });
+    void queryClient.prefetchQuery(getters.activities.list(deps));
+    void queryClient.prefetchQuery(getters.activities.unlinked());
     return {
       dehydrated: dehydrate(queryClient),
       initialQuery: deps,

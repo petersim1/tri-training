@@ -46,10 +46,6 @@ export const prepareWithPrompt = (
   ];
 };
 
-export const buildTools = (
-  availableTools: Set<ToolName>,
-): TypedChatCompletionTool[] => {
-  return PLANNING_TOOLS.filter((tool) =>
-    availableTools.has(tool.function.name),
-  );
+export const buildTools = (availableTools: Set<ToolName>): TypedChatCompletionTool[] => {
+  return PLANNING_TOOLS.filter((tool) => availableTools.has(tool.function.name));
 };

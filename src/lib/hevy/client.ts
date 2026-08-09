@@ -14,10 +14,7 @@ function headers(): HeadersInit {
   };
 }
 
-export async function hevyFetch<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
+export async function hevyFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${BASE}${path.startsWith("/") ? path : `/${path}`}`;
   const res = await fetch(url, {
     ...init,
@@ -35,9 +32,7 @@ export async function hevyFetch<T>(
 }
 
 /** Single workout `GET /v1/workouts/{id}`; `null` if not found. */
-export const hevyFetchWorkoutById = async (
-  workoutId: string,
-): Promise<HevyWorkout | null> => {
+export const hevyFetchWorkoutById = async (workoutId: string): Promise<HevyWorkout | null> => {
   const id = workoutId.trim();
   if (!id) {
     return null;

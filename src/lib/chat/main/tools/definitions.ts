@@ -1,7 +1,4 @@
-import type {
-  TypedVendorWorkoutRow,
-  WorkoutEntryWithCompleted,
-} from "@/lib/db/schema.server";
+import type { TypedVendorWorkoutRow, WorkoutEntryWithCompleted } from "@/lib/db/schema.server";
 import { convertDistance, convertTime } from "@/lib/utils/calculations";
 import { activityServerFns } from "@/server-fcts/activities.server";
 import type { ToolName } from "@/types/chats/tools";
@@ -53,8 +50,7 @@ const createWorkoutTool = async (
 
   return {
     success: true,
-    content:
-      "Proposal staged — awaiting athlete approval before any DB write occurs.",
+    content: "Proposal staged — awaiting athlete approval before any DB write occurs.",
     proposal: {
       op: "create",
       ...parsed.data,
@@ -78,8 +74,7 @@ const deleteWorkoutTool = async (
 
   return {
     success: false,
-    content:
-      "Proposal staged — awaiting athlete approval before any DB delete occurs.",
+    content: "Proposal staged — awaiting athlete approval before any DB delete occurs.",
     proposal: {
       op: "delete",
       ...parsed.data,
@@ -103,8 +98,7 @@ const updateWorkoutTool = async (
 
   return {
     success: true,
-    content:
-      "Proposal staged — awaiting athlete approval before any DB update occurs.",
+    content: "Proposal staged — awaiting athlete approval before any DB update occurs.",
     proposal: {
       op: "update",
       ...parsed.data,
@@ -113,18 +107,14 @@ const updateWorkoutTool = async (
 };
 
 const formatWorkoutForModel = (row: WorkoutEntryWithCompleted): string => {
-  const lines: string[] = [
-    `id: ${row.id} · ${row.dayKey} · ${row.kind} · ${row.status}`,
-  ];
+  const lines: string[] = [`id: ${row.id} · ${row.dayKey} · ${row.kind} · ${row.status}`];
 
   if (!row.vendorActivity) {
     if (row.notes) lines.push(`Notes: ${row.notes}`);
     if (row.distance && row.distanceUnits)
       lines.push(`Planned: ${row.distance} ${row.distanceUnits}`);
     if (row.timeSeconds)
-      lines.push(
-        `Planned duration: ${Math.round(convertTime(row.timeSeconds, "s", "m"))} min`,
-      );
+      lines.push(`Planned duration: ${Math.round(convertTime(row.timeSeconds, "s", "m"))} min`);
   } else {
     const activity = row.vendorActivity as TypedVendorWorkoutRow;
 
@@ -138,24 +128,19 @@ const formatWorkoutForModel = (row: WorkoutEntryWithCompleted): string => {
           `Moving time: ${Math.round(convertTime(activity.data.moving_time, "s", "m"))} min`,
         );
       if (activity.data.average_heartrate)
-        lines.push(
-          `Avg HR: ${Math.round(activity.data.average_heartrate)} bpm`,
-        );
+        lines.push(`Avg HR: ${Math.round(activity.data.average_heartrate)} bpm`);
       if (activity.data.average_speed)
         lines.push(
           `Avg speed: ${(convertTime(convertDistance(activity.data.average_speed, "m", "mi"), "s", "hr")).toFixed(1)} mph`,
         );
       if (activity.data.total_elevation_gain)
-        lines.push(
-          `Elevation: ${Math.round(activity.data.total_elevation_gain)} m`,
-        );
+        lines.push(`Elevation: ${Math.round(activity.data.total_elevation_gain)} m`);
       if (activity.data.average_watts)
         lines.push(`Avg power: ${Math.round(activity.data.average_watts)} W`);
     }
     if (activity.vendor === "hevy") {
       const durationMs =
-        new Date(activity.data.end_time).getTime() -
-        new Date(activity.data.start_time).getTime();
+        new Date(activity.data.end_time).getTime() - new Date(activity.data.start_time).getTime();
       const durationMin = convertTime(durationMs, "ms", "m");
       if (activity.data.title) lines.push(`Workout: ${activity.data.title}`);
       lines.push(`Duration: ${durationMin} min`);

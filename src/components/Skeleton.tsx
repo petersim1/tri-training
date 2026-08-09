@@ -2,12 +2,7 @@ import { cn } from "@/lib/utils";
 
 /** Pulse bar for loading placeholders. */
 export function Skeleton({ className = "" }: { className?: string }) {
-  return (
-    <div
-      aria-hidden
-      className={cn("animate-pulse rounded-md bg-zinc-800/90", className)}
-    />
-  );
+  return <div aria-hidden className={cn("animate-pulse rounded-md bg-zinc-800/90", className)} />;
 }
 
 function PlanRowSkeleton() {

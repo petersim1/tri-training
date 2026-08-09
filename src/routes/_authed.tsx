@@ -14,10 +14,7 @@ function AuthedLayout() {
         <header className="shrink-0 border-b border-zinc-800 bg-zinc-900/80">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-4 px-4 py-3">
             <nav className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
-              <Link
-                to="/"
-                activeProps={{ className: "font-semibold text-white" }}
-              >
+              <Link to="/" activeProps={{ className: "font-semibold text-white" }}>
                 Home
               </Link>
               <Link
@@ -29,16 +26,10 @@ function AuthedLayout() {
               >
                 Activities
               </Link>
-              <Link
-                to="/events"
-                activeProps={{ className: "font-semibold text-white" }}
-              >
+              <Link to="/events" activeProps={{ className: "font-semibold text-white" }}>
                 Events
               </Link>
-              <Link
-                to="/settings"
-                activeProps={{ className: "font-semibold text-white" }}
-              >
+              <Link to="/settings" activeProps={{ className: "font-semibold text-white" }}>
                 Settings
               </Link>
             </nav>

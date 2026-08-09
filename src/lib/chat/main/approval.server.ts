@@ -2,10 +2,7 @@ import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/index.server";
 import { chatMessages, workoutEntries } from "@/lib/db/schema.server";
 
-export const handleApproval = async (
-  threadId: string,
-  isApproved: boolean,
-): Promise<boolean> => {
+export const handleApproval = async (threadId: string, isApproved: boolean): Promise<boolean> => {
   const db = await getDb();
 
   // get the most recent seq

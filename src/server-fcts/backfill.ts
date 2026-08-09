@@ -7,10 +7,7 @@ import {
   vendorActivities,
   weightEntries,
 } from "@/lib/db/schema.server";
-import {
-  fetchAllBodyMeasurements,
-  fetchAllHevyWorkouts,
-} from "@/lib/hevy/fetch-all";
+import { fetchAllBodyMeasurements, fetchAllHevyWorkouts } from "@/lib/hevy/fetch-all";
 import { fetchAllStravaWorkouts } from "@/lib/strava/fetch-all";
 import { convertWeight } from "@/lib/utils/calculations";
 import type { BackfillReport } from "@/types/responses/activities";
@@ -40,25 +37,18 @@ const backfillLinkedWorkouts = createServerFn({
       };
 
       const existingHevyIds = new Set(
-        rows
-          .filter((r) => r.vendor === "hevy" && r.vendorId)
-          .map((r) => r.vendorId),
+        rows.filter((r) => r.vendor === "hevy" && r.vendorId).map((r) => r.vendorId),
       );
       const existingStravaIds = new Set(
-        rows
-          .filter((r) => r.vendor === "strava" && r.vendorId)
-          .map((r) => r.vendorId),
+        rows.filter((r) => r.vendor === "strava" && r.vendorId).map((r) => r.vendorId),
       );
-      const existingHevyMeasureEntries = new Set(
-        measurements.map((m) => m.dayKey),
-      );
+      const existingHevyMeasureEntries = new Set(measurements.map((m) => m.dayKey));
 
-      const [hevyWorkouts, hevyMeasurements, stravaWorkouts] =
-        await Promise.all([
-          fetchAllHevyWorkouts(),
-          fetchAllBodyMeasurements(),
-          fetchAllStravaWorkouts(),
-        ]);
+      const [hevyWorkouts, hevyMeasurements, stravaWorkouts] = await Promise.all([
+        fetchAllHevyWorkouts(),
+        fetchAllBodyMeasurements(),
+        fetchAllStravaWorkouts(),
+      ]);
 
       const workoutsCreate: NewVendorActivityRow[] = [];
       const weightEntriesCreate: NewWeightEntryRow[] = [];
@@ -80,7 +70,7 @@ const backfillLinkedWorkouts = createServerFn({
       }
 
       for (const m of hevyMeasurements) {
-        if (!existingHevyMeasureEntries.has(m.date) && !!m.weight_kg) {
+        if (!existingHevyMeasureEntries.has(m.date) && m.weight_kg !== undefined) {
           report.importedHevyWeights += 1;
           weightEntriesCreate.push({
             id: crypto.randomUUID(),

@@ -1,9 +1,5 @@
 import { z } from "zod";
-import type {
-  CardioDistanceUnit,
-  PlanKind,
-  PlanStatus,
-} from "@/lib/constants/activities";
+import type { CardioDistanceUnit, PlanKind, PlanStatus } from "@/lib/constants/activities";
 import { TOOL_NAME_VALUES } from "../chats/tools";
 
 export type CreateWorkoutOp = {
@@ -45,9 +41,7 @@ export type ChatProposal = {
 export const replaySummaryStoredSchema = z.object({
   userIntent: z
     .string()
-    .describe(
-      "The underlying goal driving the user's message, not a paraphrase of their words.",
-    ),
+    .describe("The underlying goal driving the user's message, not a paraphrase of their words."),
   assistantSummary: z
     .string()
     .describe(
@@ -56,9 +50,7 @@ export const replaySummaryStoredSchema = z.object({
   decisions: z
     .array(z.string())
     .default([])
-    .describe(
-      "Things concretely resolved this turn. Empty array if nothing was decided.",
-    ),
+    .describe("Things concretely resolved this turn. Empty array if nothing was decided."),
   openQuestions: z
     .array(z.string())
     .default([])
@@ -67,9 +59,7 @@ export const replaySummaryStoredSchema = z.object({
     ),
 });
 
-export type ReplaySummaryStoredSchemaValues = z.infer<
-  typeof replaySummaryStoredSchema
->;
+export type ReplaySummaryStoredSchemaValues = z.infer<typeof replaySummaryStoredSchema>;
 
 export const toolCalledSchema = z.object({
   name: z.enum(TOOL_NAME_VALUES),
@@ -85,15 +75,11 @@ export const coachingStateSchema = z.object({
       z.object({
         area: z
           .string()
-          .describe(
-            "The body part or area affected, e.g. 'left shoulder', 'achilles'",
-          ),
+          .describe("The body part or area affected, e.g. 'left shoulder', 'achilles'"),
         status: z
           .enum(["active", "monitoring", "resolved"])
           .describe("Current status of the physical issue"),
-        note: z
-          .string()
-          .describe("Brief description of the issue and any relevant context"),
+        note: z.string().describe("Brief description of the issue and any relevant context"),
       }),
     )
     .default([])
@@ -120,9 +106,7 @@ export const coachingStateSchema = z.object({
       z.object({
         instruction: z
           .string()
-          .describe(
-            "The active coaching directive, e.g. '3-4 pool sessions per week'",
-          ),
+          .describe("The active coaching directive, e.g. '3-4 pool sessions per week'"),
         source: z
           .string()
           .describe(

@@ -23,9 +23,7 @@ function unwrapSegmentArray(parsed: unknown): unknown[] {
   if (isPlainObject(parsed) && Array.isArray(parsed.segments)) {
     return parsed.segments;
   }
-  throw new Error(
-    "targets must be a JSON array of segments (or an object with a segments array)",
-  );
+  throw new Error("targets must be a JSON array of segments (or an object with a segments array)");
 }
 
 function coerceNonNegativeDistance(raw: unknown, segLabel: string): number {
@@ -36,10 +34,7 @@ function coerceNonNegativeDistance(raw: unknown, segLabel: string): number {
   return n;
 }
 
-function coerceOptionalIntSeconds(
-  raw: unknown,
-  segLabel: string,
-): number | null | undefined {
+function coerceOptionalIntSeconds(raw: unknown, segLabel: string): number | null | undefined {
   if (raw === undefined) {
     return undefined;
   }
@@ -58,9 +53,7 @@ function coerceOptionalIntSeconds(
 }
 
 /** Safe read from DB/client: legacy `{ segments: [...] }` is accepted (version field ignored). */
-export function coerceSportEventTargetsPayload(
-  input: unknown,
-): SportEventTargetSegment[] {
+export function coerceSportEventTargetsPayload(input: unknown): SportEventTargetSegment[] {
   if (input === undefined || input === null) {
     return EMPTY_SPORT_EVENT_TARGETS;
   }
@@ -80,9 +73,7 @@ export function coerceSportEventTargetsPayload(
   return normalizeSportEventTargetsArray(parsed);
 }
 
-export function normalizeSportEventTargetsArray(
-  raw: unknown,
-): SportEventTargetSegment[] {
+export function normalizeSportEventTargetsArray(raw: unknown): SportEventTargetSegment[] {
   const segmentsRaw = unwrapSegmentArray(raw);
   if (segmentsRaw.length > MAX_SEGMENTS) {
     throw new Error(`targets may have at most ${MAX_SEGMENTS} segments`);
@@ -102,9 +93,7 @@ function normalizeSegment(raw: unknown, num: number): SportEventTargetSegment {
     typeof act !== "string" ||
     !(PLAN_KIND_VALUES as readonly string[]).includes(act.trim().toLowerCase())
   ) {
-    throw new Error(
-      `${p}activity must be one of: ${PLAN_KIND_VALUES.join(", ")}`,
-    );
+    throw new Error(`${p}activity must be one of: ${PLAN_KIND_VALUES.join(", ")}`);
   }
   const activity = act.trim().toLowerCase() as PlanKind;
 
@@ -120,8 +109,7 @@ function normalizeSegment(raw: unknown, num: number): SportEventTargetSegment {
       ? null
       : String(notesRaw).trim().slice(0, SEGMENT_NOTE_CAP) || null;
 
-  const wantsDistance =
-    raw.distance !== undefined && raw.distance !== null && raw.distance !== "";
+  const wantsDistance = raw.distance !== undefined && raw.distance !== null && raw.distance !== "";
 
   let distanceN: number | null = null;
   if (wantsDistance) {
@@ -129,16 +117,10 @@ function normalizeSegment(raw: unknown, num: number): SportEventTargetSegment {
   }
 
   let units: CardioDistanceUnit | null = null;
-  if (
-    "distance_units" in raw &&
-    raw.distance_units !== undefined &&
-    raw.distance_units !== null
-  ) {
+  if ("distance_units" in raw && raw.distance_units !== undefined && raw.distance_units !== null) {
     const s = String(raw.distance_units).trim().toLowerCase();
     if (!(CARDIO_DISTANCE_UNITS as readonly string[]).includes(s)) {
-      throw new Error(
-        `${p}distance_units must be one of: ${CARDIO_DISTANCE_UNITS.join(", ")}`,
-      );
+      throw new Error(`${p}distance_units must be one of: ${CARDIO_DISTANCE_UNITS.join(", ")}`);
     }
     units = s as CardioDistanceUnit;
   }
@@ -157,21 +139,15 @@ function normalizeSegment(raw: unknown, num: number): SportEventTargetSegment {
 
   return {
     activity,
-    ...(distanceN != null
-      ? { distance: distanceN, distance_units: units }
-      : {}),
-    ...(timeSecondsResolved !== undefined
-      ? { time_seconds: timeSecondsResolved ?? null }
-      : {}),
+    ...(distanceN != null ? { distance: distanceN, distance_units: units } : {}),
+    ...(timeSecondsResolved !== undefined ? { time_seconds: timeSecondsResolved ?? null } : {}),
     ...(label ? { label } : {}),
     ...(notes ? { notes } : {}),
   };
 }
 
 /** Best-effort for briefs / flaky stored JSON. */
-export function safeSportEventTargetsFromStored(
-  stored: unknown,
-): SportEventTargetSegment[] {
+export function safeSportEventTargetsFromStored(stored: unknown): SportEventTargetSegment[] {
   try {
     return coerceSportEventTargetsPayload(stored);
   } catch {

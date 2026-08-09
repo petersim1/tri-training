@@ -1,9 +1,6 @@
 import { vendorActions } from "@/server-fcts/vendors";
 
-export async function stravaFetchJson<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T | null> {
+export async function stravaFetchJson<T>(path: string, init?: RequestInit): Promise<T | null> {
   const token = await vendorActions.getValidStravaAccessToken();
   if (!token) {
     return null;

@@ -78,9 +78,7 @@ function SettingsPage() {
     stravaOAuthMsg === "ok" ? (
       <p className="text-sm text-emerald-400">Strava linked successfully.</p>
     ) : stravaOAuthMsg ? (
-      <p className="wrap-break-word text-sm text-red-400">
-        Strava OAuth: {stravaOAuthMsg}
-      </p>
+      <p className="wrap-break-word text-sm text-red-400">Strava OAuth: {stravaOAuthMsg}</p>
     ) : null;
 
   return (
@@ -119,10 +117,9 @@ function SettingsPage() {
       <section className="space-y-3 rounded border border-zinc-800 p-4">
         <h2 className="font-medium text-zinc-100">Link sessions</h2>
         <p className="text-sm text-zinc-500">
-          For plans that don&apos;t have a linked Strava or Hevy workout yet,
-          try to match same-day activities (closest time to your scheduled
-          plan). Strava uses your connection above; Hevy uses the server API
-          key.
+          For plans that don&apos;t have a linked Strava or Hevy workout yet, try to match same-day
+          activities (closest time to your scheduled plan). Strava uses your connection above; Hevy
+          uses the server API key.
         </p>
         <button
           type="button"
@@ -130,13 +127,9 @@ function SettingsPage() {
           onClick={() => backfillMutation.mutate()}
           className="rounded border border-zinc-600 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-800 disabled:opacity-50"
         >
-          {backfillMutation.isPending
-            ? "Running…"
-            : "Backfill links from Strava & Hevy"}
+          {backfillMutation.isPending ? "Running…" : "Backfill links from Strava & Hevy"}
         </button>
-        {backfillMsg ? (
-          <p className="text-sm text-emerald-400/90">{backfillMsg}</p>
-        ) : null}
+        {backfillMsg ? <p className="text-sm text-emerald-400/90">{backfillMsg}</p> : null}
         {backfillErr ? (
           <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded border border-red-900/50 bg-red-950/30 p-2 text-xs text-red-300">
             {backfillErr}

@@ -1,19 +1,10 @@
 import { type Exception, trace } from "@opentelemetry/api";
 import { createServerFn } from "@tanstack/react-start";
 import { parseActivitiesMarkdownForBulkImport } from "@/lib/api/activities-markdown-import";
-import {
-  type BulkValidationIssue,
-  validateAndBuildRow,
-} from "@/lib/api/bulk-planned-workouts";
-import {
-  PLAN_KIND_VALUES,
-  PLAN_STATUS_VALUES,
-} from "@/lib/constants/activities";
+import { type BulkValidationIssue, validateAndBuildRow } from "@/lib/api/bulk-planned-workouts";
+import { PLAN_KIND_VALUES, PLAN_STATUS_VALUES } from "@/lib/constants/activities";
 import { getDb } from "@/lib/db/index.server";
-import {
-  type NewWorkoutEntryRow,
-  workoutEntries,
-} from "@/lib/db/schema.server";
+import { type NewWorkoutEntryRow, workoutEntries } from "@/lib/db/schema.server";
 import { buildActivitiesMarkdownExport } from "@/lib/plans/activities-markdown-export";
 import { activityListSchema } from "@/types/requests/activities";
 import { activityActions } from "./activities";
@@ -29,51 +20,44 @@ const exportActivitiesMarkdown = createServerFn({
   method: "POST",
 })
   .inputValidator(activityListSchema)
-  .handler(
-    async ({ data }): Promise<{ markdown: string; rowCount: number }> => {
-      return tracer.startActiveSpan(
-        "exportActivitiesMarkdown",
-        async (span) => {
-          try {
-            if (!!data.kind && !PLAN_KIND_VALUES.includes(data.kind)) {
-              throw new Error("Invalid kind filter");
-            }
-            if (!!data.status && !PLAN_STATUS_VALUES.includes(data.status)) {
-              throw new Error("Invalid status filter");
-            }
-            const fromRaw = String(data.dateFrom ?? "").trim();
-            const toRaw = String(data.dateTo ?? "").trim();
-            const hasFrom = fromRaw !== "";
-            const hasTo = toRaw !== "";
-            if (!hasFrom && !hasTo) {
-              throw new Error(
-                "Set at least a from date, a to date, or both (YYYY-MM-DD)",
-              );
-            }
-            if (hasFrom && !DAY_KEY.test(fromRaw)) {
-              throw new Error("Invalid from date");
-            }
-            if (hasTo && !DAY_KEY.test(toRaw)) {
-              throw new Error("Invalid to date");
-            }
-            if (hasFrom && hasTo && fromRaw > toRaw) {
-              throw new Error("from date must be on or before to date");
-            }
-            const rows = await activityActions.list({
-              data: { ...data, pageSize: 100 },
-            });
-            const markdown = buildActivitiesMarkdownExport(rows.rows);
-            return { markdown, rowCount: rows.rows.length };
-          } catch (err) {
-            span.recordException(err as Exception);
-            throw err;
-          } finally {
-            span.end();
-          }
-        },
-      );
-    },
-  );
+  .handler(async ({ data }): Promise<{ markdown: string; rowCount: number }> => {
+    return tracer.startActiveSpan("exportActivitiesMarkdown", async (span) => {
+      try {
+        if (data.kind && !PLAN_KIND_VALUES.includes(data.kind)) {
+          throw new Error("Invalid kind filter");
+        }
+        if (data.status && !PLAN_STATUS_VALUES.includes(data.status)) {
+          throw new Error("Invalid status filter");
+        }
+        const fromRaw = String(data.dateFrom ?? "").trim();
+        const toRaw = String(data.dateTo ?? "").trim();
+        const hasFrom = fromRaw !== "";
+        const hasTo = toRaw !== "";
+        if (!hasFrom && !hasTo) {
+          throw new Error("Set at least a from date, a to date, or both (YYYY-MM-DD)");
+        }
+        if (hasFrom && !DAY_KEY.test(fromRaw)) {
+          throw new Error("Invalid from date");
+        }
+        if (hasTo && !DAY_KEY.test(toRaw)) {
+          throw new Error("Invalid to date");
+        }
+        if (hasFrom && hasTo && fromRaw > toRaw) {
+          throw new Error("from date must be on or before to date");
+        }
+        const rows = await activityActions.list({
+          data: { ...data, pageSize: 100 },
+        });
+        const markdown = buildActivitiesMarkdownExport(rows.rows);
+        return { markdown, rowCount: rows.rows.length };
+      } catch (err) {
+        span.recordException(err as Exception);
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
+  });
 
 export type ImportActivitiesMarkdownIssue = {
   line?: number;

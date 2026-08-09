@@ -19,11 +19,6 @@ export const Home: React.FC<{
 
   const calendarSectionRef = useRef<HTMLElement | null>(null);
 
-  function openDay(dayKey: string) {
-    // setHighlightedDayKey(null);
-    setSelectedDay(dayKey);
-  }
-
   return (
     <div className="space-y-8">
       <section ref={calendarSectionRef} className="space-y-2 scroll-mt-4">
@@ -46,7 +41,7 @@ export const Home: React.FC<{
             <CalendarGrid
               anchor={anchor}
               period={period}
-              setSelectedDay={openDay}
+              setSelectedDay={(dayKey: string) => setSelectedDay(dayKey)}
             />
           </Suspense>
         </div>
@@ -54,12 +49,7 @@ export const Home: React.FC<{
 
       <Visualizer initialChartSettings={initialChartSettings} />
 
-      {!!selectedDay && (
-        <ActivityModal
-          dayKey={selectedDay}
-          onClose={() => setSelectedDay(null)}
-        />
-      )}
+      {!!selectedDay && <ActivityModal dayKey={selectedDay} onClose={() => setSelectedDay(null)} />}
     </div>
   );
 };

@@ -1,8 +1,5 @@
 import { axisBottom, axisLeft, pointer, scaleLinear, scaleTime } from "d3";
-import type {
-  SessionChartMetric,
-  SessionChartRange,
-} from "@/lib/constants/visuals";
+import type { SessionChartMetric, SessionChartRange } from "@/lib/constants/visuals";
 import { DEFAULT_VIZ_UNIT } from "@/lib/utils/calculations";
 import { type ChartDimensions, monthLabel } from "@/lib/utils/plots";
 import type { StackedVizResult } from "@/types/responses/activities";
@@ -25,8 +22,7 @@ export const formatValue = (v: number, metric: SessionChartMetric): string => {
 const rangeToDateBounds = (range: string): { from: Date; to: Date } | null => {
   const now = new Date();
   if (range === "all") return null;
-  if (range === "ytd")
-    return { from: new Date(now.getFullYear(), 0, 1), to: now };
+  if (range === "ytd") return { from: new Date(now.getFullYear(), 0, 1), to: now };
   const months = range === "3m" ? 3 : range === "6m" ? 6 : 12;
   return {
     from: new Date(now.getFullYear(), now.getMonth() - months, now.getDate()),
@@ -44,13 +40,10 @@ export const createStackedViz = (
 ) => {
   const bounds = rangeToDateBounds(range);
   const xFrom =
-    bounds?.from ??
-    (points.length > 0 ? new Date(`${points[0].date}T12:00:00`) : new Date());
+    bounds?.from ?? (points.length > 0 ? new Date(`${points[0].date}T12:00:00`) : new Date());
   const xTo =
     bounds?.to ??
-    (points.length > 0
-      ? new Date(`${points[points.length - 1].date}T12:00:00`)
-      : new Date());
+    (points.length > 0 ? new Date(`${points[points.length - 1].date}T12:00:00`) : new Date());
 
   const innerW = dimensions.viewW - dimensions.pad.l - dimensions.pad.r;
   const innerH = dimensions.viewH - dimensions.pad.t - dimensions.pad.b;
@@ -60,19 +53,14 @@ export const createStackedViz = (
     .range([dimensions.pad.l, dimensions.pad.l + innerW]);
 
   const yMax = Math.max(
-    ...points.map((p) =>
-      STACK_ORDER.reduce((sum, k) => sum + (p.values[k] ?? 0), 0),
-    ),
+    ...points.map((p) => STACK_ORDER.reduce((sum, k) => sum + (p.values[k] ?? 0), 0)),
     1e-6,
   );
   const yScale = scaleLinear()
     .domain([0, yMax])
     .range([dimensions.pad.t + innerH, dimensions.pad.t]);
 
-  const barW = Math.min(
-    10,
-    Math.max(2, (innerW / Math.max(points.length, 1)) * 0.5),
-  );
+  const barW = Math.min(10, Math.max(2, (innerW / Math.max(points.length, 1)) * 0.5));
 
   const xTicks = Array.from({ length: dimensions.nTicks.x }, (_, i) => {
     const t = i / (dimensions.nTicks.x - 1);

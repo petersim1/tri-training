@@ -22,10 +22,7 @@ export const toIsoDate = (date: Date, tz: string) => {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(date);
 };
 
-export const enumerateLocalDayKeysInclusive = (
-  from: string,
-  to: string,
-): string[] => {
+export const enumerateLocalDayKeysInclusive = (from: string, to: string): string[] => {
   if (from > to) return [from];
   const out: string[] = [];
   let cur = from;
@@ -52,13 +49,9 @@ export const formatPlanDayKey = (dayKey: string): string => {
   });
 };
 
-export const toUtcBounds = (
-  dayKey: string,
-  tz: string,
-): { start: Date; end: Date } => {
+export const toUtcBounds = (dayKey: string, tz: string): { start: Date; end: Date } => {
   const offsetMs = (date: Date) =>
-    new Date(date.toLocaleString("en-US", { timeZone: tz })).getTime() -
-    date.getTime();
+    new Date(date.toLocaleString("en-US", { timeZone: tz })).getTime() - date.getTime();
 
   const start = new Date(`${dayKey}T00:00:00`);
   const end = new Date(`${dayKey}T23:59:59.999`);
@@ -69,9 +62,7 @@ export const toUtcBounds = (
   };
 };
 
-export const getDateRange = (
-  dates: CalendarSchemaValues,
-): { dateFrom: string; dateTo: string } => {
+export const getDateRange = (dates: CalendarSchemaValues): { dateFrom: string; dateTo: string } => {
   const { period, anchor } = dates;
 
   const [yearStr, monthStr, dayStr] = anchor.split("-");
@@ -114,9 +105,7 @@ export const isValidDayKey = (s: string): boolean => {
   const mo = Number(m[2]);
   const d = Number(m[3]);
   const dt = new Date(y, mo - 1, d);
-  return (
-    dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d
-  );
+  return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
 };
 
 export const durationSecondsFromIsoRange = (

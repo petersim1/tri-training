@@ -10,10 +10,7 @@ const STRAVA_ATHLETE_URL = "https://www.strava.com/api/v3/athlete";
 
 const LOG = "[strava/callback]";
 
-function log(
-  step: string,
-  detail?: Record<string, string | boolean | number | null | undefined>,
-) {
+function log(step: string, detail?: Record<string, string | boolean | number | null | undefined>) {
   if (detail && Object.keys(detail).length > 0) {
     console.info(LOG, step, detail);
   } else {
@@ -38,11 +35,7 @@ function peek(s: string | undefined, n = 8): string {
 }
 
 /** Failed OAuth / not allowed — no session or Strava cookies set. */
-function redirectLogin(
-  origin: string,
-  stravaQueryValue: string,
-  result: string,
-): Response {
+function redirectLogin(origin: string, stravaQueryValue: string, result: string): Response {
   const location = new URL(
     `/login?strava=${encodeURIComponent(stravaQueryValue)}`,
     origin,
@@ -178,11 +171,7 @@ export const Route = createFileRoute("/api/strava/callback")({
             });
           } catch (e) {
             logError("GET /athlete fetch threw", e);
-            return redirectLogin(
-              origin,
-              "athlete_fetch_failed",
-              "network_error",
-            );
+            return redirectLogin(origin, "athlete_fetch_failed", "network_error");
           }
 
           if (!athleteRes.ok) {
@@ -191,11 +180,7 @@ export const Route = createFileRoute("/api/strava/callback")({
               status: athleteRes.status,
               bodyPreview: text.slice(0, 300),
             });
-            return redirectLogin(
-              origin,
-              `athlete_${athleteRes.status}`,
-              "athlete_error",
-            );
+            return redirectLogin(origin, `athlete_${athleteRes.status}`, "athlete_error");
           }
 
           const athlete = (await athleteRes.json()) as { id?: number };

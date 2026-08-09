@@ -2,11 +2,7 @@ import { type Exception, trace } from "@opentelemetry/api";
 import { createServerFn } from "@tanstack/react-start";
 import { and, eq, getTableColumns, gte, isNull, lte } from "drizzle-orm";
 import { getDb } from "@/lib/db/index.server";
-import {
-  vendorActivities,
-  weightEntries,
-  workoutEntries,
-} from "@/lib/db/schema.server";
+import { vendorActivities, weightEntries, workoutEntries } from "@/lib/db/schema.server";
 import { toUtcBounds } from "@/lib/utils/dates";
 import { dayKeySchema } from "@/types/requests/shared";
 import type { DayItem } from "@/types/responses/activities";
@@ -31,10 +27,7 @@ const dayInfo = createServerFn({ method: "GET" })
             },
           })
           .from(workoutEntries)
-          .leftJoin(
-            vendorActivities,
-            eq(vendorActivities.id, workoutEntries.vendorActivityId),
-          )
+          .leftJoin(vendorActivities, eq(vendorActivities.id, workoutEntries.vendorActivityId))
           .where(eq(workoutEntries.dayKey, data.dayKey))
           .all();
 
@@ -49,10 +42,7 @@ const dayInfo = createServerFn({ method: "GET" })
         const linkCandidates = await db
           .select({ vendorActivities })
           .from(vendorActivities)
-          .leftJoin(
-            workoutEntries,
-            eq(workoutEntries.vendorActivityId, vendorActivities.id),
-          )
+          .leftJoin(workoutEntries, eq(workoutEntries.vendorActivityId, vendorActivities.id))
           .where(
             and(
               gte(vendorActivities.createdAt, start),

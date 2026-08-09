@@ -29,13 +29,7 @@ const activityIconSvgProps = {
   "aria-hidden": true,
 } as const;
 
-export const PlanActivityKindIcon = ({
-  kind,
-  className,
-}: {
-  kind: string;
-  className?: string;
-}) => {
+export const PlanActivityKindIcon = ({ kind, className }: { kind: string; className?: string }) => {
   const k = normalizePlanActivityKind(kind);
 
   const { className: svgClassName, ...rest } = activityIconSvgProps;
@@ -101,15 +95,9 @@ export const PlanActivityKindIcon = ({
 };
 
 export const WeightIcon = ({ className, title, ...rest }: WeightIconProps) => {
-  const mergedClass = ["sm:size-3 size-2 shrink-0", className]
-    .filter(Boolean)
-    .join(" ");
+  const mergedClass = ["sm:size-3 size-2 shrink-0", className].filter(Boolean).join(" ");
   return (
-    <svg
-      {...activityIconSvgProps}
-      {...rest}
-      className={mergedClass || undefined}
-    >
+    <svg {...activityIconSvgProps} {...rest} className={mergedClass || undefined}>
       {title ? <title>{title}</title> : null}
       <circle cx="12" cy="5" r="3" />
       <path d="M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z" />
@@ -278,13 +266,7 @@ export const LayersIcon = ({
   );
 };
 
-export const XIcon = ({
-  className,
-  ariaHidden,
-}: {
-  className?: string;
-  ariaHidden?: boolean;
-}) => {
+export const XIcon = ({ className, ariaHidden }: { className?: string; ariaHidden?: boolean }) => {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

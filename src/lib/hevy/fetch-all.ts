@@ -34,9 +34,7 @@ export const fetchAllHevyWorkouts = async (): Promise<HevyWorkout[]> => {
   const out: HevyWorkout[] = [];
   let page = 1;
   while (true) {
-    const r = await hevyFetch<PaginatedWorkouts>(
-      `/workouts?page=${page}&pageSize=10`,
-    );
+    const r = await hevyFetch<PaginatedWorkouts>(`/workouts?page=${page}&pageSize=10`);
     out.push(...r.workouts);
     const pageCount = r.page_count ?? 1;
     if (page >= pageCount) break;
@@ -46,15 +44,11 @@ export const fetchAllHevyWorkouts = async (): Promise<HevyWorkout[]> => {
 };
 
 /** List all routine pages (pageSize 10 per Hevy). */
-export const fetchAllBodyMeasurements = async (): Promise<
-  HevyBodyMeasurementSummary[]
-> => {
+export const fetchAllBodyMeasurements = async (): Promise<HevyBodyMeasurementSummary[]> => {
   const out: HevyBodyMeasurementSummary[] = [];
   let page = 1;
   while (true) {
-    const r = await hevyFetch<PaginatedMeasurements>(
-      `/body_measurements?page=${page}&pageSize=10`,
-    );
+    const r = await hevyFetch<PaginatedMeasurements>(`/body_measurements?page=${page}&pageSize=10`);
     out.push(...r.body_measurements);
     const pageCount = r.page_count ?? 1;
     if (page >= pageCount) break;
@@ -67,9 +61,7 @@ export const fetchAllRoutines = async () => {
   const out: HevyRoutineSummary[] = [];
   let page = 1;
   while (true) {
-    const r = await hevyFetch<PaginatedRoutines>(
-      `/routines?page=${page}&pageSize=10`,
-    );
+    const r = await hevyFetch<PaginatedRoutines>(`/routines?page=${page}&pageSize=10`);
     out.push(...r.routines);
     const pageCount = r.page_count ?? 1;
     if (page >= pageCount) break;
@@ -82,9 +74,7 @@ export const fetchAllFolders = async () => {
   const out: HevyRoutineFolderSummary[] = [];
   let page = 1;
   while (true) {
-    const r = await hevyFetch<PaginatedFolders>(
-      `/routine_folders?page=${page}&pageSize=10`,
-    );
+    const r = await hevyFetch<PaginatedFolders>(`/routine_folders?page=${page}&pageSize=10`);
     out.push(...r.routine_folders);
     const pageCount = r.page_count ?? 1;
     if (page >= pageCount) break;

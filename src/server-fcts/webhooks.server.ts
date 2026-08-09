@@ -43,10 +43,7 @@ const logWebhookDelivery = async (data: {
  * Hard-delete by vendor id. Called only from this file (webhook handlers).
  * Plans are unlinked via FK `onDelete: "set null"`.
  */
-const deleteCompletedByVendor = async (
-  vendor: WorkoutVendor,
-  vendorId: string,
-): Promise<void> => {
+const deleteCompletedByVendor = async (vendor: WorkoutVendor, vendorId: string): Promise<void> => {
   const db = await getDb();
   const vid = vendorId.trim();
   if (!vid) {
@@ -54,18 +51,11 @@ const deleteCompletedByVendor = async (
   }
   await db
     .delete(vendorActivities)
-    .where(
-      and(
-        eq(vendorActivities.vendor, vendor),
-        eq(vendorActivities.vendorId, vid),
-      ),
-    )
+    .where(and(eq(vendorActivities.vendor, vendor), eq(vendorActivities.vendorId, vid)))
     .run();
 };
 
-const processHevyWebhook = async (
-  workoutId: string,
-): Promise<{ detail: string }> => {
+const processHevyWebhook = async (workoutId: string): Promise<{ detail: string }> => {
   if (!process.env.HEVY_API_KEY?.trim()) {
     throw new Error("HEVY_API_KEY is not configured");
   }

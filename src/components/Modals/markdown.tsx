@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { ACTIVITIES_PLANNED_MARKDOWN_TEMPLATE } from "@/lib/api/activities-markdown-import";
+import { invalidators } from "@/lib/query-keys";
 import { markdownActions } from "@/server-fcts/markdown";
 import { CheckIcon, XIcon } from "../assets";
 import { Textarea } from "../Forms";
@@ -18,9 +19,7 @@ export const MarkdownModal: React.FC<{
 
   const [uploadMarkdown, setUploadMarkdown] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadIssues, setUploadIssues] = useState<
-    { line?: number; message: string }[]
-  >([]);
+  const [uploadIssues, setUploadIssues] = useState<{ line?: number; message: string }[]>([]);
 
   const importMarkdownMutation = useMutation({
     mutationFn: () => importMarkdown({ data: { markdown: uploadMarkdown } }),
@@ -34,9 +33,7 @@ export const MarkdownModal: React.FC<{
         setUploadIssues(result.issues);
         return;
       }
-      queryClient.invalidateQueries({ queryKey: ["calendar"] });
-      queryClient.invalidateQueries({ queryKey: ["activities"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-viz"] });
+      invalidators.activities.refresh(queryClient);
       onClose();
     },
     onError: (e) => {
@@ -59,10 +56,7 @@ export const MarkdownModal: React.FC<{
     <Modal onClose={onClose}>
       <ModalContent>
         <div className="flex items-start justify-between  pb-6">
-          <h2
-            id="activities-link-all-title"
-            className="text-lg font-semibold text-zinc-100"
-          >
+          <h2 id="activities-link-all-title" className="text-lg font-semibold text-zinc-100">
             Upload planned workouts (markdown)
           </h2>
           <button type="button" onClick={onClose}>
@@ -87,9 +81,7 @@ export const MarkdownModal: React.FC<{
             {uploadIssues.map((iss) => (
               <li key={`${iss.line ?? "row"}-${iss.message}`}>
                 {iss.line != null ? (
-                  <span className="tabular-nums text-zinc-500">
-                    Line {iss.line}:{" "}
-                  </span>
+                  <span className="tabular-nums text-zinc-500">Line {iss.line}: </span>
                 ) : null}
                 {iss.message}
               </li>
@@ -119,9 +111,7 @@ export const MarkdownModal: React.FC<{
           </button>
           <button
             type="button"
-            disabled={
-              importMarkdownMutation.isPending || uploadMarkdown.trim() === ""
-            }
+            disabled={importMarkdownMutation.isPending || uploadMarkdown.trim() === ""}
             onClick={() => importMarkdownMutation.mutate()}
             className="h-8 rounded border border-emerald-600/60 bg-emerald-950/35 px-3 text-xs font-medium text-emerald-200 hover:bg-emerald-950/55 disabled:opacity-50"
           >

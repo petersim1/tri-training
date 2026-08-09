@@ -21,9 +21,7 @@ const METRIC_TABS = [
   ["volume", "Volume"],
 ] as const satisfies readonly (readonly [SessionChartMetric, string])[];
 
-const DISABLED_TITLE: Partial<
-  Record<ChartKinds, Partial<Record<SessionChartMetric, string>>>
-> = {
+const DISABLED_TITLE: Partial<Record<ChartKinds, Partial<Record<SessionChartMetric, string>>>> = {
   run: { volume: "Volume uses Hevy lift sets (kg × reps)." },
   bike: { volume: "Volume uses Hevy lift sets (kg × reps)." },
   swim: { volume: "Volume uses Hevy lift sets (kg × reps)." },
@@ -100,17 +98,13 @@ export const ActivityMetricsChartHeader: React.FC<Props> = ({
                   const patch: Partial<SessionChartSettings> = {
                     metric: value,
                   };
-                  if (value === "pace" || value === "efficiency")
-                    patch.cumulative = false;
+                  if (value === "pace" || value === "efficiency") patch.cumulative = false;
                   onSessionChartPatch(patch);
                 }}
                 className={cn(
                   "rounded-md px-2 py-1 text-[11px] font-medium",
-                  selected &&
-                    "bg-sky-600/20 text-sky-200 ring-1 ring-sky-500/35",
-                  !selected &&
-                    enabled &&
-                    "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200",
+                  selected && "bg-sky-600/20 text-sky-200 ring-1 ring-sky-500/35",
+                  !selected && enabled && "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200",
                   !selected && !enabled && "text-zinc-600 opacity-60",
                 )}
               >
@@ -133,11 +127,7 @@ export const ActivityMetricsChartHeader: React.FC<Props> = ({
           }}
         >
           {METRIC_TABS.map(([value, label]) => (
-            <option
-              key={value}
-              value={value}
-              disabled={!validMetrics.includes(value)}
-            >
+            <option key={value} value={value} disabled={!validMetrics.includes(value)}>
               {label}
             </option>
           ))}
@@ -151,8 +141,7 @@ export const ActivityMetricsChartHeader: React.FC<Props> = ({
               className={cn(
                 "rounded-md px-2 py-1 text-[11px] font-medium",
                 agg === a && "bg-zinc-700/50 text-zinc-200",
-                agg !== a &&
-                  "text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-300",
+                agg !== a && "text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-300",
               )}
             >
               {a.charAt(0).toUpperCase() + a.slice(1)}
@@ -163,9 +152,7 @@ export const ActivityMetricsChartHeader: React.FC<Props> = ({
           name="aggregation"
           className="sm:hidden w-fit h-6 py-0 text-xs"
           value={agg}
-          onChange={(e) =>
-            onSessionChartPatch({ agg: e.target.value as SessionChartAgg })
-          }
+          onChange={(e) => onSessionChartPatch({ agg: e.target.value as SessionChartAgg })}
         >
           {(["day", "week", "month"] as const).map((a) => (
             <option key={a} value={a}>
@@ -186,8 +173,7 @@ export const ActivityMetricsChartHeader: React.FC<Props> = ({
             }}
             className={cn(
               "rounded-md border px-2 py-0.5 text-[11px] font-medium",
-              proportional &&
-                "border-emerald-500/45 bg-emerald-600/15 text-emerald-200",
+              proportional && "border-emerald-500/45 bg-emerald-600/15 text-emerald-200",
               !proportional &&
                 "border-zinc-600/80 bg-zinc-900/35 text-zinc-400 hover:border-zinc-500 hover:bg-zinc-800/45 hover:text-zinc-200",
             )}

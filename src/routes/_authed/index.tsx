@@ -7,11 +7,9 @@ import {
 import { createFileRoute } from "@tanstack/react-router";
 import { Home } from "@/components/screens/home";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
-import queryKeys from "@/lib/query-keys";
+import { getters } from "@/lib/query-keys";
 import { toIsoDate } from "@/lib/utils/dates";
-import { activityActions } from "@/server-fcts/activities";
 import { cookieActions } from "@/server-fcts/cookies";
-import { weightActions } from "@/server-fcts/weights";
 import type { CalendarScope } from "@/types/requests/activities";
 
 export const Route = createFileRoute("/_authed/")({
@@ -33,14 +31,10 @@ export const Route = createFileRoute("/_authed/")({
 });
 
 function HomeRoute() {
-  const { dehydrated, calendarScope, sessionChartSettings } =
-    Route.useLoaderData();
+  const { dehydrated, calendarScope, sessionChartSettings } = Route.useLoaderData();
   return (
     <HydrationBoundary state={dehydrated}>
-      <Home
-        initialCalendarScope={calendarScope}
-        initialChartSettings={sessionChartSettings}
-      />
+      <Home initialCalendarScope={calendarScope} initialChartSettings={sessionChartSettings} />
     </HydrationBoundary>
   );
 }
@@ -57,49 +51,17 @@ const loadHomePageDataFn = async (
 
   const anchor = toIsoDate(new Date(), timezone);
 
-  queryClient.prefetchQuery({
-    queryKey: queryKeys.calendarQueryKey(calendarScope, anchor),
-    queryFn: () =>
-      activityActions.calendar({
-        data: {
-          period: calendarScope,
-          anchor: anchor,
-        },
-      }),
-  });
+  queryClient.prefetchQuery(
+    getters.calendar.list({
+      period: calendarScope,
+      anchor,
+    }),
+  );
 
-  queryClient.prefetchQuery({
-    queryKey: queryKeys.activityViz(
-      sessionChartSettings.kind,
-      sessionChartSettings.range,
-      sessionChartSettings.agg,
-      sessionChartSettings.metric,
-      sessionChartSettings.cumulative,
-    ),
-    queryFn: () => activityActions.viz({ data: { ...sessionChartSettings } }),
-  });
-
-  queryClient.prefetchQuery({
-    queryKey: queryKeys.stackedActivityViz(
-      sessionChartSettings.range,
-      sessionChartSettings.metric,
-      sessionChartSettings.agg,
-      sessionChartSettings.proportional,
-    ),
-    queryFn: () =>
-      activityActions.vizStacked({ data: { ...sessionChartSettings } }),
-  });
-
-  queryClient.prefetchQuery({
-    queryKey: queryKeys.weightViz(sessionChartSettings.range),
-    queryFn: () =>
-      weightActions.viz({ data: { range: sessionChartSettings.range } }),
-  });
-
-  queryClient.prefetchQuery({
-    queryKey: queryKeys.unlinkedActivities,
-    queryFn: () => activityActions.unlinked(),
-  });
+  queryClient.prefetchQuery(getters.visuals.activity(sessionChartSettings));
+  queryClient.prefetchQuery(getters.visuals.stack(sessionChartSettings));
+  queryClient.prefetchQuery(getters.visuals.weights(sessionChartSettings.range));
+  queryClient.prefetchQuery(getters.activities.unlinked());
 
   return {
     calendarScope,

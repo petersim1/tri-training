@@ -1,18 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowSendIcon,
-  ChatHistoryOutlineIcon,
-  PlusIcon,
-} from "@/components/assets";
+import { ArrowSendIcon, ChatHistoryOutlineIcon, PlusIcon } from "@/components/assets";
 import type { ChatMessageRow } from "@/lib/db/schema.server";
-import queryKeys from "@/lib/query-keys";
+import { getters, invalidators } from "@/lib/query-keys";
 import { useChat } from "@/providers/chat";
 import { chatActions } from "@/server-fcts/chat";
 import { eventActions } from "@/server-fcts/events";
 import type { ChatMessage } from "@/types/responses/chat";
-import type { ChatMessageItem } from "@/types/responses/chats";
 import {
   displayChatHeading,
   sportEventContextLine,
@@ -30,14 +25,12 @@ const lastSportEventIdFromMessages = (msgs: ChatMessageRow[]): string => {
 
 export const Composer: React.FC = () => {
   const qc = useQueryClient();
-  const {
-    createThreadAsync,
-    selectedThreadId,
-    selectThreadId,
-    threadsQuery,
-    setCurView,
-    setOpen,
-  } = useChat();
+
+  const createChat = useServerFn(chatActions.createThread);
+  const chatFn = useServerFn(chatActions.chat);
+  const runListSportEvents = useServerFn(eventActions.list);
+
+  const { selectedThreadId, selectThreadId, threadsQuery, setCurView, setOpen } = useChat();
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,16 +38,12 @@ export const Composer: React.FC = () => {
   const [sportEventContextId, setSportEventContextId] = useState("");
   const [optimisticText, setOptimisticText] = useState<string | null>(null);
 
-  const chatFn = useServerFn(chatActions.chat);
-
   const abortRef = useRef<AbortController | null>(null);
   const activeStreamThreadRef = useRef<string | null>(null);
   const paneRef = useRef<HTMLDivElement | null>(null);
   const pickerDirtyRef = useRef(false);
   const prevThreadIdRef = useRef<string>("");
   const shouldAutoScrollRef = useRef(true);
-
-  const runListSportEvents = useServerFn(eventActions.list);
 
   const onScroll = () => {
     const el = paneRef.current;
@@ -81,14 +70,8 @@ export const Composer: React.FC = () => {
   }, [selectedThreadId]);
 
   const messagesQuery = useQuery({
-    queryKey: queryKeys.messagesQueryKey(selectedThreadId),
-    queryFn: () =>
-      selectedThreadId
-        ? chatActions.listMessages({
-            data: { threadId: selectedThreadId },
-          })
-        : [],
-    enabled: selectedThreadId !== null,
+    ...getters.chats.messages(selectedThreadId!),
+    enabled: !!selectedThreadId,
     staleTime: Infinity,
   });
 
@@ -100,9 +83,7 @@ export const Composer: React.FC = () => {
 
   const sportEventsSorted = useMemo(
     () =>
-      [...(sportEventsQuery.data ?? [])].sort((a, b) =>
-        a.eventDayKey.localeCompare(b.eventDayKey),
-      ),
+      [...(sportEventsQuery.data ?? [])].sort((a, b) => a.eventDayKey.localeCompare(b.eventDayKey)),
     [sportEventsQuery.data],
   );
 
@@ -123,9 +104,7 @@ export const Composer: React.FC = () => {
     if (!tid || busy || !messagesQuery.isFetched) return;
     if (tid === prevThreadIdRef.current && pickerDirtyRef.current) return;
     prevThreadIdRef.current = tid;
-    setSportEventContextId(
-      lastSportEventIdFromMessages(messagesQuery.data ?? []),
-    );
+    setSportEventContextId(lastSportEventIdFromMessages(messagesQuery.data ?? []));
   }, [selectedThreadId, messagesQuery.isFetched, messagesQuery.data, busy]);
 
   // Scroll to bottom
@@ -161,14 +140,8 @@ export const Composer: React.FC = () => {
           setStreaming("");
         }
         if (value.type === "message") {
-          qc.setQueryData(
-            queryKeys.messagesQueryKey(threadId),
-            (old: ChatMessageItem[] | undefined) => {
-              if (!old) return old;
-              if (old.some((m) => m.id === value.message.id)) return old;
-              return [...old, value.message];
-            },
-          );
+          invalidators.chats.message(qc, { threadId, message: value.message });
+
           if (value.message.role === "user") setOptimisticText(null);
           if (value.message.role === "assistant") setStreaming("");
         }
@@ -204,7 +177,9 @@ export const Composer: React.FC = () => {
 
     try {
       if (!threadId) {
-        threadId = await createThreadAsync();
+        const thread = await createChat();
+        invalidators.chats.create(qc, { chat: thread });
+        threadId = thread.id;
       }
 
       activeStreamThreadRef.current = threadId;
@@ -244,26 +219,11 @@ export const Composer: React.FC = () => {
         },
       });
       if (approved) {
-        qc.invalidateQueries({ queryKey: ["calendar"] });
-        qc.invalidateQueries({ queryKey: ["activities"] });
-        qc.invalidateQueries({ queryKey: ["weight-viz"] });
-        qc.invalidateQueries({ queryKey: ["activity-viz"] });
+        invalidators.chats.approval(qc);
       }
 
       const status = approved ? "approved" : "rejected";
-      qc.setQueryData(
-        queryKeys.messagesQueryKey(tid),
-        (old: ChatMessageItem[] | undefined) => {
-          if (!old) return old;
-          return old.map((m) => {
-            if (!m.proposalSet?.length) return m;
-            return {
-              ...m,
-              proposalSet: m.proposalSet.map((p) => ({ ...p, status })),
-            };
-          });
-        },
-      );
+      invalidators.chats.proposal(qc, { threadId: tid, status });
     } catch (e) {
       setError(e instanceof Error ? e.message : "approval_failed");
     } finally {
@@ -271,8 +231,7 @@ export const Composer: React.FC = () => {
     }
   };
 
-  const attachedEvent =
-    sportEventsSorted.find((e) => e.id === sportEventContextId) ?? null;
+  const attachedEvent = sportEventsSorted.find((e) => e.id === sportEventContextId) ?? null;
   const canSend = !!draft.trim() && !busy;
 
   const currentThread =
@@ -380,8 +339,7 @@ export const Composer: React.FC = () => {
                 <option value="">No event context</option>
                 {sportEventsSorted.map((ev) => (
                   <option key={ev.id} value={ev.id}>
-                    {ev.eventDayKey} —{" "}
-                    {ev.name.length > 52 ? `${ev.name.slice(0, 50)}…` : ev.name}
+                    {ev.eventDayKey} — {ev.name.length > 52 ? `${ev.name.slice(0, 50)}…` : ev.name}
                   </option>
                 ))}
               </select>
