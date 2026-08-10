@@ -87,17 +87,17 @@ export const ActivityElement: React.FC<{
                   <p className="text-[9px] font-medium uppercase tracking-wide text-emerald-600/85">
                     Linked
                   </p>
-                  {title ? (
+                  {title && (
                     <p className="mt-0.5 line-clamp-2 text-[10px] font-medium leading-snug text-zinc-300">
                       {title}
                     </p>
-                  ) : null}
-                  {brief ? <p className="mt-0.5 text-[9px] text-zinc-500">{brief}</p> : null}
-                  {planTargets ? (
+                  )}
+                  {brief && <p className="mt-0.5 text-[9px] text-zinc-500">{brief}</p>}
+                  {planTargets && (
                     <p className="mt-0.5 text-[9px] text-zinc-600">Target: {planTargets}</p>
-                  ) : null}
+                  )}
                 </div>
-                {vendorOpen ? (
+                {vendorOpen && (
                   <a
                     href={vendorOpen.href}
                     target="_blank"
@@ -106,7 +106,7 @@ export const ActivityElement: React.FC<{
                   >
                     {vendorOpen.label}
                   </a>
-                ) : null}
+                )}
               </div>
             </div>
           ) : (

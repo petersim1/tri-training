@@ -75,16 +75,16 @@ export const CalendarDayItem: React.FC<{
           >
             {dayN}
           </span>
-          {day.hasWeight ? (
+          {day.weight !== undefined && (
             <WeightIcon className="pointer-events-auto absolute right-0.5 top-0.5 z-4 text-amber-400" />
-          ) : null}
-          {day.hasUnlinked ? (
+          )}
+          {day.linkCandidates.length > 0 && (
             <span
               className={`absolute right-0.5 top-0.5 z-4 ${CAL_DAY_DOT_UNLINKED}`}
               title="Session not linked to a plan"
               aria-hidden
             />
-          ) : null}
+          )}
         </div>
         <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-1 sm:gap-2">
           <CalendarDayActivityIcons dayPlans={day.activities} />

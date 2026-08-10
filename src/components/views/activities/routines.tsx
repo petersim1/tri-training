@@ -88,44 +88,45 @@ export const LiftRoutinePicker: React.FC<{
         <p className="text-xs text-zinc-500">No routines loaded from Hevy.</p>
       ) : (
         <div className={selectedId ? "space-y-4 pr-1" : "max-h-48 space-y-4 overflow-y-auto pr-1"}>
-          {visibleGroups.map(({ folder, routines }, gi) =>
-            routines.length > 0 ? (
-              <div
-                key={
-                  folder.id != null ? `fg-${String(folder.id)}` : `fg-${gi}-${folder.title ?? ""}`
-                }
-                className="space-y-1.5"
-              >
-                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  {folder.title ?? "Folder"}
-                </p>
-                <div className="flex flex-col gap-1">
-                  {routines.map((r) => {
-                    const id = r.id;
-                    if (!id) {
-                      return null;
-                    }
-                    const active = selectedId === id;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => onSelect(id)}
-                        className={`rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
-                          active
-                            ? "border-emerald-500/80 bg-emerald-950/40 text-zinc-100"
-                            : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-zinc-600"
-                        }`}
-                      >
-                        {r.title ?? id}
-                      </button>
-                    );
-                  })}
+          {visibleGroups.map(
+            ({ folder, routines }, gi) =>
+              routines.length > 0 && (
+                <div
+                  key={
+                    folder.id != null ? `fg-${String(folder.id)}` : `fg-${gi}-${folder.title ?? ""}`
+                  }
+                  className="space-y-1.5"
+                >
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                    {folder.title ?? "Folder"}
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {routines.map((r) => {
+                      const id = r.id;
+                      if (!id) {
+                        return null;
+                      }
+                      const active = selectedId === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => onSelect(id)}
+                          className={`rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                            active
+                              ? "border-emerald-500/80 bg-emerald-950/40 text-zinc-100"
+                              : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-zinc-600"
+                          }`}
+                        >
+                          {r.title ?? id}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ) : null,
+              ),
           )}
-          {visibleUnfoldered.length > 0 ? (
+          {visibleUnfoldered.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Other</p>
               <div className="flex flex-col gap-1">
@@ -152,22 +153,20 @@ export const LiftRoutinePicker: React.FC<{
                 })}
               </div>
             </div>
-          ) : null}
-          {selectedId && visibleGroups.length === 0 && visibleUnfoldered.length === 0 ? (
+          )}
+          {selectedId && visibleGroups.length === 0 && visibleUnfoldered.length === 0 && (
             <p className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-300">
               {selectedTitle ?? selectedId}
             </p>
-          ) : null}
+          )}
         </div>
       )}
 
-      {selectedId ? (
+      {selectedId && (
         <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/80 p-3">
           <p className="text-xs font-medium text-zinc-500">
             Exercises
-            {selectedTitle ? (
-              <span className="font-normal text-zinc-400"> · {selectedTitle}</span>
-            ) : null}
+            {selectedTitle && <span className="font-normal text-zinc-400"> · {selectedTitle}</span>}
           </p>
           {routineQuery.isPending ? (
             <p className="text-sm text-zinc-500">Loading…</p>
@@ -186,11 +185,11 @@ export const LiftRoutinePicker: React.FC<{
                     <span className="w-6 shrink-0 tabular-nums text-zinc-600">{i + 1}.</span>
                     <div className="min-w-0 flex-1">
                       <div className="text-zinc-100">{exerciseLabel(ex)}</div>
-                      {nSets > 0 ? (
+                      {nSets > 0 && (
                         <div className="text-xs text-zinc-500">
                           {nSets} set{nSets === 1 ? "" : "s"}
                         </div>
-                      ) : null}
+                      )}
                     </div>
                   </li>
                 );
@@ -198,7 +197,7 @@ export const LiftRoutinePicker: React.FC<{
             </ol>
           )}
         </div>
-      ) : null}
+      )}
     </div>
   );
 };
@@ -229,7 +228,7 @@ export const LiftRoutineReadOnlyPreview: React.FC<{
 
   return (
     <div className="space-y-2">
-      {title ? <p className="text-sm font-medium text-zinc-200">{title}</p> : null}
+      {title && <p className="text-sm font-medium text-zinc-200">{title}</p>}
       {routineQuery.isPending ? (
         <p className="text-xs text-zinc-500">Loading routine…</p>
       ) : routineQuery.isError || !routineQuery.data ? (
@@ -247,11 +246,11 @@ export const LiftRoutineReadOnlyPreview: React.FC<{
                 <span className="w-6 shrink-0 tabular-nums text-zinc-600">{i + 1}.</span>
                 <div className="min-w-0 flex-1">
                   <div className="text-zinc-100">{exerciseLabel(ex)}</div>
-                  {nSets > 0 ? (
+                  {nSets > 0 && (
                     <div className="text-xs text-zinc-500">
                       {nSets} set{nSets === 1 ? "" : "s"}
                     </div>
-                  ) : null}
+                  )}
                 </div>
               </li>
             );

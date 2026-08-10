@@ -9,7 +9,7 @@
     "build": "vite build && tsc --noEmit",
     "preview": "vite preview",
     "start": "node .output/server/index.mjs",
-    "lint": "biome check ./src vite.config.ts package.json biome.json drizzle.config.ts",
+    "lint": "biome check ./src vite.config.ts package.json biome.json drizzle.config.ts && tsc --noEmit",
     "format": "biome format --write ./src vite.config.ts package.json biome.json drizzle.config.ts",
     "check": "biome check --write ./src vite.config.ts package.json biome.json drizzle.config.ts",
     "routes:generate": "bunx @tanstack/router-cli@latest generate",

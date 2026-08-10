@@ -14,7 +14,7 @@ import { rawActivityType } from "@/lib/utils/vendors";
 import { activityActions } from "@/server-fcts/activities";
 import { weightActions } from "@/server-fcts/weights";
 import { type CreatePlanInput, createPlanSchema } from "@/types/requests/activities";
-import type { DayItem } from "@/types/responses/activities";
+import type { CalendarPageItem } from "@/types/responses/activities";
 import { PlusIcon } from "../assets";
 import { Field, Input, Label, Select, Textarea } from "../Forms";
 import { ActivityElement } from "../views/activities/element";
@@ -22,13 +22,11 @@ import { Modal, ModalContent } from ".";
 import { EditModal } from "./edit";
 
 export const ActivityModal: React.FC<{
-  dayKey: string;
+  day: CalendarPageItem;
   onClose: () => void;
-}> = ({ dayKey, onClose }) => {
+}> = ({ day, onClose }) => {
   const [step, setStep] = useState<"summary" | "add" | "workout">("summary");
   const [SelectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-
-  const { data, isLoading } = useQuery(getters.calendar.day(dayKey));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -38,19 +36,14 @@ export const ActivityModal: React.FC<{
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const SelectedPlan = data?.activities.find((a) => a.id === SelectedPlanId) ?? null;
+  const SelectedPlan = day.activities.find((a) => a.id === SelectedPlanId) ?? null;
 
   return (
     <Modal onClose={onClose}>
       <ModalContent>
-        {isLoading ? (
-          <div className="flex h-40 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-500" />
-          </div>
-        ) : !data ? null : step === "summary" ? (
+        {step === "summary" && (
           <SummaryModal
-            dayKey={dayKey}
-            data={data}
+            day={day}
             onClose={onClose}
             onAddPlan={() => setStep("add")}
             onOpenPlan={(id) => {
@@ -58,54 +51,55 @@ export const ActivityModal: React.FC<{
               setStep("workout");
             }}
           />
-        ) : step === "add" ? (
-          <AddModal dayKey={dayKey} onClose={onClose} onBack={() => setStep("summary")} />
-        ) : step === "workout" && SelectedPlan ? (
+        )}
+        {step === "add" && (
+          <AddModal day={day} onClose={onClose} onBack={() => setStep("summary")} />
+        )}
+        {step === "workout" && SelectedPlan && (
           <EditModal plan={SelectedPlan} onClose={onClose} onBack={() => setStep("summary")} />
-        ) : null}
+        )}
       </ModalContent>
     </Modal>
   );
 };
 
 const SummaryModal: React.FC<{
-  dayKey: string;
-  data: DayItem;
+  day: CalendarPageItem;
   onClose: () => void;
   onAddPlan: () => void;
   onOpenPlan: (id: string) => void;
-}> = ({ dayKey, data, onClose, onAddPlan, onOpenPlan }) => {
+}> = ({ day, onClose, onAddPlan, onOpenPlan }) => {
   const queryClient = useQueryClient();
   const [weightErr, setWeightErr] = useState<string | null>(null);
 
-  const dialogTitle = new Date(`${dayKey}T12:00:00`).toLocaleDateString(undefined, {
+  const dialogTitle = new Date(`${day.dayKey}T12:00:00`).toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
   });
 
-  const planned = data.activities.filter((a) => a.status === "planned" || a.status === "skipped");
-  const completed = data.activities.filter((a) => a.status === "completed");
+  const planned = day.activities.filter((a) => a.status === "planned" || a.status === "skipped");
+  const completed = day.activities.filter((a) => a.status === "completed");
 
   const setWeightMutation = useMutation({
-    mutationFn: (weightLb: number) => weightActions.set({ data: { dayKey, weightLb } }),
+    mutationFn: (weightLb: number) => weightActions.set({ data: { dayKey: day.dayKey, weightLb } }),
     onSuccess: (_, newWeightLb) => {
-      invalidators.weights.set(queryClient, { dayKey, weightLb: newWeightLb });
+      invalidators.weights.set(queryClient, { dayKey: day.dayKey, weightLb: newWeightLb });
     },
   });
 
   const clearWeightMutation = useMutation({
-    mutationFn: () => weightActions.remove({ data: { dayKey } }),
+    mutationFn: () => weightActions.remove({ data: { dayKey: day.dayKey } }),
     onSuccess: () => {
-      invalidators.weights.delete(queryClient, { dayKey });
+      invalidators.weights.delete(queryClient, { dayKey: day.dayKey });
     },
   });
 
   const createFromCompletedMutation = useMutation({
     mutationFn: (vendorActivityId: string) =>
       activityActions.createFromCompleted({
-        data: { dayKey, vendorActivityId },
+        data: { dayKey: day.dayKey, vendorActivityId },
       }),
     onSuccess: (updatedActivity) => {
       invalidators.activities.link(queryClient, { plan: updatedActivity });
@@ -168,11 +162,11 @@ const SummaryModal: React.FC<{
           </section>
         )}
 
-        {data.linkCandidates.length > 0 && (
+        {day.linkCandidates.length > 0 && (
           <section>
             <h3 className="mb-2 text-sm font-medium text-zinc-200">Completed (no plan)</h3>
             <ul className="space-y-3">
-              {data.linkCandidates.map((va) => (
+              {day.linkCandidates.map((va) => (
                 <li key={va.id} className="rounded border border-zinc-800 bg-zinc-900/80 px-3 py-2">
                   <div className="text-sm text-zinc-100 capitalize">{rawActivityType(va)}</div>
                   <div className="mt-0.5 text-xs capitalize text-zinc-500">{va.vendor}</div>
@@ -228,7 +222,7 @@ const SummaryModal: React.FC<{
                 required
                 inputMode="decimal"
                 autoComplete="off"
-                defaultValue={data.weight?.toFixed(1) ?? ""}
+                defaultValue={day.weight?.toFixed(1) ?? ""}
                 aria-label="Weight in pounds"
               />
               <span
@@ -246,7 +240,7 @@ const SummaryModal: React.FC<{
           >
             {setWeightMutation.isPending ? "…" : "Save"}
           </button>
-          {data.weight != null && (
+          {day.weight != undefined && (
             <button
               type="button"
               disabled={clearWeightMutation.isPending || setWeightMutation.isPending}
@@ -267,14 +261,14 @@ const SummaryModal: React.FC<{
 };
 
 const AddModal: React.FC<{
-  dayKey: string;
+  day: CalendarPageItem;
   onClose: () => void;
   onBack: () => void;
-}> = ({ dayKey, onClose, onBack }) => {
+}> = ({ day, onClose, onBack }) => {
   const queryClient = useQueryClient();
 
   const formReducer = useFormReducer<CreatePlanInput>({
-    dayKey,
+    dayKey: day.dayKey,
     kind: "run",
   });
   const [planErr, setPlanErr] = useState<
@@ -283,13 +277,6 @@ const AddModal: React.FC<{
       description: string;
     }[]
   >([]);
-
-  const dialogTitle = new Date(`${dayKey}T12:00:00`).toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
 
   const routineQuery = useQuery(getters.routines.list());
 
@@ -344,7 +331,7 @@ const AddModal: React.FC<{
 
   return (
     <>
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex items-center gap-2 justify-between">
         <button
           type="button"
           onClick={onBack}
@@ -352,12 +339,6 @@ const AddModal: React.FC<{
         >
           Back
         </button>
-        <div className="min-w-0 flex-1">
-          <h2 id="day-dialog-title" className="text-lg font-semibold text-zinc-100">
-            Add plan
-          </h2>
-          <p className="truncate text-sm text-zinc-400">{dialogTitle}</p>
-        </div>
         <button
           type="button"
           onClick={onClose}

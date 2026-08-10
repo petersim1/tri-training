@@ -1,6 +1,6 @@
 import { type Exception, trace } from "@opentelemetry/api";
 import { createServerFn } from "@tanstack/react-start";
-import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, lte } from "drizzle-orm";
 import {
   type SessionChartSettings,
   VALID_CUMULATIVE,
@@ -64,17 +64,18 @@ const calendar = createServerFn({ method: "GET" })
 
         const workouts = await db
           .select({
-            id: workoutEntries.id,
-            kind: workoutEntries.kind,
-            dayKey: workoutEntries.dayKey,
-            status: workoutEntries.status,
+            ...getTableColumns(workoutEntries),
+            vendorActivity: {
+              ...getTableColumns(vendorActivities),
+            },
           })
           .from(workoutEntries)
+          .leftJoin(vendorActivities, eq(vendorActivities.id, workoutEntries.vendorActivityId))
           .where(and(gte(workoutEntries.dayKey, dateFrom), lte(workoutEntries.dayKey, dateTo)))
           .all();
 
         const weights = await db
-          .select({ dayKey: weightEntries.dayKey })
+          .select({ dayKey: weightEntries.dayKey, weight: weightEntries.weightLb })
           .from(weightEntries)
           .where(and(gte(weightEntries.dayKey, dateFrom), lte(weightEntries.dayKey, dateTo)))
           .all();
@@ -101,21 +102,16 @@ const calendar = createServerFn({ method: "GET" })
         const unlinkedByDay = Map.groupBy(unlinkedActivities, (a) =>
           toIsoDate(a.createdAt, timezone),
         );
-
-        const weightDays = new Set(weights.map((w) => w.dayKey));
         const workoutsByDay = Map.groupBy(workouts, (r) => r.dayKey);
+        const weightByDay = new Map<string, number>(weights.map((row) => [row.dayKey, row.weight]));
 
         const allDayKeys = enumerateLocalDayKeysInclusive(dateFrom, dateTo);
 
-        const items = allDayKeys.map((dayKey) => ({
+        const items: CalendarPageItem[] = allDayKeys.map((dayKey) => ({
           dayKey,
-          activities: (workoutsByDay.get(dayKey) ?? []).map(({ id, kind, status }) => ({
-            id,
-            kind,
-            status,
-          })),
-          hasWeight: weightDays.has(dayKey),
-          hasUnlinked: unlinkedByDay.has(dayKey),
+          activities: workoutsByDay.get(dayKey) ?? [],
+          weight: weightByDay.get(dayKey),
+          linkCandidates: unlinkedByDay.get(dayKey) ?? [],
           isToday: dayKey === today,
         }));
 

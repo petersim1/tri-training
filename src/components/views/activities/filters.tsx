@@ -147,12 +147,12 @@ export const ActivityFilters: React.FC<{
         >
           Upload markdown
         </button>
-        {!exportDateRangeOk ? (
+        {!exportDateRangeOk && (
           <span className="text-[11px] text-zinc-600">
             Set day from and/or day to (uses kind + status above; ignores pagination).
           </span>
-        ) : null}
-        {exportFeedback ? (
+        )}
+        {exportFeedback && (
           <span
             className={
               exportFeedback.kind === "ok"
@@ -162,7 +162,7 @@ export const ActivityFilters: React.FC<{
           >
             {exportFeedback.text}
           </span>
-        ) : null}
+        )}
       </div>
     </section>
   );

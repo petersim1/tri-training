@@ -2,7 +2,6 @@ import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { activityActions } from "@/server-fcts/activities";
 import { chatActions } from "@/server-fcts/chat";
 import { cookieActions } from "@/server-fcts/cookies";
-import { dayActions } from "@/server-fcts/days";
 import { eventActions } from "@/server-fcts/events";
 import { vendorActions } from "@/server-fcts/vendors";
 import { weightActions } from "@/server-fcts/weights";
@@ -14,7 +13,6 @@ import type {
 } from "@/types/requests/activities";
 import {
   CalendarPageItem,
-  DayItem,
   PlannedWorkoutsPageResult,
   StackedVizResult,
   VizResult,
@@ -27,7 +25,6 @@ const QUERY_KEYS = {
   ACTIVITIES: "activities",
   CALENDAR: "calendar",
   VISUAL: "visual",
-  DAYS: "days",
   CHATS: "chats",
   MESSAGES: "messages",
   ROUTINES: "routines",
@@ -77,11 +74,6 @@ export const getters = {
       queryOptions({
         queryKey: [QUERY_KEYS.TIMEZONE],
         queryFn: () => cookieActions.getTimezone(),
-      }),
-    day: (dayKey: string) =>
-      queryOptions({
-        queryKey: [QUERY_KEYS.DAYS, dayKey],
-        queryFn: () => dayActions.dayInfo({ data: { dayKey } }),
       }),
     list: (settings: CalendarSchemaValues) =>
       queryOptions({
@@ -151,10 +143,6 @@ export const invalidators = {
         queryKey: [QUERY_KEYS.CALENDAR],
         exact: false,
       });
-      qc.invalidateQueries({
-        queryKey: [QUERY_KEYS.DAYS],
-        exact: false,
-      });
     },
     message: (
       qc: QueryClient,
@@ -212,11 +200,6 @@ export const invalidators = {
         stale: false,
       });
       qc.invalidateQueries({
-        queryKey: [QUERY_KEYS.DAYS],
-        exact: false,
-        stale: false,
-      });
-      qc.invalidateQueries({
         queryKey: [QUERY_KEYS.ACTIVITIES],
         exact: false,
         stale: false,
@@ -261,6 +244,9 @@ export const invalidators = {
                 }
                 return activity;
               }),
+              linkCandidates: page.linkCandidates.filter(
+                (link) => link.id !== plan.vendorActivityId,
+              ),
             };
           });
         },
@@ -269,32 +255,6 @@ export const invalidators = {
       qc.setQueryData(getters.activities.unlinked().queryKey, (oldData) => {
         if (!oldData) return oldData;
         return oldData.filter((d) => d.id !== plan.vendorActivityId);
-      });
-
-      qc.setQueryData(getters.calendar.day(plan.dayKey).queryKey, (oldData) => {
-        if (!oldData) return oldData;
-        const didWorkoutExist = oldData.activities.some((activity) => activity.id === plan.id);
-        const newLinks = oldData.linkCandidates.filter((link) => {
-          return link.id !== plan.vendorActivityId;
-        });
-
-        const newItem: DayItem = {
-          ...oldData,
-          linkCandidates: newLinks,
-        };
-
-        if (didWorkoutExist) {
-          newItem.activities = oldData.activities.map((activity) => {
-            if (activity.id === plan.id) {
-              return plan;
-            }
-            return activity;
-          });
-        } else {
-          newItem.activities = [...oldData.activities, plan];
-        }
-
-        return newItem;
       });
 
       qc.invalidateQueries({
@@ -335,19 +295,6 @@ export const invalidators = {
           };
         },
       );
-
-      qc.setQueryData(getters.calendar.day(plan.dayKey).queryKey, (oldData) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          activities: oldData.activities.map((activity) => {
-            if (activity.id === plan.id) {
-              return plan;
-            }
-            return activity;
-          }),
-        };
-      });
 
       qc.setQueriesData(
         {
@@ -400,13 +347,6 @@ export const invalidators = {
           };
         },
       );
-      qc.setQueryData(getters.calendar.day(plan.dayKey).queryKey, (oldData) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          activities: oldData.activities.filter((activity) => activity.id !== plan.id),
-        };
-      });
 
       qc.setQueriesData(
         {
@@ -470,14 +410,6 @@ export const invalidators = {
         },
       });
 
-      qc.setQueryData(getters.calendar.day(plan.dayKey).queryKey, (oldData) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          activities: [...oldData.activities, plan],
-        };
-      });
-
       qc.setQueriesData(
         {
           queryKey: [QUERY_KEYS.CALENDAR],
@@ -500,13 +432,6 @@ export const invalidators = {
   },
   weights: {
     set: (qc: QueryClient, { dayKey, weightLb }: { dayKey: string; weightLb: number }) => {
-      qc.setQueryData(getters.calendar.day(dayKey).queryKey, (oldData) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          weight: weightLb,
-        };
-      });
       qc.setQueriesData(
         {
           queryKey: [QUERY_KEYS.CALENDAR],
@@ -520,7 +445,7 @@ export const invalidators = {
             }
             return {
               ...page,
-              hasWeight: true,
+              weight: weightLb,
             };
           });
         },
@@ -533,13 +458,6 @@ export const invalidators = {
       });
     },
     delete: (qc: QueryClient, { dayKey }: { dayKey: string }) => {
-      qc.setQueryData(getters.calendar.day(dayKey).queryKey, (oldData) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          weight: undefined,
-        };
-      });
       qc.setQueriesData(
         {
           queryKey: [QUERY_KEYS.CALENDAR],
@@ -553,7 +471,7 @@ export const invalidators = {
             }
             return {
               ...page,
-              hasWeight: false,
+              weight: undefined,
             };
           });
         },

@@ -2,7 +2,6 @@ import { Suspense, useRef, useState } from "react";
 import type { SessionChartSettings } from "@/lib/constants/visuals";
 import { getToday } from "@/lib/utils/dates";
 import type { CalendarScope } from "@/types/requests/activities";
-import { ActivityModal } from "../Modals/activity";
 import { CalendarGrid, CalendarGridLoading } from "../views/calendar/grid";
 import { CalendarToggle } from "../views/calendar/toggle";
 import { Visualizer } from "../views/visuals";
@@ -15,7 +14,6 @@ export const Home: React.FC<{
 }> = ({ initialCalendarScope, initialChartSettings }) => {
   const [period, setPeriod] = useState(initialCalendarScope);
   const [anchor, setAnchor] = useState(() => getToday());
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const calendarSectionRef = useRef<HTMLElement | null>(null);
 
@@ -38,18 +36,12 @@ export const Home: React.FC<{
             </div>
           ))}
           <Suspense fallback={<CalendarGridLoading period={period} />}>
-            <CalendarGrid
-              anchor={anchor}
-              period={period}
-              setSelectedDay={(dayKey: string) => setSelectedDay(dayKey)}
-            />
+            <CalendarGrid anchor={anchor} period={period} />
           </Suspense>
         </div>
       </section>
 
       <Visualizer initialChartSettings={initialChartSettings} />
-
-      {!!selectedDay && <ActivityModal dayKey={selectedDay} onClose={() => setSelectedDay(null)} />}
     </div>
   );
 };

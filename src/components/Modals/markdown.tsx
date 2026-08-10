@@ -80,9 +80,9 @@ export const MarkdownModal: React.FC<{
           <ul className="max-h-32 overflow-y-auto rounded border border-zinc-800 bg-zinc-900/50 px-2 py-1.5 text-xs text-amber-200/90">
             {uploadIssues.map((iss) => (
               <li key={`${iss.line ?? "row"}-${iss.message}`}>
-                {iss.line != null ? (
+                {iss.line != null && (
                   <span className="tabular-nums text-zinc-500">Line {iss.line}: </span>
-                ) : null}
+                )}
                 {iss.message}
               </li>
             ))}

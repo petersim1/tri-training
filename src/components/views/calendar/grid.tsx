@@ -1,9 +1,11 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type React from "react";
-import { useDeferredValue } from "react";
+import { useDeferredValue, useState } from "react";
+import { ActivityModal } from "@/components/Modals/activity";
 import { getters } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import type { CalendarScope } from "@/types/requests/activities";
+import { CalendarPageItem } from "@/types/responses/activities";
 import { CalendarDayItem } from "./day";
 
 export const CalendarGridLoading: React.FC<{ period: CalendarScope }> = ({ period }) => {
@@ -27,10 +29,11 @@ export const CalendarGridLoading: React.FC<{ period: CalendarScope }> = ({ perio
 export const CalendarGrid: React.FC<{
   period: CalendarScope;
   anchor: string;
-  setSelectedDay: (dayKey: string) => void;
-}> = ({ period, anchor, setSelectedDay }) => {
+}> = ({ period, anchor }) => {
   const periodUse = useDeferredValue(period);
   const anchorUse = useDeferredValue(anchor);
+
+  const [selectedDay, setSelectedDay] = useState<CalendarPageItem | undefined>(undefined);
 
   const { data } = useSuspenseQuery(
     getters.calendar.list({
@@ -46,9 +49,12 @@ export const CalendarGrid: React.FC<{
           key={`${cell.dayKey}-${anchor}-${period}`}
           day={cell}
           period={period}
-          onOpenDay={() => setSelectedDay(cell.dayKey)}
+          onOpenDay={() => setSelectedDay(cell)}
         />
       ))}
+      {!!selectedDay && (
+        <ActivityModal day={selectedDay} onClose={() => setSelectedDay(undefined)} />
+      )}
     </>
   );
 };

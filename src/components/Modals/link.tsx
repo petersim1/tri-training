@@ -79,8 +79,8 @@ export const LinkModal: React.FC<{
             );
           })}
         </ul>
-        {linkAllInfo ? <p className="text-sm text-zinc-400">{linkAllInfo}</p> : null}
-        {linkAllError ? <p className="text-sm text-red-400">{linkAllError}</p> : null}
+        {linkAllInfo && <p className="text-sm text-zinc-400">{linkAllInfo}</p>}
+        {linkAllError && <p className="text-sm text-red-400">{linkAllError}</p>}
         <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-800/80 pt-3 mt-3">
           <div>
             {linkAllMutation.isSuccess && (

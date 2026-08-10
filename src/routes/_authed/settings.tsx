@@ -129,12 +129,12 @@ function SettingsPage() {
         >
           {backfillMutation.isPending ? "Running…" : "Backfill links from Strava & Hevy"}
         </button>
-        {backfillMsg ? <p className="text-sm text-emerald-400/90">{backfillMsg}</p> : null}
-        {backfillErr ? (
+        {backfillMsg && <p className="text-sm text-emerald-400/90">{backfillMsg}</p>}
+        {backfillErr && (
           <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded border border-red-900/50 bg-red-950/30 p-2 text-xs text-red-300">
             {backfillErr}
           </pre>
-        ) : null}
+        )}
       </section>
 
       <Link to="/" className="text-sm text-emerald-400 hover:underline">

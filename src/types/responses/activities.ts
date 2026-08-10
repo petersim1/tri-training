@@ -14,9 +14,9 @@ export type ActivityItem = {
 
 export type CalendarPageItem = {
   dayKey: string;
-  activities: ActivityItem[];
-  hasWeight: boolean;
-  hasUnlinked: boolean;
+  activities: WorkoutEntryWithCompleted[];
+  weight?: number;
+  linkCandidates: VendorActivityRow[];
   isToday: boolean;
 };
 
@@ -50,12 +50,6 @@ export type StackedGroupItem = {
     bike: number;
     run: number;
   };
-};
-
-export type DayItem = {
-  activities: WorkoutEntryWithCompleted[];
-  weight?: number;
-  linkCandidates: VendorActivityRow[];
 };
 
 export type LinkAllResponse = {
