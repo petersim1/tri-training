@@ -6,6 +6,7 @@ export const VALID_METRICS: Record<PlanKind, SessionChartMetric[]> = {
   bike: ["distance", "efficiency", "pace", "time"],
   run: ["distance", "efficiency", "pace", "time"],
   swim: ["distance", "efficiency", "pace", "time"],
+  hike: ["distance", "efficiency", "pace", "time"],
   recovery: [],
   lift: ["time", "volume"],
 };

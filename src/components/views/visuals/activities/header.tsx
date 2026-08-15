@@ -10,7 +10,7 @@ import {
 } from "@/lib/constants/visuals";
 import { cn } from "@/lib/utils";
 
-const CHART_KINDS = ["bike", "run", "swim", "lift"] as const;
+const CHART_KINDS = ["bike", "run", "swim", "lift", "hike"] as const;
 type ChartKinds = (typeof CHART_KINDS)[number];
 
 const METRIC_TABS = [

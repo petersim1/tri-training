@@ -22,9 +22,10 @@ import { Modal, ModalContent } from ".";
 import { EditModal } from "./edit";
 
 export const ActivityModal: React.FC<{
-  day: CalendarPageItem;
+  dayKey: string;
+  days: CalendarPageItem[];
   onClose: () => void;
-}> = ({ day, onClose }) => {
+}> = ({ dayKey, days, onClose }) => {
   const [step, setStep] = useState<"summary" | "add" | "workout">("summary");
   const [SelectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
@@ -35,6 +36,12 @@ export const ActivityModal: React.FC<{
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  const day = useMemo(() => days.find((d) => d.dayKey === dayKey), [dayKey, days]);
+
+  if (!day) {
+    return <></>;
+  }
 
   const SelectedPlan = day.activities.find((a) => a.id === SelectedPlanId) ?? null;
 
@@ -103,6 +110,9 @@ const SummaryModal: React.FC<{
       }),
     onSuccess: (updatedActivity) => {
       invalidators.activities.link(queryClient, { plan: updatedActivity });
+    },
+    onError: (err) => {
+      console.error(err);
     },
   });
 

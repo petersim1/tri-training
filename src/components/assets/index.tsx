@@ -1,21 +1,8 @@
 import type { SVGProps } from "react";
+import { PlanKind } from "@/lib/constants/activities";
 import { cn } from "@/lib/utils";
 
 type WeightIconProps = SVGProps<SVGSVGElement> & { title?: string };
-type PlanActivityKind = "swim" | "lift" | "run" | "bike" | "recovery";
-
-function normalizePlanActivityKind(kind: string): PlanActivityKind | "other" {
-  if (
-    kind === "swim" ||
-    kind === "lift" ||
-    kind === "run" ||
-    kind === "bike" ||
-    kind === "recovery"
-  ) {
-    return kind;
-  }
-  return "other";
-}
 
 const activityIconSvgProps = {
   xmlns: "http://www.w3.org/2000/svg",
@@ -29,12 +16,16 @@ const activityIconSvgProps = {
   "aria-hidden": true,
 } as const;
 
-export const PlanActivityKindIcon = ({ kind, className }: { kind: string; className?: string }) => {
-  const k = normalizePlanActivityKind(kind);
-
+export const PlanActivityKindIcon = ({
+  kind,
+  className,
+}: {
+  kind: PlanKind;
+  className?: string;
+}) => {
   const { className: svgClassName, ...rest } = activityIconSvgProps;
 
-  if (k === "swim") {
+  if (kind === "swim") {
     return (
       <svg {...rest} className={cn(svgClassName, className)}>
         <path d="m2 10 2.456-3.684a.7.7 0 0 1 1.106-.013l2.39 3.413a.7.7 0 0 0 1.096-.001l2.402-3.432a.7.7 0 0 1 1.098 0l2.402 3.432a.7.7 0 0 0 1.098 0l2.389-3.413a.7.7 0 0 1 1.106.013L22 10" />
@@ -43,7 +34,7 @@ export const PlanActivityKindIcon = ({ kind, className }: { kind: string; classN
     );
   }
 
-  if (k === "lift") {
+  if (kind === "lift") {
     return (
       <svg {...rest} className={cn(svgClassName, className)}>
         <path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z" />
@@ -55,7 +46,7 @@ export const PlanActivityKindIcon = ({ kind, className }: { kind: string; classN
     );
   }
 
-  if (k === "run") {
+  if (kind === "run") {
     return (
       <svg {...rest} className={cn(svgClassName, className)}>
         <path d="m15 10.42 4.8-5.07" />
@@ -65,7 +56,7 @@ export const PlanActivityKindIcon = ({ kind, className }: { kind: string; classN
     );
   }
 
-  if (k === "bike") {
+  if (kind === "bike") {
     return (
       <svg {...rest} className={cn(svgClassName, className)}>
         <circle cx="18.5" cy="17.5" r="3.5" />
@@ -76,13 +67,27 @@ export const PlanActivityKindIcon = ({ kind, className }: { kind: string; classN
     );
   }
 
-  if (k === "recovery") {
+  if (kind === "recovery") {
     return (
       <svg {...rest} className={cn(svgClassName, className)}>
         <path d="M14.5714 15.0036L15.4286 16.8486C15.4286 16.8486 19.2857 17.6678 19.2857 19.6162C19.2857 21 17.5714 21 17.5714 21H13L10.75 19.75" />
         <path d="M9.42864 15.0036L8.5715 16.8486C8.5715 16.8486 4.71436 17.6678 4.71436 19.6162C4.71436 21 6.42864 21 6.42864 21H8.50007L10.7501 19.75L13.5001 18" />
         <path d="M3 15.9261C3 15.9261 5.14286 15.4649 6.42857 15.0036C7.71429 8.54595 11.5714 9.00721 12 9.00721C12.4286 9.00721 16.2857 8.54595 17.5714 15.0036C18.8571 15.4649 21 15.9261 21 15.9261" />
         <path d="M12 7C13.1046 7 14 6.10457 14 5C14 3.89543 13.1046 3 12 3C10.8954 3 10 3.89543 10 5C10 6.10457 10.8954 7 12 7Z" />
+      </svg>
+    );
+  }
+
+  if (kind === "hike") {
+    return (
+      <svg
+        {...rest}
+        className={cn(svgClassName, className)}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
       </svg>
     );
   }

@@ -161,7 +161,7 @@ export const createStackedViz = (
     .attr("y1", dimensions.pad.t)
     .attr("y2", dimensions.viewH - dimensions.pad.b)
     .attr("stroke", "rgb(113 113 122)")
-    .attr("stroke-width", 1)
+    .attr("strokeWidth", 1)
     .attr("stroke-opacity", 0.45)
     .attr("pointer-events", "none")
     .style("display", "none");

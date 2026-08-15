@@ -197,22 +197,18 @@ export const invalidators = {
       qc.invalidateQueries({
         queryKey: [QUERY_KEYS.CALENDAR],
         exact: false,
-        stale: false,
       });
       qc.invalidateQueries({
         queryKey: [QUERY_KEYS.ACTIVITIES],
         exact: false,
-        stale: false,
       });
       qc.invalidateQueries({
         queryKey: [QUERY_KEYS.VISUAL],
         exact: false,
-        stale: false,
       });
       qc.invalidateQueries({
         queryKey: [QUERY_KEYS.ROUTINES],
         exact: false,
-        stale: false,
       });
     },
     link: (qc: QueryClient, { plan }: { plan: WorkoutEntryWithCompleted }) => {
@@ -236,14 +232,18 @@ export const invalidators = {
             if (page.dayKey !== plan.dayKey) {
               return page;
             }
+            const hadActivity = page.activities.some((a) => a.id === plan.id);
+            const newActivities = hadActivity
+              ? page.activities.map((activity) => {
+                  if (activity.id === plan.id) {
+                    return plan;
+                  }
+                  return activity;
+                })
+              : [...page.activities, plan];
             return {
               ...page,
-              activities: page.activities.map((activity) => {
-                if (activity.id === plan.id) {
-                  return plan;
-                }
-                return activity;
-              }),
+              activities: newActivities,
               linkCandidates: page.linkCandidates.filter(
                 (link) => link.id !== plan.vendorActivityId,
               ),

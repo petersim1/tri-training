@@ -147,10 +147,10 @@ export const createViz = (
       .datum(enriched)
       .attr("fill", "none")
       .attr("stroke", fill)
-      .attr("stroke-width", 2)
+      .attr("strokeWidth", 2)
       .attr("stroke-opacity", 0.92)
-      .attr("stroke-linejoin", "round")
-      .attr("stroke-linecap", "round")
+      .attr("strokeLinejoin", "round")
+      .attr("strokeLinecap", "round")
       .attr("pointer-events", "none")
       .attr(
         "d",
@@ -187,7 +187,7 @@ export const createViz = (
     .attr("r", 3)
     .attr("fill", "rgb(24 24 27)")
     .attr("stroke", "rgb(244 244 245)")
-    .attr("stroke-width", 1)
+    .attr("strokeWidth", 1)
     .attr("opacity", 0.28);
 
   // Hover line
@@ -196,7 +196,7 @@ export const createViz = (
     .attr("y1", dimensions.pad.t)
     .attr("y2", dimensions.viewH - dimensions.pad.b)
     .attr("stroke", "rgb(113 113 122)")
-    .attr("stroke-width", 1)
+    .attr("strokeWidth", 1)
     .attr("stroke-opacity", 0.45)
     .attr("pointer-events", "none")
     .style("display", "none");

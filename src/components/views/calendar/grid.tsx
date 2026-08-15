@@ -5,7 +5,6 @@ import { ActivityModal } from "@/components/Modals/activity";
 import { getters } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import type { CalendarScope } from "@/types/requests/activities";
-import { CalendarPageItem } from "@/types/responses/activities";
 import { CalendarDayItem } from "./day";
 
 export const CalendarGridLoading: React.FC<{ period: CalendarScope }> = ({ period }) => {
@@ -33,7 +32,7 @@ export const CalendarGrid: React.FC<{
   const periodUse = useDeferredValue(period);
   const anchorUse = useDeferredValue(anchor);
 
-  const [selectedDay, setSelectedDay] = useState<CalendarPageItem | undefined>(undefined);
+  const [selectedDayKey, setSelectedDayKey] = useState<string | undefined>(undefined);
 
   const { data } = useSuspenseQuery(
     getters.calendar.list({
@@ -49,11 +48,15 @@ export const CalendarGrid: React.FC<{
           key={`${cell.dayKey}-${anchor}-${period}`}
           day={cell}
           period={period}
-          onOpenDay={() => setSelectedDay(cell)}
+          onOpenDay={() => setSelectedDayKey(cell.dayKey)}
         />
       ))}
-      {!!selectedDay && (
-        <ActivityModal day={selectedDay} onClose={() => setSelectedDay(undefined)} />
+      {!!selectedDayKey && (
+        <ActivityModal
+          dayKey={selectedDayKey}
+          days={data}
+          onClose={() => setSelectedDayKey(undefined)}
+        />
       )}
     </>
   );

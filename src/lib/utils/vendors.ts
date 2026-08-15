@@ -24,6 +24,8 @@ export const vendorActivityToPlanKind = (activity: VendorActivityRow): PlanKind 
         return "swim";
       case "Yoga":
         return "recovery";
+      case "Hike":
+        return "hike";
       default:
         return null;
     }

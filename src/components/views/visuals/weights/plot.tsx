@@ -151,9 +151,9 @@ export const createViz = (
     .datum(enriched)
     .attr("fill", "none")
     .attr("stroke", LINE_COLOR)
-    .attr("stroke-width", 2)
-    .attr("stroke-linecap", "round")
-    .attr("stroke-linejoin", "round")
+    .attr("strokeWidth", 2)
+    .attr("strokeLinecap", "round")
+    .attr("strokeLinejoin", "round")
     .attr("opacity", 0.95)
     .attr(
       "d",
@@ -174,14 +174,14 @@ export const createViz = (
     .attr("r", 3)
     .attr("fill", "rgb(24 24 27)")
     .attr("stroke", "rgb(244 244 245)")
-    .attr("stroke-width", 1)
+    .attr("strokeWidth", 1)
     .attr("opacity", 0.6);
 
   // Hover line
   const hoverLine = svg
     .append("line")
     .attr("stroke", "rgb(113 113 122)")
-    .attr("stroke-width", 1)
+    .attr("strokeWidth", 1)
     .attr("stroke-opacity", 0.45)
     .attr("y1", dimensions.pad.t)
     .attr("y2", dimensions.viewH - dimensions.pad.b)
